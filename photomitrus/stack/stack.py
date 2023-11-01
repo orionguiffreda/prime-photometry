@@ -4,6 +4,7 @@ Stacks astrometrically calibrated files using swarp
 #%%
 import os
 import argparse
+import subprocess
 
 def swarp(indir, finout):
     os.chdir(str(finout))
