@@ -13,7 +13,7 @@ import argparse
 os.chdir('/Users/orion/Desktop/PRIME/prime-photometry')
 from photomitrus.settings import filter
 #%%
-def sigma_clipped(image, sigma=5):
+def sigma_clipped(image, sigma=4):
     masked_array = sigma_clip(image, sigma, maxiters=5)
     return masked_array.filled(np.nan)
 #%%
@@ -30,7 +30,7 @@ def median_filter_masking(image, size=40):
     return image
 #%%
 def gen_sky_image(science_data_directory, output_directory, sky_group_size=None):
-    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('.cds.fits')]
+    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('.cds.flat.fits')]
     nfiles = len(image_fnames)
     if sky_group_size is None:
         sky_group_size = nfiles
@@ -59,8 +59,9 @@ def gen_sky_image(science_data_directory, output_directory, sky_group_size=None)
     sky = median_filter_masking(sky)  # filling in the all nan slices
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(save_name, overwrite=True)
 #%%
-#gen_sky_image('/Users/orion/Desktop/PRIME/GRB/H_band/GRB-Open-H/','/Users/orion/Desktop/PRIME/GRB/H_band/H_sky', 30)
+gen_sky_image('/Users/orion/Desktop/PRIME/GRB/H_band/GRB-Open-H2/','/Users/orion/Desktop/PRIME/GRB/H_band/H_sky', 30)
 
+#%%
 #NEED TO ADD DIFF DETECTOR SETTINGS, ONLY HAVE FILTER SETTINGS
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generates sky for given filter and dataset')
