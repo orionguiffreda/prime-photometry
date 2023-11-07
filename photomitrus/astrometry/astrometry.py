@@ -32,7 +32,7 @@ def scamp(imgdir, outdir):
         com = ["scamp ", imgname + ext, ' -c /Users/orion/Desktop/PRIME/scamp.conf']
         s0 = ''
         com = s0.join(com)
-        out = subprocess.Popen([com], shell=True)
+        out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         out.wait()
         print(pre + ext + ' scamped!')
 
