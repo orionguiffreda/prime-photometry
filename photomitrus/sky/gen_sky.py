@@ -12,11 +12,14 @@ import argparse
 
 os.chdir('/Users/orion/Desktop/PRIME/prime-photometry')
 from photomitrus.settings import filter
-#%%
-def sigma_clipped(image, sigma=4):
-    masked_array = sigma_clip(image, sigma, maxiters=5)
-    return masked_array.filled(np.nan)
-#%%
+
+
+def sigma_clipped(image, sigma=4, sky=0):
+    masked_array = sigma_clip(image-sky, sigma, maxiters=5)
+    image[masked_array.mask] = np.nan
+    return image
+
+
 def median_filter_masking(image, size=40):
     nan_percent = 100 * np.count_nonzero(np.isnan(image)) / (image.shape[0] * image.shape[1])
     print('start_nan_percentage: {}'.format(nan_percent))
@@ -28,8 +31,9 @@ def median_filter_masking(image, size=40):
     print('filling remaining nan with median value: {}'.format(med))
     image[np.isnan(image)] = med
     return image
-#%%
-def gen_sky_image(science_data_directory, output_directory, sky_group_size=None):
+
+
+def gen_sky_image(science_data_directory, output_directory, sky_group_size=None, sigma=4, previous_sky=0):
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('.cds.flat.fits')]
     nfiles = len(image_fnames)
     if sky_group_size is None:
@@ -51,7 +55,7 @@ def gen_sky_image(science_data_directory, output_directory, sky_group_size=None)
         # calculating sky frame for group
         group_files = image_fnames[file_counter:file_counter+sky_group_size]
         print(group_files)
-        images = [sigma_clipped(fits.getdata(f)) for f in group_files]
+        images = [sigma_clipped(fits.getdata(f), sigma, previous_sky) for f in group_files]
         # images = [sigma_clipped(image) for image in images]
         median_array.append(np.nanmedian(images, axis=0))
         file_counter += sky_group_size
