@@ -4,9 +4,9 @@ Runs astrometry.net on specified file
 #%%
 import subprocess
 import argparse
-def astrom(infile, outpath):
+def astrom(inpath, outpath):
     com = ["solve-field ", ' -U none', ' --axy none', ' -S none', ' -M none', ' -R none', ' -B none', ' -O',
-           ' -p', ' -z 2', ' -D ' + outpath, ' ' + infile] #can change downsample w/ z, or change what outputs here
+           ' -p', ' -z 2', ' -D ' + outpath, ' ' + inpath + '*.fits'] #can change downsample w/ z, or change what outputs here
     s0 = ''
     com = s0.join(com)
     out = subprocess.Popen([com], shell=True)   #include stdout and stderr to suppress astrometry.net output

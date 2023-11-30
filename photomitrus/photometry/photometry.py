@@ -36,15 +36,11 @@ def get_table_from_ldac(filename, frame=1):
 
 #%%
 #import img and get wcs
-dir = '/Users/orion/Desktop/PRIME/GRB/preproc_swarp/'
-imageName = 'coadd_cds.fits'
-# Set the box size to search for catalog stars
-boxsize = 33.4  # arcminutes
+"""directory = '/Users/orion/Desktop/PRIME/GRB/preproc_swarp/'
+imageName = 'coadd_cds.fits'"""
 
-# Magnitude cut-offs of sources to be cross-matched against
-maxmag = 18
-def img(dir,imageName):
-    os.chdir(dir)
+def img(directory,imageName):
+    os.chdir(directory)
     f = fits.open(imageName)
     data = f[0].data  #This is the image array
     header = f[0].header
@@ -53,20 +49,20 @@ def img(dir,imageName):
     w = WCS(header)
 
     #Get the RA and Dec of the center of the image
-    [raImage, decImage] = w.all_pix2world(data.shape[0]/2, data.shape[1]/2, 1)
+    raImage, decImage = w.all_pix2world(data.shape[0]/2, data.shape[1]/2, 1)
 
-    return data,header,w,[raImage, decImage]
+    return data,header,w,raImage, decImage
 
-data,header,w,[raImage, decImage] = img(dir,imageName)
+#data,header,w,raImage, decImage = img(directory,imageName)
 #%%
 # Use astroquery to get catalog search
 from astroquery.vizier import Vizier
 #Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
 
-catNum = 'II/246'#changing to 2mass
-def query(catNum, raImage, decImage):
-    boxsize = 33.4  # arcminutes
-    maxmag = 18
+def query(raImage, decImage):
+    boxsize = 33.4  # Set the box size to search for catalog stars
+    maxmag = 18     # Magnitude cut-offs of sources to be cross-matched against
+    catNum = 'II/246'  # changing to 2mass
     print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a radius of %.4f arcmin' % (
     catNum, raImage, decImage, boxsize))
     try:
@@ -80,59 +76,66 @@ def query(catNum, raImage, decImage):
         print('I cannnot reach the Vizier database. Is the internet working?')
     return Q
 
-Q = query(catNum, raImage, decImage)
+#Q = query(catNum, raImage, decImage)
 #%%
 #run sextractor on swarped img to find sources
-configFile = '/Users/orion/Desktop/PRIME/sex.config'
+"""configFile = '/Users/orion/Desktop/PRIME/sex.config'
 catalogName = imageName+'.cat'
-paramName = '/Users/orion/Desktop/PRIME/tempsource.param'
-def sex1(imageName, configFile, paramName):
+paramName = '/Users/orion/Desktop/PRIME/tempsource.param'"""
+def sex1(imageName):
+    print('Running sextractor on img to initially find sources...')
+    configFile = '/Users/orion/Desktop/PRIME/sex.config'    #change this
+    paramName = '/Users/orion/Desktop/PRIME/tempsource.param'   #change this
     catalogName = imageName + '.cat'
     try:
         command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catalogName, paramName)
         print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True)
+        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
+    return catalogName
 
 #%%
 #run psfex on sextractor LDAC from previous step
-psfConfigFile = '/Users/orion/Desktop/PRIME/default.psfex'
-os.chdir('/Users/orion/Desktop/PRIME/GRB/preproc_swarp/')
-def psfex(catalogName,psfConfigFile):
+def psfex(catalogName):
+    print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
+    psfConfigFile = '/Users/orion/Desktop/PRIME/default.psfex'  #change this
     try:
         command = 'psfex %s -c %s' % (catalogName,psfConfigFile)
         print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True)
+        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run psfex with exit error %s'%err)
 
 #%%
 #feed generated psf model back into sextractor w/ diff param (or you could use that param from the start but its slower)
-psfName = imageName + '.psf'
-psfcatalogName = psfName+'.cat'
-psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param' #This is a new set of parameters to be obtained from SExtractor, including PSF-fit magnitudes
-os.chdir('/Users/orion/Desktop/PRIME/GRB/preproc_swarp/')
-def sex2(imageName, configFile, psfparamName):
+"""psfName = imageName + '.psf'
+psfcatalogName = imageName.replace('.fits','.psf.cat')
+psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param'""" #This is a new set of parameters to be obtained from SExtractor, including PSF-fit magnitudes
+def sex2(imageName):
+    print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
-    psfcatalogName = psfName + '.cat'
+    psfcatalogName = imageName.replace('.fits','.psf.cat')
+    configFile = '/Users/orion/Desktop/PRIME/sex.config'        #change this
+    psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param' #change this
     try:
         #We are supplying SExtactor with the PSF model with the PSF_NAME option
         command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, psfcatalogName, psfName, psfparamName)
         print("Executing command: %s" % command)
-        rval = subprocess.run(command.split(), check=True)
+        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
     return psfcatalogName
 
 #%%
-#Rread in tables, clean edges (potentially unnecessary), crossmatch
+#read in tables, clean edges (potentially unnecessary), crossmatch
 def tables(Q,psfcatalogName):
+    print('Cross-matching sextracted and catalog sources...')
     mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
-    good_cat_stars = Q[0][np.where((mass_imCoords[0] > 215) & (mass_imCoords[0] < 4400) & (mass_imCoords[1] > 215) & (mass_imCoords[1] < 4400))]
+    good_cat_stars = Q[0] #[np.where((mass_imCoords[0] > 215) & (mass_imCoords[0] < 4400) & (mass_imCoords[1] > 215) & (mass_imCoords[1] < 4400))]
 
     psfsourceTable = get_table_from_ldac(psfcatalogName)
-    cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']<4400) & (psfsourceTable['XMODEL_IMAGE']>215) &(psfsourceTable['YMODEL_IMAGE']<4400) &(psfsourceTable['YMODEL_IMAGE']>215)]
+    cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0)] #& (psfsourceTable['XMODEL_IMAGE']<4400) & (psfsourceTable['XMODEL_IMAGE']>215) &(psfsourceTable['YMODEL_IMAGE']<4400) &(psfsourceTable['YMODEL_IMAGE']>215)]
 
     psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs', unit='degree')
 
@@ -146,33 +149,46 @@ def tables(Q,psfcatalogName):
     print('Found %d good cross-matches'%len(idx_psfmass))
     return good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage
 
-good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage = tables(Q,psfcatalogName)
+#good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage = tables(Q,psfcatalogName)
 #%%
 #derive zero pt / put in swarped header
-def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage):
-    psfoffsets = ma.array(good_cat_stars['Jmag'][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
+def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName):
+    psfoffsets = ma.array(good_cat_stars['Hmag'][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage]) # *TO WORK ON* currently need to change the filter here manually
     #Compute sigma clipped statistics
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
-    header.set('ZP_ERR',zero_psfstd,'PSF Zero Point STD',after='SATURATE')
-    header.set('ZP_MEAN',zero_psfmean,'PSF Zero Point Mean',after='SATURATE')
-    header.set('ZP_MEDIAN',zero_psfmed,'PSF Zero Point Median',after='SATURATE')
+    header.set('ZP_ERR', zero_psfstd, 'PSF Zero Point STD', after='SATURATE')
+    header.set('ZP_MEAN', zero_psfmean, 'PSF Zero Point Mean', after='SATURATE')
+    header.set('ZP_MED', zero_psfmed, 'PSF Zero Point Median', after='SATURATE')
 
-    print(header['ZP_ERR'],header['ZP_MEAN'],header['ZP_MEDIAN'])
+    print('Header values added = ', header['ZP_MEAN'], header['ZP_MED'], header['ZP_ERR'])
 
-#%%
+    fits.writeto(imageName,data,header=header,overwrite=True)
+    print('Swarped img header rewritten w/ zero pts, all done!')
+
 #%%
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='runs sextractor and psfex on swarped img to get psf fit photometry')
-    parser.add_argument('args', nargs='*', type=str, metavar='a', help='Put in order: dir,imagename,configfile,psfconfigfile'
-                                                                       'paramname,psfparamname')
+    parser = argparse.ArgumentParser(description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
+                                                 'writes zero pts to img header')
+    parser.add_argument('args', nargs=2, type=str, metavar='a', help='Put in order: directory, image_name')
     args = parser.parse_args()
 
-    data, header, w, [raImage, decImage] = img(dir, imageName)
-    Q = query(catNum, raImage, decImage)
-    sex1(imageName, configFile, paramName)
-    psfex(catalogName, psfConfigFile)
-    psfcatalogName = sex2(imageName, configFile, psfparamName)
+    data, header, w, raImage, decImage = img(args.args[0], args.args[1])
+    Q = query(raImage, decImage)
+    catalogName = sex1(args.args[1])
+    psfex(catalogName)
+    psfcatalogName = sex2(args.args[1])
     good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName)
-    zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage)
+    zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.args[1])
+
+#%%
+
+"""dir = '/Users/orion/Desktop/PRIME/GRB/preproc_swarp/'
+imageName = 'coadd_cds.fits'
+configFile = '/Users/orion/Desktop/PRIME/sex.config'
+catalogName = imageName+'.cat'
+paramName = '/Users/orion/Desktop/PRIME/tempsource.param'
+psfName = imageName + '.psf'
+psfcatalogName = imageName.replace('.fits','.psf.cat')
+psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param'"""

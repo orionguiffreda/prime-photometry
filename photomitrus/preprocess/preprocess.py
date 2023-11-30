@@ -18,10 +18,11 @@ active_pixel_slice_end_y = active_pixel_slice_end_x = 4092
 file_format = "{:08d}C{}.fits"
 
 #%%
-dark_ramp_fname = r"G:\My Drive\PRIME\prime_data\GRB230815A\mramp.Dark-Y.408423-408815.C2.fits"
+"""
+#dark_ramp_fname = r"G:\My Drive\PRIME\prime_data\GRB230815A\mramp.Dark-Y.408423-408815.C2.fits"
 with fits.open(dark_ramp_fname) as dark_ramp:
     master_dark_frame = dark_ramp[nframes-1].data  # choosing the corresponding dark frame to the exposure frame
-
+"""
 #%%
 def get_ref_pixel_corrected_frame_and_header(filename):
     hdu = fits.open(filename)[data_hdu]
@@ -49,6 +50,7 @@ def ref_pixel_correct_frame(frame):
     return frame[active_pixel_slice_start_y:active_pixel_slice_end_y, active_pixel_slice_start_x:active_pixel_slice_end_x]  # removing reference pixels from final array
 
 #%%
+"""
 def gen_CDS_image(camera, ramp_start_index, integrations, frames_per_ramp, dark_frame=None):
     raw_directory = raw_directory_format.format(root_folder[camera-1])
     # raw_directory = r'G:\My Drive\PRIME\prime_data\GRB230815A\raw\C2\grb-H'
@@ -69,20 +71,29 @@ def gen_CDS_image(camera, ramp_start_index, integrations, frames_per_ramp, dark_
         if not os.path.isdir(os.path.dirname(saved_name)):
             os.makedirs(os.path.dirname(saved_name))
         fits.HDUList(hdulist).writeto(saved_name,overwrite=True)
-
+"""
 #%% flat fielding
-def flatfield(directory,flat):
+def flatfield(directory,outdir,flat):
+    os.chdir(directory)
     flatdata = fits.getdata(flat)
-    flat = flatdata[4:4 + 4088, 4:4 + 4088]
+    flat = flatdata[4:4 + 4088, 4:4 + 4088]         #remove when new flats come
     for filename in sorted(os.listdir(directory)):
-        if filename.endswith('.fits'):
-            f = filename.replace('.fits','.flat.fits')
+        if filename.endswith('.new'):
+            f = filename.replace('.new','.flat.fits')
             with fits.open(directory+filename) as hdu:
                 data = hdu[0].data
                 hdr = hdu[0].header
                 flatfield = data / flat
-            fits.writeto(directory+f,flatfield,hdr,overwrite=True)
+            fits.writeto(outdir+f,flatfield,hdr,overwrite=True)
             print(directory+f+' flat fielded!')
 
 #%%
-flatfield('/Users/orion/Desktop/PRIME/GRB/H_band/H/','/Users/orion/Desktop/PRIME/GRB/H_band/H_flat/H.flat.C2.fits')
+import argparse
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='*CURRENTLY* Flat fields images')
+    parser.add_argument('-ff', action='store_true', help='flat field images')
+    parser.add_argument('paths', nargs='*', type=str, metavar='p', help='Put input image path first, then output path, '
+                                                                        'then flat img')
+    args = parser.parse_args()
+    if args.ff:
+        flatfield(args.paths[0],args.paths[1],args.paths[2])
