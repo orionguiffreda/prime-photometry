@@ -5,6 +5,10 @@ Runs improved astrometry on a given file using sextractor and scamp
 import os
 import argparse
 import subprocess
+import sys
+
+sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus/')
+from settings import gen_config_file_name
 
 #%%
 def sex(imgdir):

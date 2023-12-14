@@ -12,6 +12,10 @@ from astropy.stats import sigma_clipped_stats, sigma_clip
 import subprocess
 from astropy.io import fits
 import os
+import sys
+
+sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus/')
+from settings import gen_config_file_name
 
 #%%
 # Read LDAC tables
@@ -84,8 +88,8 @@ catalogName = imageName+'.cat'
 paramName = '/Users/orion/Desktop/PRIME/tempsource.param'"""
 def sex1(imageName):
     print('Running sextractor on img to initially find sources...')
-    configFile = '/Users/orion/Desktop/PRIME/sex.config'    #change this
-    paramName = '/Users/orion/Desktop/PRIME/tempsource.param'   #change this
+    configFile = gen_config_file_name('sex.config') #/Users/orion/Desktop/PRIME/sex.config'    #change this
+    paramName = gen_config_file_name('tempsource.param') #/Users/orion/Desktop/PRIME/tempsource.param'   #change this
     catalogName = imageName + '.cat'
     try:
         command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catalogName, paramName)
@@ -99,7 +103,7 @@ def sex1(imageName):
 #run psfex on sextractor LDAC from previous step
 def psfex(catalogName):
     print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
-    psfConfigFile = '/Users/orion/Desktop/PRIME/default.psfex'  #change this
+    psfConfigFile = gen_config_file_name('default.psfex') #'/Users/orion/Desktop/PRIME/default.psfex'  #change this
     try:
         command = 'psfex %s -c %s' % (catalogName,psfConfigFile)
         print('Executing command: %s' % command)
@@ -116,8 +120,8 @@ def sex2(imageName):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
     psfcatalogName = imageName.replace('.fits','.psf.cat')
-    configFile = '/Users/orion/Desktop/PRIME/sex.config'        #change this
-    psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param' #change this
+    configFile = gen_config_file_name('sex.config') #'/Users/orion/Desktop/PRIME/sex.config'        #change this
+    psfparamName = gen_config_file_name('photomPSF.param') #'/Users/orion/Desktop/PRIME/photomPSF.param' #change this
     try:
         #We are supplying SExtactor with the PSF model with the PSF_NAME option
         command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, psfcatalogName, psfName, psfparamName)

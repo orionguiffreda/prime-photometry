@@ -14,7 +14,7 @@ import sys
 sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
 from settings import filter
 
-#a,b,c,d = filter('H')
+a,b,c,d = filter('H')
 #%%
 def sigma_clipped(image, sigma, sky=0):
     masked_array = sigma_clip(image-sky, sigma, maxiters=5)
@@ -74,7 +74,7 @@ def gen_sky_image(science_data_directory, output_directory, sky_group_size=None,
         file_counter += sky_group_size
     sky = np.nanmedian(median_array, axis=0)  # generating median image
     sky = median_filter_masking(sky)  # filling in the all nan slices
-    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(save_name, overwrite=True)
+    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
 def gen_prev_sky_image(science_data_directory, output_directory, previous_sky=None, sky_group_size=None, sigma=None):
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('.cds.flat.fits')]
@@ -104,7 +104,7 @@ def gen_prev_sky_image(science_data_directory, output_directory, previous_sky=No
         file_counter += sky_group_size
     sky = np.nanmedian(median_array, axis=0)  # generating median image
     sky = median_filter_masking(sky)  # filling in the all nan slices
-    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(save_name, overwrite=True)
+    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
 def gen_prev_meansky_image(science_data_directory, output_directory, previous_sky=0, sky_group_size=None, sigma=2.5):
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('.cds.flat.fits')]
@@ -134,7 +134,7 @@ def gen_prev_meansky_image(science_data_directory, output_directory, previous_sk
         file_counter += sky_group_size
     sky = np.nanmean(median_array, axis=0)  # generating median image
     sky = mean_filter_masking(sky)  # filling in the all nan slices
-    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(save_name, overwrite=True)
+    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
 #%%
 #NEED TO ADD DIFF DETECTOR SETTINGS, ONLY HAVE FILTER SETTINGS

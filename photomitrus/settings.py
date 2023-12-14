@@ -5,6 +5,12 @@ Settings for pipeline
     - Filter specific settings
     - Catalog settings
 """
+import os
+
+def gen_config_file_name(filename):
+    base_dir = os.path.dirname(__file__)
+    return os.path.join(base_dir, 'configs', filename)
+
 #%% Filter Settings
 def filter(filter):
     if filter == 'H':
