@@ -5,6 +5,7 @@ Calibrates photometry for stacked image
 import numpy as np
 import numpy.ma as ma
 import argparse
+import sys
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
@@ -13,6 +14,8 @@ import subprocess
 from astropy.io import fits
 import os
 
+sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
+from settings import gen_config_file_name
 #%%
 # Read LDAC tables
 def get_table_from_ldac(filename, frame=1):
@@ -70,7 +73,7 @@ def query(raImage, decImage):
         v = Vizier(columns=['*'], column_filters={"gmag":"<%.2f"%maxmag, "Nd":">6", "e_gmag":"<1.086/3"}, row_limit=-1)
         Q = v.query_region(SkyCoord(ra = raImage, dec = decImage, unit = (u.deg, u.deg)), radius = str(boxsize)+'m', catalog=catNum, cache=False)
         #query vizier around (ra, dec) with a radius of boxsize
-        print(Q[0])
+        #print(Q[0])
         print(Q[0].colnames)
     except:
         print('I cannnot reach the Vizier database. Is the internet working?')
@@ -84,8 +87,8 @@ catalogName = imageName+'.cat'
 paramName = '/Users/orion/Desktop/PRIME/tempsource.param'"""
 def sex1(imageName):
     print('Running sextractor on img to initially find sources...')
-    configFile = '/Users/orion/Desktop/PRIME/sex.config'    #change this
-    paramName = '/Users/orion/Desktop/PRIME/tempsource.param'   #change this
+    configFile = gen_config_file_name('sex2.config')
+    paramName = gen_config_file_name('tempsource.param')
     catalogName = imageName + '.cat'
     try:
         command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catalogName, paramName)
@@ -99,7 +102,7 @@ def sex1(imageName):
 #run psfex on sextractor LDAC from previous step
 def psfex(catalogName):
     print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
-    psfConfigFile = '/Users/orion/Desktop/PRIME/default.psfex'  #change this
+    psfConfigFile = gen_config_file_name('default.psfex')
     try:
         command = 'psfex %s -c %s' % (catalogName,psfConfigFile)
         print('Executing command: %s' % command)
@@ -116,8 +119,8 @@ def sex2(imageName):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
     psfcatalogName = imageName.replace('.fits','.psf.cat')
-    configFile = '/Users/orion/Desktop/PRIME/sex.config'        #change this
-    psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param' #change this
+    configFile = gen_config_file_name('sex2.config')
+    psfparamName = gen_config_file_name('photomPSF.param')
     try:
         #We are supplying SExtactor with the PSF model with the PSF_NAME option
         command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, psfcatalogName, psfName, psfparamName)

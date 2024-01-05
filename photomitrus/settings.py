@@ -5,6 +5,16 @@ Settings for pipeline
     - Filter specific settings
     - Catalog settings
 """
+#%% Config File Names
+import os
+#base_dir = os.path.dirname(__file__)
+#base_dir = os.path.dirname(os.path.abspath('__file__'))
+
+#export PYTHONPATH=.       if fctn below isnt working from command line, cd to photomitrus and use command
+def gen_config_file_name(filename):
+    base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
+    return os.path.join(base_dir, 'configs', filename)
+
 #%% Filter Settings
 def filter(filter):
     if filter == 'H':
@@ -60,3 +70,84 @@ def filter(filter):
         return nint, nframes, sky_size, start_index
     else:
         print('Filters must be specified as H, J, Y or Z!')
+
+#%%
+import pandas as pd
+
+#Settings for list of directory+filenames
+object = 'field4057'
+filter = 'H'
+chip = 4
+
+def flist(Object=object, Filter=filter, Chip=chip):
+    log = pd.read_csv('/mnt/d/PRIME_photometry_test_files/ramp_fit_log_2023-12-10.clean.dat', delimiter=' ') #reads in csv
+    if Filter == 'Z':
+        fnames = log['filename'][log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(Object)) & ~log['OBJNAME'].str.contains('test') & log['FILTER1'].str.contains('Z')
+        & log['Open'].str.contains(str(Filter))]
+        fnames = fnames.tolist()
+        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
+        fullnames = [dir + x for x in sorted(fnames)]
+    else:
+        #screening log w/ constraints
+        fnames = log['filename'][log['OBJNAME'].str.contains(str(Object)) & ~log['OBJNAME'].str.contains('test') & log['FILTER1'].str.contains('Open')
+                 & log['FILTER2'].str.contains(str(Filter)) & log['OBSERVER'].str.contains('NASA')]
+        fnames = fnames.tolist()
+        #adding path
+        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
+        fullnames = [dir + x for x in sorted(fnames)]
+        #fullnames = fnames
+    fullnames = [f.replace('fits.ramp','ramp.fits') for f in fullnames]
+    fullnames = [f.replace('C1','C%s' % chip) for f in fullnames]
+    if not fullnames:
+        print('No files found for specified fields!')
+    return fullnames
+
+a = flist()
+#%% make directories
+import os
+def makedirs(dir,chip):
+    a = 'C%i_GRBastrom' % chip
+    sub = 'C%i_GRBsub' % chip
+    subcrop = 'C%i_GRBsubcrop' % chip
+    print(a)
+    print(sub)
+    print(subcrop)
+    os.chdir(dir)
+    os.mkdir(a)
+    os.mkdir(sub)
+    os.mkdir(subcrop)
+
+#makedirs('/mnt/d/PRIME_photometry_test_files/H_Band',4)
+#%% for multiple object fields
+"""
+object = ['field4037']
+filter = 'J'
+chip = 1
+def flist(Object=object, Filter=filter, Chip=chip):
+    log = pd.read_csv('/mnt/d/PRIME_photometry_test_files/ramp_fit_log_2023-12-10.clean.dat', delimiter=' ') #reads in csv
+    if Filter == 'Z':
+        fnames = []
+        for f in Object:
+            fobjnames = log['filename'][log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(Object)) & log['FILTER1'].str.contains('Z')
+            & log['Open'].str.contains(str(Filter))]
+            fobjnames = fobjnames.tolist()
+            fnames.extend(fobjnames)
+        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
+        fullnames = [dir + x for x in sorted(fnames)]
+    else:
+        #screening log w/ constraints
+        fnames = []
+        for f in Object:
+            fobjnames = log['filename'][log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(f)) & log['FILTER1'].str.contains('Open')
+                 & log['FILTER2'].str.contains(str(Filter))]
+            fobjnames = fobjnames.tolist()
+            fnames.extend(fobjnames)
+            #adding path
+        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
+        fullnames = [dir + x for x in sorted(fnames)]
+    if not fullnames:
+        print('No files found for specified fields!')
+    return fullnames
+
+a = flist()
+"""

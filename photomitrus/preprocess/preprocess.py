@@ -1,12 +1,15 @@
 """
-Dark subtraction, flat fielding and rough astrometry
+Dark subtraction, flat fielding and rough astrom
 """
 #%%
 import os
 
 import numpy as np
 from astropy.io import fits
-
+import sys
+sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
+from settings import flist
+#%%
 # common settings
 cameras = range(2, 3)
 root_folder = ['', '', '', '']
@@ -74,10 +77,9 @@ def gen_CDS_image(camera, ramp_start_index, integrations, frames_per_ramp, dark_
 """
 #%% flat fielding
 def flatfield(directory,outdir,flat):
-    os.chdir(directory)
     flatdata = fits.getdata(flat)
     flat = flatdata[4:4 + 4088, 4:4 + 4088]         #remove when new flats come
-    for filename in sorted(os.listdir(directory)):
+    for filename in sorted(directory):
         if filename.endswith('.new'):
             f = filename.replace('.new','.flat.fits')
             with fits.open(directory+filename) as hdu:
@@ -88,12 +90,28 @@ def flatfield(directory,outdir,flat):
             print(directory+f+' flat fielded!')
 
 #%%
+def crop(dir,out):
+    os.chdir(dir)
+    for f in sorted(os.listdir('.')):
+        if os.path.isfile(f):
+            h = fits.getheader(f)
+            d = fits.getdata(f)
+            cropdata = d[4:4092, 10:]
+            path = os.path.join(out,f)
+            fits.writeto(path,cropdata,h,overwrite=True)
+        print(path+' cropped!')
+
+#crop('/mnt/d/PRIME_photometry_test_files/H_Band/C1_GRBsub/','/mnt/d/PRIME_photometry_test_files/H_Band/C1_GRBsubcrop')
+#%%
 import argparse
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='*CURRENTLY* Flat fields images')
     parser.add_argument('-ff', action='store_true', help='flat field images')
+    parser.add_argument('-crop', action='store_true', help='crop images')
     parser.add_argument('paths', nargs='*', type=str, metavar='p', help='Put input image path first, then output path, '
-                                                                        'then flat img')
+                                                                        'then (if applicable) flat img')
     args = parser.parse_args()
     if args.ff:
         flatfield(args.paths[0],args.paths[1],args.paths[2])
+    if args.crop:
+        crop(args.paths[0],args.paths[1])

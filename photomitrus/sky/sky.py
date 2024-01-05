@@ -8,7 +8,7 @@ import argparse
 def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
     if not os.path.isdir(output_data_dir):
         os.makedirs(output_data_dir)
-    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('flat.fits')]
+    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('ramp.fits') or f.endswith('ramp.new')]
     image_fnames.sort()
     sky = fits.getdata(sky)
     for f in image_fnames:
@@ -18,7 +18,7 @@ def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
             header = hdul[0].header
         reduced_image = (image-sky)
         output_fname = os.path.basename(f)
-        output_fname = output_fname.replace('.flat.fits', '.sky.flat.fits')
+        output_fname = output_fname.replace('.ramp.new', '.sky.flat.fits')
         output_fname = os.path.join(output_data_dir, output_fname)
         print(output_fname)
         fits.HDUList(fits.PrimaryHDU(header=header, data=reduced_image)).writeto(output_fname, overwrite=True)
