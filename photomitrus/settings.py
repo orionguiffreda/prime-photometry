@@ -105,19 +105,42 @@ def flist(Object=object, Filter=filter, Chip=chip):
 a = flist()
 #%% make directories
 import os
+from pathlib import Path
 def makedirs(dir,chip):
-    a = 'C%i_GRBastrom' % chip
-    sub = 'C%i_GRBsub' % chip
-    subcrop = 'C%i_GRBsubcrop' % chip
-    print(a)
-    print(sub)
-    print(subcrop)
     os.chdir(dir)
-    os.mkdir(a)
-    os.mkdir(sub)
-    os.mkdir(subcrop)
+    skypath = Path(dir+'sky')
+    if skypath.is_dir():
+        a = 'C%i_astrom' % chip
+        sub = 'C%i_sub' % chip
+        os.mkdir(a)
+        os.mkdir(sub)
+        print(dir + a)
+        print(dir + sub)
+    else:
+        a = 'C%i_astrom' % chip
+        sub = 'C%i_sub' % chip
+        os.mkdir(a)
+        os.mkdir(sub)
+        os.mkdir('sky')
+        os.mkdir('stack')
+        print(dir + a)
+        print(dir + sub)
+        print(dir + 'sky')
+        print(dir + 'stack')
+    dirnames = os.listdir('.')
+    astromlist = [i for i in dirnames if a in i]
+    astrom = ' '.join(astromlist)
+    sublist = [i for i in dirnames if sub in i]
+    sub = ' '.join(sublist)
+    skylist = [i for i in dirnames if 'sky' in i]
+    sky = ' '.join(skylist)
+    stacklist = [i for i in dirnames if 'stack' in i]
+    stack = ' '.join(stacklist)
+    return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
 
-#makedirs('/mnt/d/PRIME_photometry_test_files/H_Band',4)
+#%%
+astrom, sky, sub, stack = makedirs('/mnt/d/PRIME_photometry_test_files/test/',2)
+
 #%% for multiple object fields
 """
 object = ['field4037']

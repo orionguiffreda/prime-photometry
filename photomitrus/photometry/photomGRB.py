@@ -133,15 +133,13 @@ def sex2(imageName):
 
 #%%
 #read in tables, clean edges (potentially unnecessary), crossmatch
-def tables(Q,psfcatalogName,crop):
+def tables(Q,psfcatalogName):
     print('Cross-matching sextracted and catalog sources...')
     mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
-    good_cat_stars = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max(mass_imCoords[0])-crop)) & (mass_imCoords[1] > crop) & (mass_imCoords[1] < (max(mass_imCoords[0])-crop)))]
+    good_cat_stars = Q[0][np.where((mass_imCoords[0] > 300) & (mass_imCoords[0] < 4468) & (mass_imCoords[1] > 300) & (mass_imCoords[1] < 4468))]
 
     psfsourceTable = get_table_from_ldac(psfcatalogName)
-    cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']
-                < (max(psfsourceTable['XMODEL_IMAGE'])-crop)) & (psfsourceTable['XMODEL_IMAGE']>crop) &(psfsourceTable['YMODEL_IMAGE']<(max(psfsourceTable['YMODEL_IMAGE'])-crop))
-                & (psfsourceTable['YMODEL_IMAGE']>crop)] #& (psfsourceTable['SNR_WIN']>3.0)]
+    cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']<4468) & (psfsourceTable['XMODEL_IMAGE']>300) &(psfsourceTable['YMODEL_IMAGE']<4468) &(psfsourceTable['YMODEL_IMAGE']>300)]
 
     psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs', unit='degree')
 
@@ -159,7 +157,7 @@ def tables(Q,psfcatalogName,crop):
 #%%
 #derive zero pt / put in swarped header
 def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,filter):
-    psfoffsets = ma.array(good_cat_stars['%smag' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage]) # *TO WORK ON* currently need to change the filter here manually
+    psfoffsets = ma.array(good_cat_stars['%smag' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
     #Compute sigma clipped statistics
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
@@ -185,25 +183,53 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.write('%s.mag.csv' % imageName, format='ascii',overwrite=True)
     print('%s.mag.csv written, CSV w/ corrected mags' % imageName)
 
+    return zero_psfmed,zero_psfstd
 #%%
-defaults = dict(crop=300)
+def GRB(ra,dec,psfcatalogName,zero_psfmed,zero_psfstd,filter):
+    GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
 
+    psfsourceTable = get_table_from_ldac(psfcatalogName)
+    cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS'] == 0) & (psfsourceTable['FLAGS_MODEL'] == 0)]
+    psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs',
+                                  unit='degree')
+
+    photoDistThresh = 4.0
+    idx_GRB, idx_GRBcleanpsf, d2d, d3d = psfsourceCatCoords.search_around_sky(GRBcoords,
+                                                                                 photoDistThresh * u.arcsec)
+    print('idx size = %d' % len(idx_GRBcleanpsf))
+    if len(idx_GRBcleanpsf) >= 1:
+        print('GRB source at inputted coords %s and %s found!' % (ra,dec))
+    else:
+        print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
+
+    grb_psfmag = cleanPSFSources[idx_GRBcleanpsf]['MAG_POINTSOURCE'][0]
+    grb_psfmagerr = cleanPSFSources[idx_GRBcleanpsf]['MAGERR_POINTSOURCE'][0]
+
+    grb_ra = cleanPSFSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
+    grb_dec = cleanPSFSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
+    grb_rad = cleanPSFSources[idx_GRBcleanpsf]['FLUX_RADIUS'][0]
+
+    GRB_mag = zero_psfmed + grb_psfmag
+    GRB_magerr = np.sqrt(grb_psfmagerr ** 2 + zero_psfstd ** 2)
+
+    #print('psfmag = %.5f' %grb_psfmag)
+    print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec' %(grb_ra, grb_dec, grb_rad))
+    print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, GRB_mag, GRB_magerr))
+#%%
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
-                                                 'writes zero pts to img header and outputs csv w/ corrected mags')
-    parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
-    parser.add_argument('-name', type=str, help='[str], image name')
-    parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
-    parser.add_argument('-crop', type=str, help='[int], # of pixels from edge of image to crop, default 300',default=defaults["crop"])
+                                                 'gets zero pts, finds closest GRB source, applies zero pts to get mag')
+    parser.add_argument('args', nargs=5, type=str, metavar='a', help='Put in order: directory, image_name, GRB ra, GRB dec, filter (ex."H")')
     args = parser.parse_args()
 
-    data, header, w, raImage, decImage = img(args.dir, args.name)
+    data, header, w, raImage, decImage = img(args.args[0], args.args[1])
     Q = query(raImage, decImage)
-    catalogName = sex1(args.name)
+    catalogName = sex1(args.args[1])
     psfex(catalogName)
-    psfcatalogName = sex2(args.name)
-    good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-    zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter)
+    psfcatalogName = sex2(args.args[1])
+    good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName)
+    zero_psfmed,zero_psfstd = zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.args[1],args.args[4])
+    GRB(args.args[2],args.args[3],psfcatalogName,zero_psfmed,zero_psfstd,args.args[4])
 
 #%%
 
