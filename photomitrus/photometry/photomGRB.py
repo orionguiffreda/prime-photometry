@@ -180,8 +180,8 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.add_column(psfmagerrcol)
     cleanPSFSources.remove_column('VIGNET')
 
-    cleanPSFSources.write('%s.mag.csv' % imageName, format='ascii',overwrite=True)
-    print('%s.mag.csv written, CSV w/ corrected mags' % imageName)
+    cleanPSFSources.write('%s.mag.ecsv' % imageName,overwrite=True)
+    print('%s.mag.ecsv written, CSV w/ corrected mags' % imageName)
 
     return zero_psfmed,zero_psfstd
 #%%

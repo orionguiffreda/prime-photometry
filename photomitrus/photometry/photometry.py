@@ -43,7 +43,7 @@ def get_table_from_ldac(filename, frame=1):
 """directory = '/Users/orion/Desktop/PRIME/GRB/preproc_swarp/'
 imageName = 'coadd_cds.fits'"""
 
-def img(directory,imageName):
+def img(directory,imageName,crop):
     os.chdir(directory)
     f = fits.open(imageName)
     data = f[0].data  #This is the image array
@@ -55,7 +55,11 @@ def img(directory,imageName):
     #Get the RA and Dec of the center of the image
     raImage, decImage = w.all_pix2world(data.shape[0]/2, data.shape[1]/2, 1)
 
-    return data,header,w,raImage, decImage
+    #get ra and dec of edge, subtract to get rough rad of image
+    [raEdge, decEdge] = w.all_pix2world(data.shape[0]-int(crop), data.shape[1] / 2, 1)
+    boxsize = (raImage - raEdge)*60 #rad in arcmin
+
+    return data,header,w,raImage, decImage, boxsize
 
 #data,header,w,raImage, decImage = img(directory,imageName)
 #%%
@@ -63,8 +67,8 @@ def img(directory,imageName):
 from astroquery.vizier import Vizier
 #Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
 
-def query(raImage, decImage):
-    boxsize = 33.4  # Set the box size to search for catalog stars
+def query(raImage, decImage,boxsize):
+    #boxsize = 33.4  # Set the box size to search for catalog stars
     maxmag = 18     # Magnitude cut-offs of sources to be cross-matched against
     catNum = 'II/246'  # changing to 2mass
     print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a radius of %.4f arcmin' % (
@@ -135,6 +139,7 @@ def sex2(imageName):
 #read in tables, clean edges (potentially unnecessary), crossmatch
 def tables(Q,psfcatalogName,crop):
     print('Cross-matching sextracted and catalog sources...')
+    crop = int(crop)
     mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
     good_cat_stars = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max(mass_imCoords[0])-crop)) & (mass_imCoords[1] > crop) & (mass_imCoords[1] < (max(mass_imCoords[0])-crop)))]
 
@@ -182,8 +187,8 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.add_column(psfmagerrcol)
     cleanPSFSources.remove_column('VIGNET')
 
-    cleanPSFSources.write('%s.mag.csv' % imageName, format='ascii',overwrite=True)
-    print('%s.mag.csv written, CSV w/ corrected mags' % imageName)
+    cleanPSFSources.write('%s.mag.ecsv' % imageName,overwrite=True)
+    print('%s.mag.ecsv written, CSV w/ corrected mags' % imageName)
 
 #%%
 defaults = dict(crop=300)
@@ -197,8 +202,8 @@ if __name__ == "__main__":
     parser.add_argument('-crop', type=str, help='[int], # of pixels from edge of image to crop, default 300',default=defaults["crop"])
     args = parser.parse_args()
 
-    data, header, w, raImage, decImage = img(args.dir, args.name)
-    Q = query(raImage, decImage)
+    data, header, w, raImage, decImage, boxsize = img(args.dir, args.name, args.crop)
+    Q = query(raImage, decImage, boxsize)
     catalogName = sex1(args.name)
     psfex(catalogName)
     psfcatalogName = sex2(args.name)

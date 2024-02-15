@@ -12,10 +12,10 @@ import argparse
 import sys
 
 sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
-from settings import filter
-from settings import flist
+#from settings import filter
+#from settings import flist
 
-a,b,c,d = filter('H')
+#a,b,c,d = filter('H')
 #%%
 def sigma_clipped(image, sigma, sky=0):
     masked_array = sigma_clip(image-sky, sigma, maxiters=5)
@@ -59,7 +59,7 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
     #save_name = 'sky.Open-J.00747455-00747767.C4.fits'
     save_name = 'sky.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-19:-11],
                                                     image_fnames[-1][-19:-11], image_fnames[0][-10])
-    save_name = os.path.join(output_directory, save_name)
+    #save_name = os.path.join(output_directory, save_name)
     print(save_name)
     # breaking the files into group to avoid using too much memory
     ngroups = int(nfiles / sky_group_size)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     #parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
     parser.add_argument('paths', nargs='*', type=str, metavar='p', help='Put input path, output path,'
                                                                         'then (if applicable) put prev sky path')
-    parser.add_argument('sigma', nargs=1, type=float, metavar='s', help='Sigma value for sigma clipping'
+    parser.add_argument('sigma', nargs=1, type=int, metavar='s', help='Sigma value for sigma clipping'
                                                                       ', put after paths')
     args = parser.parse_args()
     #nint,nframes,sky_size,start_index = filter(args.filter[0])

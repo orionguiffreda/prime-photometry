@@ -108,25 +108,32 @@ import os
 from pathlib import Path
 def makedirs(dir,chip):
     os.chdir(dir)
-    skypath = Path(dir+'sky')
-    if skypath.is_dir():
-        a = 'C%i_astrom' % chip
-        sub = 'C%i_sub' % chip
-        os.mkdir(a)
-        os.mkdir(sub)
-        print(dir + a)
-        print(dir + sub)
-    else:
-        a = 'C%i_astrom' % chip
-        sub = 'C%i_sub' % chip
-        os.mkdir(a)
-        os.mkdir(sub)
+    a = 'C%i_astrom' % chip
+    sub = 'C%i_sub' % chip
+    skyexists = os.path.exists('sky')
+    if not skyexists:
         os.mkdir('sky')
-        os.mkdir('stack')
-        print(dir + a)
-        print(dir + sub)
         print(dir + 'sky')
+    if skyexists:
+        print(dir + 'sky already exists!')
+    stackexists = os.path.exists('stack')
+    if not stackexists:
+        os.mkdir('stack')
         print(dir + 'stack')
+    if stackexists:
+        print(dir + 'stack already exists!')
+    aexists = os.path.exists(a)
+    if not aexists:
+        os.mkdir(a)
+        print(dir + a)
+    if aexists:
+        print(dir + a+' already exists!')
+    subexists = os.path.exists(sub)
+    if not subexists:
+        os.mkdir(sub)
+        print(dir + sub)
+    if subexists:
+        print(dir + sub+' already exists!')
     dirnames = os.listdir('.')
     astromlist = [i for i in dirnames if a in i]
     astrom = ' '.join(astromlist)
@@ -139,7 +146,7 @@ def makedirs(dir,chip):
     return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
 
 #%%
-astrom, sky, sub, stack = makedirs('/mnt/d/PRIME_photometry_test_files/test/',2)
+#astrom, sky, sub, stack = makedirs('/mnt/d/PRIME_photometry_test_files/GRB240205B/J_Band/flats/',1)
 
 #%% for multiple object fields
 """
