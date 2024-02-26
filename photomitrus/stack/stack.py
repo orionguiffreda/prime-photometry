@@ -46,7 +46,7 @@ print(save_name)"""
 #%%
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runs swarp to stack imgs')
-    parser.add_argument('paths', nargs='*', type=str, metavar='p', help='Put input file path first and output path last')
+    parser.add_argument('paths', type=str, metavar='p', help='Put input file path first and output path last')
     args = parser.parse_args()
     swarp(args.paths[0],args.paths[1])
 

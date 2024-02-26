@@ -16,6 +16,7 @@ from astropy.io import fits
 from astropy.io import ascii
 import os
 from astropy.table import Column
+from astropy.table import QTable
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from scipy import stats
@@ -114,11 +115,6 @@ def query(raImage, decImage,filter, width, height, survey):
         print('No supported survey found, currently use either 2MASS or VHS')
     return Q
 
-def queryexport(Q, survey):
-    table = Q[0]
-    table.write('%s_query.ecsv' % survey, overwrite=True)
-    print('%s_query.ecsv written!' % survey)
-
 #Q = query(raImage, decImage, boxsize)
 #table = Q[0]
 #table.write('2MASS_query.ecsv', overwrite=True)
@@ -197,6 +193,10 @@ def tables(Q,psfcatalogName,crop):
     print('Found %d good cross-matches'%len(idx_psfmass))
     return good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage
 
+def queryexport(good_cat_stars, survey):
+    table = good_cat_stars
+    table.write('%s_query.ecsv' % survey, overwrite=True)
+    print('%s_query.ecsv written!' % survey)
 #good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage = tables(Q,psfcatalogName)
 #%%
 #derive zero pt / put in swarped header
@@ -234,6 +234,50 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
 
+#%% optional GRB-specific photom
+def GRB(ra,dec,imageName,survey,filter,thresh):
+    from astropy.table import Table
+    GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
+
+    mag_ecsvname = '%s.%s.ecsv'  % (imageName,survey)
+    mag_ecsvtable = ascii.read(mag_ecsvname)
+    mag_ecsvcleanSources = mag_ecsvtable[(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
+    mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'], frame='icrs',
+                                  unit='degree')
+
+    photoDistThresh = thresh
+    idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
+                                                                                 photoDistThresh * u.arcsec)
+    print('idx size = %d' % len(idx_GRBcleanpsf))
+    if len(idx_GRBcleanpsf) >= 1:
+        print('GRB source at inputted coords %s and %s found!' % (ra,dec))
+    else:
+        print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
+
+    grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
+    grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
+
+    grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
+    grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
+    grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][0]
+    grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][0]
+
+    print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' %(grb_ra, grb_dec, grb_rad, grb_snr))
+    print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
+
+    grbdata = Table()
+    grbdata['RA'] = np.array([grb_ra])
+    grbdata['DEC'] = np.array([grb_dec])
+    grbdata['%sMag' % filter] = np.array([grb_mag])
+    grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
+    grbdata['Radius'] = np.array([grb_rad])
+    grbdata['SNR'] = np.array([grb_snr])
+
+    grbdata.write('GRB_Data.ecsv', overwrite=True)
+    print('Generated GRB data table!')
+
+
+
 #%% optional plots
 def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
     #appropriate mag column
@@ -249,8 +293,8 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     plt.figure(1,figsize=(8, 8))
     plt.plot(PRIMEdata['%sMAG_PSF' % filter][idx_psfimage],good_cat_stars['%s' % magcol][idx_psfmass],
              'r.', markersize=14, markeredgecolor='black',)
-    plt.xlim(10, 22)
-    plt.ylim(10, 22)
+    #plt.xlim(10, 22)
+    #plt.ylim(10, 22)
     plt.title('PRIME Mags vs %s Mags' % survey)
     plt.xlabel('PRIME Mags', fontsize=15)
     plt.ylabel('%s Mags' % survey, fontsize=15)
@@ -283,7 +327,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     plt.axhline(y=-res_err, color='tab:orange', linestyle='--', linewidth=1)
     plt.axhline(y=-res_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % res_err, r'2 $\sigma$'], loc='lower left')
+    plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % res_err, r'2 $\sigma$ = %.3f' % (2*res_err)], loc='lower left')
     info = ('slope = %.3f +/- %.3f' % (m,merr))+('\nintercept = %.3f +/- %.3f' % (b,berr))+('\nR$^{2}$ = %.3f' % rsquare)+('\nRSS = %d' % rss)
     plt.text(15,-1.25,info,bbox=dict(facecolor='none',edgecolor='black',pad=5.0))
     plt.savefig('%s_residual_plot.png' % survey,dpi=300)
@@ -291,7 +335,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
 
 
 #%%
-defaults = dict(crop=300,survey='2MASS')
+defaults = dict(crop=300,survey='2MASS',RA=None,DEC=None,thresh=4.0)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
@@ -300,50 +344,33 @@ if __name__ == "__main__":
                                                                 'along with photometry')
     parser.add_argument('-plots', action='store_true', help='optional flag, exports mag comparison plot betw. PRIME and survey, '
                                                             'along with residual plot w/ statistics')
+    parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
+                                                          'specific coords, such as w/ a GRB')
     parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
     parser.add_argument('-name', type=str, help='[str], image name')
     parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
     parser.add_argument('-survey', type=str, help='[str], survey to query, currently use either "2MASS" '
-                                                  'or "VHS" (for VISTA in s. hemi. only), default = 2MASS')
-    parser.add_argument('-crop', type=str, help='[int], # of pixels from edge of image to crop, default = 300',default=defaults["crop"])
+                                                  'or "VHS" (for VISTA in s. hemi. only), default = 2MASS', default=defaults["survey"])
+    parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',default=defaults["crop"])
+    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*')
+    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*')
+    parser.add_argument('-thresh', type=float, help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG*',
+                        default=defaults["thresh"])
     args = parser.parse_args()
 
-    if args.exp_query and args.plots:
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        queryexport(Q,args.survey)
-        catalogName = sex1(args.name)
-        psfex(catalogName)
-        psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
+    data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
+    Q = query(raImage, decImage, args.filter, width, height, args.survey)
+    catalogName = sex1(args.name)
+    psfex(catalogName)
+    psfcatalogName = sex2(args.name)
+    good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+    if args.exp_query:
+        queryexport(good_cat_stars, args.survey)
+    zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
+    if args.grb:
+        GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
+    if args.plots:
         plots(args.dir, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
-    elif args.exp_query:
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        queryexport(Q,args.survey)
-        catalogName = sex1(args.name)
-        psfex(catalogName)
-        psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
-    elif args.plots:
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        catalogName = sex1(args.name)
-        psfex(catalogName)
-        psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter,args.survey)
-        plots(args.dir,args.name,args.survey,args.filter,good_cat_stars,idx_psfmass,idx_psfimage)
-    else:
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        catalogName = sex1(args.name)
-        psfex(catalogName)
-        psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter,args.survey)
 
 #%%
 

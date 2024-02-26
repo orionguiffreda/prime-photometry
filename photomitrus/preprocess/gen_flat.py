@@ -22,7 +22,7 @@ def flatlists(path, chip):
         if fnmatch.fnmatch(file, '*.clean.dat'):
             logname = file
             print('taken log = ',logname)
-    log = pd.read_csv(path+logname, delimiter=' ')
+    log = pd.read_csv(path+logname, delimiter=' ', on_bad_lines='warn')
     direct = path
     directory = direct + 'C%i/' % chip
     log_start = log.iloc[:int(len(log)/2)]
@@ -120,9 +120,9 @@ def flatprocessing(start_images_names_1,start_images_names_2,end_images_names_1,
     """
     #low end cut off
 
-    cut_off = 0.45
-    start_median_norm[start_median_norm < cut_off] = np.nanmedian(start_median_norm)
-    end_median_norm[end_median_norm < cut_off] = np.nanmedian(end_median_norm)
+    #cut_off = 0.45
+    #start_median_norm[start_median_norm < cut_off] = np.nanmedian(start_median_norm)
+    #end_median_norm[end_median_norm < cut_off] = np.nanmedian(end_median_norm)
 
 
     # writing master flat to file
