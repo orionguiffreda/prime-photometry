@@ -1,5 +1,15 @@
 # PRIME Photometry Pipeline - Master Instruction & Basic Usage
 
+## Before using Master.py
+
+Before trying to use, make sure of course everything is installed correctly.  In addition, make sure your astrometry.net index files are downloaded.  See these links for details about index files:
+
+https://astrometry.net/doc/readme.html
+
+http://data.astrometry.net/
+
+I recommend downloading the 4100 and some of the 5200 series.
+
 ## Using Master.py
 
 Once the pipeline is installed, make sure to add the _/photomitrus_ directory to your PYTHONPATH.  Once you've made sure to build the conda environment from the provided .yaml file, cd to _/photomitrus_ and try running the command:
