@@ -8,7 +8,7 @@ https://astrometry.net/doc/readme.html
 
 http://data.astrometry.net/
 
-I recommend downloading the 4100 and some of the 5200 series.
+The 4200 series is useful, as I first downloaded those and they've worked (mostly) just fine, being built off of 2MASS.  I recommend downloading the 4100 and some of the 5200 series, though I haven't yet tested if these are better for PRIME than the 4100 and 5200.
 
 ## Using Master.py
 
