@@ -15,6 +15,10 @@ def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
     return os.path.join(base_dir, 'configs', filename)
 
+def gen_mask_file_name(filename):
+    base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
+    return os.path.join(base_dir, 'weightmaps', filename)
+
 #%% Filter Settings
 def filter(filter):
     if filter == 'H':

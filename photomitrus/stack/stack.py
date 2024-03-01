@@ -3,15 +3,43 @@ Stacks astrometrically calibrated files using swarp
 """
 #%%
 import os
+import shutil
 import argparse
 import subprocess
 import sys
 from astropy.io import fits
+import numpy as np
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from settings import gen_config_file_name
+from settings import gen_mask_file_name
 
 #%%
+def badpixmask(parent, subpath, chip):
+    otherdir = parent+'temp/'
+    exists = os.path.exists(otherdir)
+    if not exists:
+        os.mkdir(otherdir)
+    if exists:
+        print(otherdir,' exists!')
+    mask = gen_mask_file_name('badpixmask_c%i.fits' % chip)
+    badmask = fits.getdata(mask)
+    badmask = badmask.astype(bool)
+    imgdir = subpath
+    print('moving imgs to temp dir...')
+    for i in sorted(os.listdir(imgdir)):
+        if i.endswith('.sky.flat.fits'):
+            shutil.move(imgdir+i,otherdir+i)
+    print('Applying bad pixel mask...')
+    for i in sorted(os.listdir(otherdir)):
+        img = fits.open(otherdir + i)
+        hdr = img[0].header
+        data = img[0].data
+        data[~badmask] = np.nan
+        fits.writeto(imgdir + i, data, hdr)
+    return otherdir
+
+
 def swarp(imgdir, finout):
     image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.sky.flat.fits')]
     image_fnames.sort()
@@ -33,6 +61,7 @@ def swarp(imgdir, finout):
     out.wait()
     print('Co-added image created, all done!')
 
+
 #%%
 """imgdir='/mnt/d/PRIME_photometry_test_files/GRBastrom/'
 image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.ramp.new')]
@@ -45,10 +74,20 @@ print(save_name)"""
 
 #%%
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Runs swarp to stack imgs')
-    parser.add_argument('paths', type=str, metavar='p', help='Put input file path first and output path last')
+    parser = argparse.ArgumentParser(description='Runs swarp to stack imgs, if using -mask flag, do not keyboard interupt')
+    parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
+    parser.add_argument('-sub', type=str, help='[str] Processed images path')
+    parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
+    parser.add_argument('-parent', type=str, help='[str] Parent directory where all img folders are stored *USE ONLY W/ -MASK FLAG*',
+                        default=None)
+    parser.add_argument('-chip', type=int, help='[int] Detector chip number *USE ONLY W/ -MASK FLAG*',
+                        default=None)
     args = parser.parse_args()
-    swarp(args.paths[0],args.paths[1])
+    if args.mask:
+        otherdir = badpixmask(args.parent,args.sub,args.chip)
+        print('removing temp dir...')
+        shutil.rmtree(otherdir)
+    swarp(args.sub,args.stack)
 
 #%%
 """swarp('/Users/orion/Desktop/PRIME/GRB/H_band/H_backs/','/Users/orion/Desktop/PRIME/GRB/H_band/H_swarp/')"""

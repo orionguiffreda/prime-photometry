@@ -352,8 +352,8 @@ if __name__ == "__main__":
     parser.add_argument('-survey', type=str, help='[str], survey to query, currently use either "2MASS" '
                                                   'or "VHS" (for VISTA in s. hemi. only), default = 2MASS', default=defaults["survey"])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',default=defaults["crop"])
-    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*')
-    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*')
+    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["RA"])
+    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["DEC"])
     parser.add_argument('-thresh', type=float, help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG*',
                         default=defaults["thresh"])
     args = parser.parse_args()

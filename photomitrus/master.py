@@ -74,7 +74,7 @@ def astrometry(subpath):
 def stack(subpath, stackpath):
     print('stacking all images using SWARP...')
     try:
-        command = 'python ./stack/stack.py %s %s' % (subpath, stackpath)
+        command = 'python ./stack/stack.py -sub %s -stack %s' % (subpath, stackpath)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
