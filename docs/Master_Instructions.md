@@ -50,6 +50,33 @@ This section details how _master.py_ works.
 - To begin, it imports the makedirs function from _settings.py_, which creates directories to store the ramp images with astrometry, the generated sky, the processed (cropped and sky-subtracted) images, and the final stacked image.  
 - Then, using subprocess, it runs a command which calls _gen_astrometry.py_, running astrometry.net to generate astrometry for all the ramp images in the chip's directory.
 - Another command is then run that calls _gen_sky.py_, which generates a sky image based on the given sigma value.  The sky image is then subtracted from each image using _sky.py_.
-- Once each image has been processed, _astrometry.py_ is used to run sextractor and scamp to generate improved astrometry for stacking purposes.
+- Once each image has been processed, _astrometry.py_ is used to run sextractor and scamp to generate improved astrometry for stacking purposes, through generating sextractor .cat and scamp .head files.
 - Finally _stack.py_ is utilized, running swarp to median-combine all the processed images into 1 final stacked image!   
 
+## Data Products
+
+There are many outputted data products from this pipeline.  However, _master.py_ sorts them nicely in folders within the parent directory.  We can look at a sample parent directory to see how things will be stored.  Below, is a parent directory after _master.py_ has processed 1 chip's worth of data. 
+
+	├── J_Band (Parent)
+	│   ├── C1
+	│   │   ├── **C1.ramp.fits...
+	│   ├── C1_astrom
+ 	│   │   ├── **C1.ramp.new...
+  	│   │   ├── **C1.ramp.wcs...
+   	│   ├── C1_sub
+  	│   │   ├── **C1.sky.flat.fits...
+  	│   │   ├── **C1.sky.flat.cat...
+  	│   │   ├── **C1.sky.flat.head...
+   	│   ├── sky
+	│   │   ├── sky.Open-#.12345678-12345678.C#.fits
+  	│   ├── stack
+	│   │   ├── coadd.Open-#.12345678-12345678.C#.fits
+  	│   ├── ramp_fit_log_****-**-**.dat
+	│   ├── ramp_fit_log_****-**-**.clean.dat
+
+We've already gone over C1 (the directory where the ramps are stored).  We'll now go over the rest of the subdirectories and what is stored within.
+
+- C1_astrom is where _gen_astrometry.py_ deposits the new ramps that now have astrometry, hence the name '.ramp.new'.  Astrometry.net also outputs the '.ramp.wcs' wcs files, though since the WCS for the new ramps are written in the header, we don't use these.
+- C1_sub is where the sky subtracted images are stored.  These are the 'sky.flat.fits' files.  This subdirectory is also where the _astrometry.py_ places the sextractor catalogues ('sky.flat.cat') and the scamp .head ('.sky.flat.head') files, for better astrometry when swarp is used.
+- sky is where _gen_sky.py_ outputs the sky image.  The filename is similar to the final stacked image, look at _photometry.py_ or _stack.py_'s documentation for more info on how this name is generated.
+- stack is where the final co-added image for the chip is placed.  
