@@ -28,7 +28,7 @@ Let us again start with the required positional arguments:
 
 - _-survey_ is a string which denotes which survey _photometry.py_ will be using for calibration.  Currently, there are 2 surveys supported: 2MASS and the VISTA Hemisphere Survey (VHS).  VHS is a deeper survey and generally a better pick for photometry, but it is limited in area to targets in the southern hemisphere, so keep this in mind or you may get an error.  2MASS is all-sky, so it should be fine anywhere.  To utilize 2MASS, put '2MASS', to utilize VISTA, put 'VHS'.
 
-- _-crop_ in an integer which denotes how far in pixels from the edge of the stacked image the script should crop out sources.  This is used to combat bad edge artifacts resulting in many false positive sources.  The default is 300 pixels.
+- _-crop_ in an integer which denotes how far in pixels from the edge of the stacked image the script should crop out sources.  This is used to combat the empty edges present in stacked images, along with bad edge artifacts which would result in many false positive sources.  The default is 300 pixels.
 
 ### Optional Arguments
 
@@ -47,13 +47,41 @@ Now that all of that is out of the way, here is a sample command using all the a
 
     python ./photometry/photometry.py -plots -grb -dir /../../J_Band/stack/ -name coadd.Open-J.00654321-00123456.C1.fits -filter J -survey 2MASS -crop 400 -RA 221.248375 -DEC -60.697972 -thresh 2.0
 
+## Data Products
+
+After running this script, the main product that will be outputted will be the .ecsv file with the corrected mags and sextractor columns.  If we call the filename of the co-added image: **COADD** (just for simplicity), then the naming format of the .ecsv would be:
+
+> COADD.fits._survey_.ecsv
+
+Here, _survey_ is the chosen survey name.
+There are several other catalogues that are outputted, including the initial sextractor catalogue, the psf model file, and the final model-fitted sextractor catalogue (look at 'How Photometry.py Works' section for more info).  The format for these files, respectively, is:
+
+> COADD.fits.cat,
+> COADD.fits.psf,
+> COADD.psf.cat
+
+As we don't really utilize these catalogues once the photometry is done, so I could have an option to delete these after the fact.  But for now, they stay.
+
+In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be:
+
+> _survey_-query.ecsv
+
+For _-plots_, the outputted mag comparison and residual plots will be PNGS with the respective names:
+
+> _survey_-mag_comp_plot.png,
+> _survey_-residual_plot.png
+
+Finally, for _-grb_, the .ecsv with the found source's information will be named:
+
+> GRB_Data.ecsv
+
 ## How Photometry.py Works
 
 - To begin, _photometry.py_ reads the WCS of the co-added final image, in order to find the RA and Dec at the center of the image, along with the width and height of the image in arcmin.  (Though, due to the empty edges of the stacked images having no direct coordinate data, these width and height values can be inaccurate and rough, so currently we rely on the edge cropping of sources later on).  
 - After getting the size and center of the image in sky coordinates, it then uses astroquery to remotely run a box query the chosen catalog for crossmatching and calibration.
 - Sextractor is then run on the co-added image in order to initially extract sources.  Once this catalog is generated, PSFex is run on the catalog to create a PSF model for sources in the catalog.  Then, this PSF model is run back through sextractor, performing model-fitting on sources and calculating PSF-fit magnitudes.
 - Once this final sextractor catalog is generated, both it and the previous survey query catalogue have sources on the edges cropped.  The two catalogues are then crossmatched, with a crossmatch being defined as sources in both catalogues that are within 1" of eachother.  _photometry.py_ prints the amount of crossmatches to the command line.
-  - If you included _-exp_query_, it is at this point that the survey query catalogue is saved.
+  - If you included _-exp_query_, it is at this point that the cropped survey query catalogue is saved.
 - Each crossmatched source then has their sextractor calculated mags subtracted from the catalog source mags.  These offsets are used to calculate the zero point.  This is done by calculating the median and standard deviation of the offset data, excluding sources > 3&#963; from the median.
 - For each source, the zero point is then added to the sextractor mags to generate the final filter mag.  The error in this mag is calculated by combining the sextractor mag error and offset data stdev in quadrature.  These mags are then written to columns and added as an addition to the sextractor columns, before being written to a new .ecsv file.  (The _VIGNET_ column is removed from the sextractor catalogue before this writing)
     - After this point, your photometry is done! If you've included _-grb_, then after this file is written, it is read back in and an attempt at a crossmatch is made using your inputted RA, Dec, and thresh.  If it finds a source within these parameters, it will give source information and write it to an .ecsv file.  If not, then it'll let you know.
