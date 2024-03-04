@@ -47,6 +47,18 @@ Now that all of that is out of the way, here is a sample command using all the a
 
     python ./photometry/photometry.py -plots -grb -dir /../../J_Band/stack/ -name coadd.Open-J.00654321-00123456.C1.fits -filter J -survey 2MASS -crop 400 -RA 221.248375 -DEC -60.697972 -thresh 2.0
 
+## How Photometry.py Works
+
+- To begin, _photometry.py_ reads the WCS of the co-added final image, in order to find the RA and Dec at the center of the image, along with the width and height of the image in arcmin.  (Though, due to the empty edges of the stacked images having no direct coordinate data, these width and height values can be inaccurate and rough, so currently we rely on the edge cropping of sources later on).  
+- After getting the size and center of the image in sky coordinates, it then uses astroquery to remotely run a box query the chosen catalog for crossmatching and calibration.
+- Sextractor is then run on the co-added image in order to initially extract sources.  Once this catalog is generated, PSFex is run on the catalog to create a PSF model for sources in the catalog.  Then, this PSF model is run back through sextractor, performing model-fitting on sources and calculating PSF-fit magnitudes.
+- Once this final sextractor catalog is generated, both it and the previous survey query catalogue have sources on the edges cropped.  The two catalogues are then crossmatched, with a crossmatch being defined as sources in both catalogues that are within 1" of eachother.  _photometry.py_ prints the amount of crossmatches to the command line.
+  - If you included _-exp_query_, it is at this point that the cropped survey query catalogue is saved.
+- Each crossmatched source then has their sextractor calculated mags subtracted from the catalog source mags.  These offsets are used to calculate the zero point.  This is done by calculating the median and standard deviation of the offset data, excluding sources > 3&#963; from the median.
+- For each source, the zero point is then added to the sextractor mags to generate the final filter mag.  The error in this mag is calculated by combining the sextractor mag error and offset data stdev in quadrature.  These mags are then written to columns and added as an addition to the sextractor columns, before being written to a new .ecsv file.  (The _VIGNET_ column is removed from the sextractor catalogue before this writing)
+    - After this point, your photometry is done! If you've included _-grb_, then after this file is written, it is read back in and an attempt at a crossmatch is made using your inputted RA, Dec, and thresh.  If it finds a source within these parameters, it will give source information and write it to an .ecsv file.  If not, then it'll let you know.
+    - If you included _-plots_, then it will also read in the final sextractor .ecsv and the cropped survey query in order to generate the mag comparison and residual plots.
+ 
 ## Data Products
 
 After running this script, the main product that will be outputted will be the .ecsv file with the corrected mags and sextractor columns.  If we call the filename of the co-added image: **COADD** (just for simplicity), then the naming format of the .ecsv would be:
@@ -74,15 +86,3 @@ For _-plots_, the outputted mag comparison and residual plots will be PNGS with 
 Finally, for _-grb_, the .ecsv with the found source's information will be named:
 
 > GRB_Data.ecsv
-
-## How Photometry.py Works
-
-- To begin, _photometry.py_ reads the WCS of the co-added final image, in order to find the RA and Dec at the center of the image, along with the width and height of the image in arcmin.  (Though, due to the empty edges of the stacked images having no direct coordinate data, these width and height values can be inaccurate and rough, so currently we rely on the edge cropping of sources later on).  
-- After getting the size and center of the image in sky coordinates, it then uses astroquery to remotely run a box query the chosen catalog for crossmatching and calibration.
-- Sextractor is then run on the co-added image in order to initially extract sources.  Once this catalog is generated, PSFex is run on the catalog to create a PSF model for sources in the catalog.  Then, this PSF model is run back through sextractor, performing model-fitting on sources and calculating PSF-fit magnitudes.
-- Once this final sextractor catalog is generated, both it and the previous survey query catalogue have sources on the edges cropped.  The two catalogues are then crossmatched, with a crossmatch being defined as sources in both catalogues that are within 1" of eachother.  _photometry.py_ prints the amount of crossmatches to the command line.
-  - If you included _-exp_query_, it is at this point that the cropped survey query catalogue is saved.
-- Each crossmatched source then has their sextractor calculated mags subtracted from the catalog source mags.  These offsets are used to calculate the zero point.  This is done by calculating the median and standard deviation of the offset data, excluding sources > 3&#963; from the median.
-- For each source, the zero point is then added to the sextractor mags to generate the final filter mag.  The error in this mag is calculated by combining the sextractor mag error and offset data stdev in quadrature.  These mags are then written to columns and added as an addition to the sextractor columns, before being written to a new .ecsv file.  (The _VIGNET_ column is removed from the sextractor catalogue before this writing)
-    - After this point, your photometry is done! If you've included _-grb_, then after this file is written, it is read back in and an attempt at a crossmatch is made using your inputted RA, Dec, and thresh.  If it finds a source within these parameters, it will give source information and write it to an .ecsv file.  If not, then it'll let you know.
-    - If you included _-plots_, then it will also read in the final sextractor .ecsv and the cropped survey query in order to generate the mag comparison and residual plots.  
