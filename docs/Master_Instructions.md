@@ -2,13 +2,7 @@
 
 ## Before using Master.py
 
-Before trying to use, make sure of course everything is installed correctly.  In addition, make sure your astrometry.net index files are downloaded.  See these links for details about index files:
-
-https://astrometry.net/doc/readme.html
-
-http://data.astrometry.net/
-
-The 4200 series is useful, as I first downloaded those and they've worked (mostly) just fine, being built off of 2MASS.  I recommend downloading the 4100 and some of the 5200 series, though I haven't yet tested if these are better for PRIME than the 4100 and 5200.
+Before trying to use, make sure of course everything is installed correctly.  In addition, make sure your astrometry.net index files are downloaded.
 
 ## Using Master.py
 
