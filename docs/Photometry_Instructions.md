@@ -74,9 +74,9 @@ There are several other catalogues that are outputted, including the initial sex
 
 As we don't really utilize these catalogues once the photometry is done, so I could have an option to delete these after the fact.  But for now, they stay.
 
-In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be:
+In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be (where C# is the chip number):
 
-> _survey_-query.ecsv
+> _survey_-C#-query.ecsv
 
 For _-plots_, the outputted mag comparison and residual plots will be PNGS with the respective names:
 
