@@ -46,8 +46,6 @@ def get_table_from_ldac(filename, frame=1):
 
 #%%
 #import img and get wcs
-"""directory = '/Users/orion/Desktop/PRIME/GRB/preproc_swarp/'
-imageName = 'coadd_cds.fits'"""
 
 def img(directory,imageName,crop):
     os.chdir(directory)
@@ -120,9 +118,6 @@ def query(raImage, decImage,filter, width, height, survey):
 #table.write('2MASS_query.ecsv', overwrite=True)
 #%%
 #run sextractor on swarped img to find sources
-"""configFile = '/Users/orion/Desktop/PRIME/sex.config'
-catalogName = imageName+'.cat'
-paramName = '/Users/orion/Desktop/PRIME/tempsource.param'"""
 def sex1(imageName):
     print('Running sextractor on img to initially find sources...')
     configFile = gen_config_file_name('sex2.config')
@@ -150,9 +145,6 @@ def psfex(catalogName):
 
 #%%
 #feed generated psf model back into sextractor w/ diff param (or you could use that param from the start but its slower)
-"""psfName = imageName + '.psf'
-psfcatalogName = imageName.replace('.fits','.psf.cat')
-psfparamName = '/Users/orion/Desktop/PRIME/photomPSF.param'""" #This is a new set of parameters to be obtained from SExtractor, including PSF-fit magnitudes
 def sex2(imageName):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
@@ -169,7 +161,7 @@ def sex2(imageName):
     return psfcatalogName
 
 #%%
-#read in tables, clean edges (potentially unnecessary), crossmatch
+#read in tables, crossmatch
 def tables(Q,psfcatalogName,crop):
     print('Cross-matching sextracted and catalog sources...')
     crop = int(crop)

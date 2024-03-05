@@ -39,7 +39,7 @@ def sky(astrompath, skypath, sigma):
     os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
     print('generating sky...')
     try:
-        command = 'python ./sky/gen_sky.py %s %s %i' % (astrompath, skypath, sigma)
+        command = 'python ./sky/gen_sky.py -in_path %s -out_path %s -sigma %i' % (astrompath, skypath, sigma)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
@@ -54,7 +54,7 @@ def skysub(astrompath, subpath, skypath, chip):
             skyfile = file
     print('cropping and subtracting sky...')
     try:
-        command = 'python ./sky/sky.py %s %s %s%s' % (astrompath, subpath, skypath, skyfile)
+        command = 'python ./sky/sky.py -in_path %s -out_path %s -sky_path %s%s' % (astrompath, subpath, skypath, skyfile)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
@@ -64,7 +64,7 @@ def skysub(astrompath, subpath, skypath, chip):
 def astrometry(subpath):
     print('using SXTRCTR and SCAMP to generate better astrometry...')
     try:
-        command = 'python ./astrom/astrometry.py -all %s' % (subpath)
+        command = 'python ./astrom/astrometry.py -all -path %s' % (subpath)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:

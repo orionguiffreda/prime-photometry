@@ -50,13 +50,13 @@ if __name__ == "__main__":
     parser.add_argument('-sex', action='store_true', help='if you want to run JUST sextractor')
     parser.add_argument('-scamp', action='store_true', help='if you want to run JUST scamp')
     parser.add_argument('-all', action='store_true', help='if you want to run both')
-    parser.add_argument('path', nargs='*', type=str, metavar='f', help='Images path (currently just dumps .cat '
+    parser.add_argument('-path', type=str, help='[str] Images path (currently just dumps .cat '
                                                                        '& .head files in same path)')
     args = parser.parse_args()
     if args.sex:
-        sex(args.path[0])
+        sex(args.path)
     if args.scamp:
-        scamp(args.path[0])
+        scamp(args.path)
     if args.all:
-        sex(args.path[0])
-        scamp(args.path[0])
+        sex(args.path)
+        scamp(args.path)

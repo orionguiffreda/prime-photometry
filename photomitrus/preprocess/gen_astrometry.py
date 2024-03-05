@@ -38,7 +38,7 @@ def astromdir(outpath,dir):
 #%%
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runs astrom.net on specified file')
-    parser.add_argument('files', nargs='*', type=str, metavar='f', help='Put output path then dir or input list (if applicable')
+    parser.add_argument('files', nargs='*', type=str, metavar='f', help='Put output path then dir or input list (if applicable)')
     parser.add_argument('-list', action='store_true', help='if downloading from a list of file paths, use this optional arg')
     parser.add_argument('-dir', action='store_true', help='if downloading directly from a dir, use this optional arg,'
                                                           ' include the desired dir after the output path')
