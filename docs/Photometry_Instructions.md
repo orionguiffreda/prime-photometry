@@ -40,7 +40,7 @@ The previous were all required arguments, now we will discuss the optional argum
 
 - _-plots_ is an optional flag that will currently generate 2 plots.  The first is a magnitude comparison plot.  It plots the calculated PRIME mags and survey mags of crossmatched sources against eachother.  This can be a good, quick, visual representation of how well the photometry is doing.  For a more in depth look, the 2nd plot is a residuals plot.  A linear fit is run on the crossmatched mag data and then residuals are calculated and plotted.  The residual plot contains useful information, such as lines representing &#963; values, fitted slope & intercept values and error, along with R<sup>2</sup> and RSS values.
 
-- _-grb_ is an optional flag to be used when you're trying to find a specific source.  With this flag, you input the RA and Dec of the GRB you wish to find, along with a search threshold diameter.  _photometry.py_ will search for a sextracted source within that area.  If it finds one, it will print information about the source to the command line, along with generating an .ecsv file with the same information.  This info includes the source's RA & Dec, calculated magnitude & error, 50% flux radius, and SNR.  Below are the optional arguments that must be inputted when using this flag.
+- _-grb_ is an optional flag to be used when you're trying to find a specific source.  With this flag, you input the RA and Dec of the GRB you wish to find, along with a search threshold diameter.  _photometry.py_ will search for a sextracted source within that area.  If it finds one, it will print information about the source to the command line, along with generating an .ecsv file with the same information.  If it finds multiple sources, it will let you know in the command line and log info for all found sources in the .ecsv.  This info includes the source's RA & Dec, calculated magnitude & error, 50% flux radius, SNR, and distance from inputted coords.  Below are the optional arguments that must be inputted when using this flag.
     - _-RA_: GRB RA
     - _-DEC_: GRB Dec
     - _-thresh_: Search diameter in arcsec, default = 4"
@@ -85,6 +85,6 @@ For _-plots_, the outputted mag comparison and residual plots will be PNGS with 
 > _survey_-mag_comp_plot.png,
 > _survey_-residual_plot.png
 
-Finally, for _-grb_, the .ecsv with the found source's information will be named:
+Finally, for _-grb_, the .ecsv with the found source's (or sources') information will be named:
 
-> GRB_Data.ecsv
+> GRB-_filter_-Data.ecsv or GRB_Multisource-_filter_-Data.ecsv
