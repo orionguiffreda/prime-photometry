@@ -2,13 +2,7 @@
 
 ## Before using Master.py
 
-Before trying to use, make sure of course everything is installed correctly.  In addition, make sure your astrometry.net index files are downloaded.  See these links for details about index files:
-
-https://astrometry.net/doc/readme.html
-
-http://data.astrometry.net/
-
-The 4200 series is useful, as I first downloaded those and they've worked (mostly) just fine, being built off of 2MASS.  I recommend downloading the 4100 and some of the 5200 series, though I haven't yet tested if these are better for PRIME than the 4100 and 5200.
+Before trying to use, make sure of course everything is installed correctly.  In addition, make sure your astrometry.net index files are downloaded.
 
 ## Using Master.py
 
@@ -33,7 +27,7 @@ We will learn what all these arguments mean, starting with the positional argume
 
 - _-chip_ is an integer that tells the pipeline which detector is being processed.  In the previous example, we would simply use '1' for this argument.  Currently, this master file only processes 1 chip at a time, though perhaps improvements will be coming soon!
 
-- _sigma_ is an integer that is used in the creation of the sky for sky subtraction (default = 4).  This value is how many &#963; away from the median value will be clipped.  If &#963; = 4, pixels with values >4&#963; will be clipped and replaced with the median value.  If you would like to know more, look to the individual documentation for _gen_sky.py_
+- _sigma_ is an integer that is used in the creation of the sky for sky subtraction (default = 4).  This value is how many &#963; away from the median value will be clipped.  If &#963; = 4, pixels with values >4&#963; will be clipped and replaced with the median value.  If you would like to know more, look to the individual documentation for _gen_sky.py_.  Due to the variation in image quality when comparing ramps from each chip, I usually use a sigma of 4 for C1 and C2, with a sigma of 6 for C3 and C4.
 
 - _skygen_start_ is an optional argument for starting the pipeline on the sky generation step.  This would be used if you had already done the astrometry on all ramp files or for some reason the pipeline errored out after the astrometry step.  In the future, I aim to be able to start the pipeline on any individual step, in case things go wrong halfway through.
 

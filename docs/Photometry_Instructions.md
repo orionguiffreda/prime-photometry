@@ -26,7 +26,9 @@ Let us again start with the required positional arguments:
 
 - _-filter_ is a single character string which denotes the filter of the co-added final image.  This should be clear from the filename of the image.  For instance, 'Open-J' is J band, so we would put 'J' for this argument.
 
-- _-survey_ is a string which denotes which survey _photometry.py_ will be using for calibration.  Currently, there are 2 surveys supported: 2MASS and the VISTA Hemisphere Survey (VHS).  VHS is a deeper survey and generally a better pick for photometry, but it is limited in area to targets in the southern hemisphere, so keep this in mind or you may get an error.  2MASS is all-sky, so it should be fine anywhere.  To utilize 2MASS, put '2MASS', to utilize VISTA, put 'VHS'.
+- _-survey_ is a string which denotes which survey _photometry.py_ will be using for calibration.  Currently, there are 2 surveys supported: 2MASS and the VISTA Hemisphere Survey (VHS).  VHS is a deeper survey and generally a better pick for photometry, but it is limited in area to targets in the southern hemisphere, so keep this in mind or you may get an error.  In addition, while VHS has nearly all S. hemi. coverage in J (and Ks, but PRIME doesn't have that filter), its coverage in H, Y, and Z is far less.  The link below shows coverage maps for VISTA surveys in each filter.  2MASS is all-sky, so it should be fine anywhere in J and H.  To utilize 2MASS, put '2MASS', to utilize VISTA, put 'VHS'.
+
+    http://casu.ast.cam.ac.uk/vistasp/overview/ 
 
 - _-crop_ in an integer which denotes how far in pixels from the edge of the stacked image the script should crop out sources.  This is used to combat the empty edges present in stacked images, along with bad edge artifacts which would result in many false positive sources.  The default is 300 pixels.
 
@@ -38,7 +40,7 @@ The previous were all required arguments, now we will discuss the optional argum
 
 - _-plots_ is an optional flag that will currently generate 2 plots.  The first is a magnitude comparison plot.  It plots the calculated PRIME mags and survey mags of crossmatched sources against eachother.  This can be a good, quick, visual representation of how well the photometry is doing.  For a more in depth look, the 2nd plot is a residuals plot.  A linear fit is run on the crossmatched mag data and then residuals are calculated and plotted.  The residual plot contains useful information, such as lines representing &#963; values, fitted slope & intercept values and error, along with R<sup>2</sup> and RSS values.
 
-- _-grb_ is an optional flag to be used when you're trying to find a specific source.  With this flag, you input the RA and Dec of the GRB you wish to find, along with a search threshold diameter.  _photometry.py_ will search for a sextracted source within that area.  If it finds one, it will print information about the source to the command line, along with generating an .ecsv file with the same information.  This info includes the source's RA & Dec, calculated magnitude & error, 50% flux radius, and SNR.  Below are the optional arguments that must be inputted when using this flag.
+- _-grb_ is an optional flag to be used when you're trying to find a specific source.  With this flag, you input the RA and Dec of the GRB you wish to find, along with a search threshold diameter.  _photometry.py_ will search for a sextracted source within that area.  If it finds one, it will print information about the source to the command line, along with generating an .ecsv file with the same information.  If it finds multiple sources, it will let you know in the command line and log info for all found sources in the .ecsv.  This info includes the source's RA & Dec, calculated magnitude & error, 50% flux radius, SNR, and distance from inputted coords.  Below are the optional arguments that must be inputted when using this flag.
     - _-RA_: GRB RA
     - _-DEC_: GRB Dec
     - _-thresh_: Search diameter in arcsec, default = 4"
@@ -74,15 +76,15 @@ There are several other catalogues that are outputted, including the initial sex
 
 As we don't really utilize these catalogues once the photometry is done, so I could have an option to delete these after the fact.  But for now, they stay.
 
-In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be:
+In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be (where C# is the chip number):
 
-> _survey_-query.ecsv
+> _survey_-C#-query.ecsv
 
 For _-plots_, the outputted mag comparison and residual plots will be PNGS with the respective names:
 
 > _survey_-mag_comp_plot.png,
 > _survey_-residual_plot.png
 
-Finally, for _-grb_, the .ecsv with the found source's information will be named:
+Finally, for _-grb_, the .ecsv with the found source's (or sources') information will be named:
 
-> GRB_Data.ecsv
+> GRB-_filter_-Data.ecsv or GRB_Multisource-_filter_-Data.ecsv
