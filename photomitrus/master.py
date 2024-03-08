@@ -28,7 +28,7 @@ def initastrom(astrompath, parentdir, chip):
     ramppath = parentdir + 'C%i/' % (chip)
     print('running initial astrometry on raw imgs...')
     try:
-        command = 'python ./preprocess/gen_astrometry.py -dir %s %s' % (astrompath, ramppath)
+        command = 'python ./preprocess/gen_astrometry.py -output %s -input %s' % (astrompath, ramppath)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
@@ -39,7 +39,7 @@ def sky(astrompath, skypath, sigma):
     os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
     print('generating sky...')
     try:
-        command = 'python ./sky/gen_sky.py -in_path %s -out_path %s -sigma %i' % (astrompath, skypath, sigma)
+        command = 'python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %i' % (astrompath, skypath, sigma)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
@@ -87,7 +87,10 @@ defaults = dict(sigma=4)
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
     parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
-    parser.add_argument('-parent', type=str, help='[str], parent directory of outputs, should include astrom, sky, sub, and stack dirs')
+    parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
+    parser.add_argument('-astrom_start', action='store_true', help='optional flag, starts pipeline at sxtrctr / scamp step')
+    parser.add_argument('-stack_start', action='store_true',help='optional flag, starts pipeline at swarp step')
+    parser.add_argument('-parent', type=str, help='[str], parent directory of outputs, should include folders of the chips ramp data')
     parser.add_argument('-chip', type=int, help='[int], number of detector')
     parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4', default=defaults["sigma"])
     args = parser.parse_args()
@@ -96,6 +99,15 @@ if __name__ == "__main__":
         astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
         sky(astromdir, skydir, args.sigma)
         skysub(astromdir, subdir, skydir, args.chip)
+        astrometry(subdir)
+        stack(subdir, stackdir)
+    elif args.skysub_start:
+        astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
+        skysub(astromdir, subdir, skydir, args.chip)
+        astrometry(subdir)
+        stack(subdir, stackdir)
+    elif args.astrom_start:
+        astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
         astrometry(subdir)
         stack(subdir, stackdir)
     else:
