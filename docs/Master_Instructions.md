@@ -65,6 +65,7 @@ There are many outputted data products from this pipeline.  However, _master.py_
 	│   │   ├── sky.Open-#.12345678-12345678.C#.fits
   	│   ├── stack
 	│   │   ├── coadd.Open-#.12345678-12345678.C#.fits
+ 	│   │   ├── weight.Open-#.12345678-12345678.C#.fits
   	│   ├── ramp_fit_log_****-**-**.dat
 	│   ├── ramp_fit_log_****-**-**.clean.dat
 
