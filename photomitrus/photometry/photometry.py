@@ -98,7 +98,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % filter,'e_%sap3' % filter], column_filters={"%sap3" % filter: ">0"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % filter,'e_%sap3' % filter], column_filters={"%sap3" % filter: ">12"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -160,16 +160,17 @@ def sex2(imageName):
 
 #%%
 #read in tables, crossmatch
-def tables(Q,psfcatalogName,crop):
+def tables(Q,psfcatalogName,crop,filter):
     print('Cross-matching sextracted and catalog sources...')
     crop = int(crop)
     mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
     good_cat_stars = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max(mass_imCoords[0])-crop)) & (mass_imCoords[1] > crop) & (mass_imCoords[1] < (max(mass_imCoords[0])-crop)))]
 
     psfsourceTable = get_table_from_ldac(psfcatalogName)
+
     cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']
                 < (max(psfsourceTable['XMODEL_IMAGE'])-crop)) & (psfsourceTable['XMODEL_IMAGE']>crop) &(psfsourceTable['YMODEL_IMAGE']<(max(psfsourceTable['YMODEL_IMAGE'])-crop))
-                & (psfsourceTable['YMODEL_IMAGE']>crop)] #& (psfsourceTable['SNR_WIN']>3.0)]
+                & (psfsourceTable['YMODEL_IMAGE']>crop)]
 
     psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs', unit='degree')
 
@@ -213,6 +214,13 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.add_column(psfmagerrcol)
     cleanPSFSources.remove_column('VIGNET')
 
+    magmean = cleanPSFSources['%sMAG_PSF' % filter].mean()  #trimming sources more than 3.5 sig away from mean (outliers)
+    magerr = cleanPSFSources['%sMAG_PSF' % filter].std()
+    maglow = magmean - 3.5 * magerr
+    maghigh = magmean + 3.5 * magerr
+
+    cleanPSFSources = cleanPSFSources[(cleanPSFSources['JMAG_PSF'] >= maglow) & (cleanPSFSources['JMAG_PSF'] <= maghigh)]
+
     cleanPSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
 
@@ -221,7 +229,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
     from astropy.table import Table
     GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
 
-    mag_ecsvname = '%s.%s.ecsv'  % (imageName,survey)
+    mag_ecsvname = '%s.%s.ecsv' % (imageName,survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable[(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'], frame='icrs',
