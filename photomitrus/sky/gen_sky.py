@@ -9,6 +9,8 @@ from astropy.io import fits
 from astropy.stats import sigma_clip
 from scipy import ndimage
 import argparse
+import warnings
+from astropy.utils.exceptions import AstropyWarning
 import sys
 
 sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
@@ -47,6 +49,7 @@ def mean_filter_masking(image, size=50):
     return image
 
 def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None):
+    warnings.simplefilter('ignore', category=AstropyWarning)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if
                     f.endswith('.ramp.new') or f.endswith('.flat.fits')]
     nfiles = len(image_fnames)

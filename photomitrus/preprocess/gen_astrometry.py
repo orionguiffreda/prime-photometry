@@ -38,12 +38,11 @@ def astromdir(outpath,dir):
 #%%
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Runs astrom.net on specified file')
-    parser.add_argument('files', nargs='*', type=str, metavar='f', help='Put output path then dir or input list (if applicable)')
     parser.add_argument('-list', action='store_true', help='if downloading from a list of file paths, use this optional arg')
-    parser.add_argument('-dir', action='store_true', help='if downloading directly from a dir, use this optional arg,'
-                                                          ' include the desired dir after the output path')
+    parser.add_argument('-output', type=str, help='[str] output path for ramps w/ astrom.')
+    parser.add_argument('-input', type=str, help='[str] input path for ramps (or list if using that)')
     args = parser.parse_args()
     if args.list:
-        astrom(args.files[0],args.files[1])
-    if args.dir:
-        astromdir(args.files[0],args.files[1])
+        astrom(args.output,args.input)
+    else:
+        astromdir(args.output,args.input)

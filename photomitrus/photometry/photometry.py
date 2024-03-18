@@ -160,7 +160,7 @@ def sex2(imageName):
 
 #%%
 #read in tables, crossmatch
-def tables(Q,psfcatalogName,crop,filter):
+def tables(Q,psfcatalogName,crop):
     print('Cross-matching sextracted and catalog sources...')
     crop = int(crop)
     mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
@@ -171,6 +171,13 @@ def tables(Q,psfcatalogName,crop,filter):
     cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']
                 < (max(psfsourceTable['XMODEL_IMAGE'])-crop)) & (psfsourceTable['XMODEL_IMAGE']>crop) &(psfsourceTable['YMODEL_IMAGE']<(max(psfsourceTable['YMODEL_IMAGE'])-crop))
                 & (psfsourceTable['YMODEL_IMAGE']>crop)]
+
+    magmean = cleanPSFSources['MAG_POINTSOURCE'].mean()  #trimming sources more than 4 sig away from mean (outliers)
+    magerr = cleanPSFSources['MAG_POINTSOURCE'].std()
+    maglow = magmean - 4 * magerr
+    maghigh = magmean + 4 * magerr
+
+    #cleanPSFSources = cleanPSFSources[(cleanPSFSources['MAG_POINTSOURCE'] >= maglow) & (cleanPSFSources['MAG_POINTSOURCE'] <= maghigh)]
 
     psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs', unit='degree')
 
@@ -213,13 +220,6 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     cleanPSFSources.add_column(psfmagcol)
     cleanPSFSources.add_column(psfmagerrcol)
     cleanPSFSources.remove_column('VIGNET')
-
-    magmean = cleanPSFSources['%sMAG_PSF' % filter].mean()  #trimming sources more than 3.5 sig away from mean (outliers)
-    magerr = cleanPSFSources['%sMAG_PSF' % filter].std()
-    maglow = magmean - 3.5 * magerr
-    maghigh = magmean + 3.5 * magerr
-
-    cleanPSFSources = cleanPSFSources[(cleanPSFSources['JMAG_PSF'] >= maglow) & (cleanPSFSources['JMAG_PSF'] <= maghigh)]
 
     cleanPSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
@@ -267,7 +267,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
 
         grbdata.write('GRB_%s_Data.ecsv' % filter, overwrite=True)
         print('Generated GRB data table!')
-    if len(idx_GRBcleanpsf) > 1:
+    elif len(idx_GRBcleanpsf) > 1:
         print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
         mag_ar = []
         mag_err_ar =[]
@@ -333,12 +333,12 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     #residual fit
     x = PRIMEdata['%sMAG_PSF' % filter][idx_psfimage]
     y = good_cat_stars['%s' % magcol][idx_psfmass]
-    x_const = sm.add_constant(x)
-    model = sm.OLS(y, x_const).fit()
-    m = model.params[1]
-    merr = model.bse[1]
-    b = model.params[0]
-    berr = model.bse[0]
+    #x_const = sm.add_constant(x)
+    model = sm.OLS(y, x).fit()
+    m = model.params[0]
+    merr = model.bse[0]
+    #b = model.params[0]
+    #berr = model.bse[0]
     rsquare = model.rsquared
     rss = model.ssr
     res_err = np.std(model.resid)
@@ -356,7 +356,8 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     plt.axhline(y=-res_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % res_err, r'2 $\sigma$ = %.3f' % (2*res_err)], loc='lower left')
-    info = ('slope = %.3f +/- %.3f' % (m,merr))+('\nintercept = %.3f +/- %.3f' % (b,berr))+('\nR$^{2}$ = %.3f' % rsquare)+('\nRSS = %d' % rss)
+    info = ('slope = %.5f +/- %.5f' % (m,merr))+('\nR$^{2}$ = %.3f' % rsquare)+('\nRSS = %d' % rss)
+    #+('\nintercept = %.3f +/- %.3f' % (b,berr))
     plt.text(15,-1.25,info,bbox=dict(facecolor='none',edgecolor='black',pad=5.0))
     plt.savefig('%s_residual_plot.png' % survey,dpi=300)
     print('Saved residual plot to dir!')

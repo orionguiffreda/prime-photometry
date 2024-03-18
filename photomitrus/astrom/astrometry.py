@@ -7,9 +7,7 @@ import sys
 import argparse
 import subprocess
 import sys
-
-sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus/')
-from settings import gen_config_file_name
+from astropy.io import fits
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from settings import gen_config_file_name
@@ -18,17 +16,33 @@ from settings import gen_config_file_name
 def sex(imgdir):
     os.chdir(str(imgdir))
     sx = gen_config_file_name('sex.config')
+    ap = gen_config_file_name('astrom.param')
     for f in sorted(os.listdir(str(imgdir))):
         if f.endswith('.fits'):
             pre = os.path.splitext(f)[0]
             ext = os.path.splitext(f)[1]
-            com = ["sex ", imgdir + pre + ext, ' -c '+sx,
-                   " -CATALOG_NAME " + pre + '.cat']
+            com = ["sex ", imgdir + pre + ext, ' -c '+sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME '+ap]
             s0 = ''
             com = s0.join(com)
             out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             out.wait()
             print(pre + ext + ' sextracted!')
+
+def sexback(imgdir):
+    os.chdir(str(imgdir))
+    sx = gen_config_file_name('sex.config')
+    ap = gen_config_file_name('astrom.param')
+    for f in sorted(os.listdir(str(imgdir))):
+        if f.endswith('ramp.new'):
+            pre = os.path.splitext(f)[0]
+            ext = os.path.splitext(f)[1]
+            com = ["sex ", imgdir + pre + ext, ' -c '+sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME '+ap,
+                   ' -CHECKIMAGE_NAME '+pre+'.back.fits']
+            s0 = ''
+            com = s0.join(com)
+            out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            out.wait()
+            print(pre + '.back.fits back subbed!')
 
 def scamp(imgdir):
     os.chdir(imgdir)
@@ -58,5 +72,6 @@ if __name__ == "__main__":
     if args.scamp:
         scamp(args.path)
     if args.all:
+        #sexback(args.path)
         sex(args.path)
         scamp(args.path)

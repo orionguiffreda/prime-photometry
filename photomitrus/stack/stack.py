@@ -41,7 +41,7 @@ def badpixmask(parent, subpath, chip):
 
 
 def swarp(imgdir, finout):
-    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.sky.flat.fits')]
+    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits')]
     image_fnames.sort()
     header = fits.getheader(image_fnames[-1])
     filter1 = header.get('FILTER1', 'unknown')
@@ -49,10 +49,12 @@ def swarp(imgdir, finout):
     save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
                                                     image_fnames[-1][-24:-16], image_fnames[0][-15])
     print(save_name)
-    weight_name =  'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+    weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
                                                     image_fnames[-1][-24:-16], image_fnames[0][-15])
     os.chdir(str(finout))
     sw = gen_config_file_name('default.swarp')
+    #save_name = 'coaddback.fits'
+    #weight_name = 'coaddbackweight.fits'
     com = ["swarp ", imgdir + '*.flat.fits', ' -c '+sw
            , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
     s0 = ''
