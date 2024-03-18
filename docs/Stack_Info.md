@@ -10,19 +10,19 @@ _stack.py_ has the formatting as followed:
 
 The arguments you will utilize (currently) are the following:
 
--_-sub_ is a string that is the path to where your input processed images are stored.  These will be stacked.
+- _-sub_ is a string that is the path to where your input processed images are stored.  These will be stacked.
 
--_-stack_ is a string that is the path to where your final stacked image & weight image will be stored. 
+- _-stack_ is a string that is the path to where your final stacked image & weight image will be stored. 
 
 ### Bad Pixel Mask - *IN DEVELOPMENT*
 
 The arguments below are currently in development, but I've put them in for an initial test.  They technically work if given the right files and paths, but the swarped end product is subpar, so it's not currently part of the pipeline.
 
--_-mask_ is be an optional flag, utilized when you want to use a bad pixel mask to remove bad pixels from your images.
+- _-mask_ is be an optional flag, utilized when you want to use a bad pixel mask to remove bad pixels from your images.
 
--_-parent_ is be a string for the path to the greater parent directory, where all the ramps and other images are stored. It's the same path as _-parent_ in _master.py_.
+- _-parent_ is be a string for the path to the greater parent directory, where all the ramps and other images are stored. It's the same path as _-parent_ in _master.py_.
 
--_-chip_ is an integer for the chip number.
+- _-chip_ is an integer for the chip number.
 
 What this part of _stack.py_ does is apply an already created bad pixel mask (there will be one for each detector) that identifies bad pixels in each detector.  This mask is a FITS file, but it is converted to a boolean array and then applied to each image.  This removes bad pixels by converting all the false values into nan values.  The images are then rewritten with these nan values.  These masked images are then inputted into swarp for stacking.
 
