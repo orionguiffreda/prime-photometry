@@ -43,6 +43,11 @@ Recently, I have included the ability to use flat-fielding in the pipeline, thro
 
 - _-FF_ includes a flat-fielding step.  Currently, this extra step happens after the initial astrometry.  The ramp images (w/ astrometry) are divided by an appropriate master flat.  These master flats are stored in their own subdirectory called _mflats_, and are called by a function in _settings.py_ by their filter and chip number.  Currently, this only grabs the appropriate flats that have already been created.  These master flats were created using _gen_flat.py_.  In the future, I hope to have an addition which will read the night's log, determine if flats have been taken for the same filter as the images you're processing, then generate a new flat before processing.  This will combat any temperature adjustments (causing thermal noise) made between when I made these master flats and future observations.
 
+- _-filter_ is an argument that must be included with the flat-fielding step.  This is simply the letter corresponding to the filter of the images you're processing, ex. "J".
+
+A sample argument utilizing flat-fielding would look like:
+
+	python ./master.py -FF -parent ../../J_Band/ -chip 1 -filter J -sigma 4
 
 ## How Master.py Works
 
