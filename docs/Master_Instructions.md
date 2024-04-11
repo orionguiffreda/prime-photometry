@@ -58,7 +58,7 @@ This section details how _master.py_ works.
 - It is at this point, where if you included flat-fielding, the ramp images would be cropped accordingly and divided by the master flat specific to the filter and chip, using _flatfield.py_.
 - Another command is then run that calls _gen_sky.py_, which generates a sky image based on the given sigma value.  The sky image is then subtracted from each image using _sky.py_.
 - Once each image has been processed, _astrometry.py_ is used to run sextractor and scamp to generate improved astrometry for stacking purposes, through generating sextractor .cat and scamp .head files.
-- Finally _stack.py_ is utilized, running swarp to median-combine all the processed images into 1 final stacked image.  This image sometimes has bad astrometry at the very edges, so astrometry.net is run again on this stacked image, correcting the astrometry.   
+- Finally _stack.py_ is utilized, running swarp to co-add all the processed images into 1 final stacked image.  This image sometimes has bad astrometry at the very edges, so astrometry.net can be run again on this stacked image, correcting the astrometry.   
 
 ## Data Products
 
