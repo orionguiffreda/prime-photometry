@@ -82,9 +82,10 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
     sky = median_filter_masking(sky)  # filling in the all nan slices
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
-def gen_prev_sky_image(science_data_directory,output_directory, previous_sky=None, sky_group_size=None, sigma=None):
+def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None):
+    warnings.simplefilter('ignore', category=AstropyWarning)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if
-                    f.endswith('.cds.flat.fits')]
+                    f.endswith('.ramp.new') or f.endswith('.flat.fits')]
     nfiles = len(image_fnames)
     if sky_group_size is None:
         sky_group_size = nfiles
@@ -92,8 +93,10 @@ def gen_prev_sky_image(science_data_directory,output_directory, previous_sky=Non
     header = fits.getheader(image_fnames[-1])
     filter1 = header.get('FILTER1', 'unknown')
     filter2 = header.get('FILTER2', 'unknown')
-    save_name = 'sky.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16], image_fnames[-1][-24:-16],
-                                                  image_fnames[0][-19])
+    #save_name = 'sky.Open-J.00747455-00747767.C4.fits'
+    save_name = 'sky.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-20:-12],
+                                                    image_fnames[-1][-20:-12], image_fnames[0][-11])
+    #save_name = os.path.join(output_directory, save_name)
     print(save_name)
     # breaking the files into group to avoid using too much memory
     ngroups = int(nfiles / sky_group_size)
@@ -105,29 +108,28 @@ def gen_prev_sky_image(science_data_directory,output_directory, previous_sky=Non
         # calculating sky frame for group
         group_files = image_fnames[file_counter:file_counter+sky_group_size]
         print(group_files)
-        images = [sigma_clipped(fits.getdata(f), sigma, fits.getdata(previous_sky)) for f in group_files]
+        images = [sigma_clipped(fits.getdata(f), sigma) for f in group_files]
         # images = [sigma_clipped(image) for image in images]
         median_array.append(np.nanmedian(images, axis=0))
         file_counter += sky_group_size
     sky = np.nanmedian(median_array, axis=0)  # generating median image
     sky = median_filter_masking(sky)  # filling in the all nan slices
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+
 #%%
 #NEED TO ADD DIFF DETECTOR SETTINGS, ONLY HAVE FILTER SETTINGS
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generates sky for given filter and dataset')
-    parser.add_argument('-prev_sky',  action='store_true', help='if including prev sky in sky gen, include'
-                                                                ' this optional argument')
+    parser.add_argument('-flat',  action='store_true', help='if using flat fielding, as in pipeline (with .flat.fits files), use this optional flag')
     #parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
     parser.add_argument('-sky_path', type=str, help='[str] output sky path')
-    parser.add_argument('-prev', type=str, help='[str] prev sky path *ONLY USE W/ -prev_sky FLAG*',default=None)
     parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping')
     args = parser.parse_args()
     #nint,nframes,sky_size,start_index = filter(args.filter[0])
-    if args.prev_sky:
-        gen_prev_sky_image(science_data_directory=args.in_path,output_directory=args.sky_path,previous_sky=args.prev,
-                      sky_group_size=None,sigma=args.sigma)
+    if args.flat:
+        gen_flat_sky_image(science_data_directory=args.in_path, output_directory=args.sky_path, sky_group_size=None,
+                      sigma=args.sigma)
     else:
         gen_sky_image(science_data_directory=args.in_path,output_directory=args.sky_path, sky_group_size=None,sigma=args.sigma)
 

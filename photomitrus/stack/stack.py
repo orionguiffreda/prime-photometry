@@ -41,27 +41,92 @@ def badpixmask(parent, subpath, chip):
 
 
 def swarp(imgdir, finout):
-    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits')]
+    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     image_fnames.sort()
     header = fits.getheader(image_fnames[-1])
     filter1 = header.get('FILTER1', 'unknown')
     filter2 = header.get('FILTER2', 'unknown')
-    save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                    image_fnames[-1][-24:-16], image_fnames[0][-15])
-    print(save_name)
-    weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                    image_fnames[-1][-24:-16], image_fnames[0][-15])
+    ext = os.path.splitext(image_fnames[-1])[1]
+    if ext == '.new':
+        save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                        image_fnames[-1][-23:-15], image_fnames[0][-14])
+        print(save_name)
+        weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                        image_fnames[-1][-23:-15], image_fnames[0][-14])
+    else:
+        save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+        print(save_name)
+        weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+
     os.chdir(str(finout))
+    #save_name = 'coaddastr.fits'
+    #weight_name = 'coaddastrweight.fits'
+
     sw = gen_config_file_name('default.swarp')
-    #save_name = 'coaddback.fits'
-    #weight_name = 'coaddbackweight.fits'
-    com = ["swarp ", imgdir + '*.flat.fits', ' -c '+sw
+    com = ["swarp ", imgdir + '*.flat'+ext, ' -c '+sw
            , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
     s0 = ''
     com = s0.join(com)
     out = subprocess.Popen([com], shell=True)
     out.wait()
     print('Co-added image created, all done!')
+
+def swarp_increm(imgdir, finout,im_num):
+    batch_size = im_num
+    files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.fits')]
+    total_files = len(files)
+
+    for i in range(0, total_files, batch_size):
+        batch = files[:i + batch_size]
+        print(batch)
+        print('images taken = ', len(batch))
+
+        image_fnames = batch
+        header = fits.getheader(image_fnames[-1])
+        filter1 = header.get('FILTER1', 'unknown')
+        filter2 = header.get('FILTER2', 'unknown')
+        save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+        print(save_name)
+        weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+        os.chdir(str(finout))
+        sw = gen_config_file_name('default.swarp')
+        #save_name = 'coaddastr.fits'
+        #weight_name = 'coaddastrweight.fits'
+        image_list = (',').join(image_fnames)
+        com = ["swarp ", image_list, ' -c '+sw
+               , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
+        s0 = ''
+        com = s0.join(com)
+        out = subprocess.Popen([com], shell=True)
+        out.wait()
+        print('Co-added image created, all done!')
+
+def astromfin(dir,chip):
+    print('Re-running astrometry on swarped image!')
+    import fnmatch
+    instack = sorted(os.listdir(dir))
+    stackimg = []
+    for f in instack:
+        if fnmatch.fnmatch(f, 'coadd.Open-*.C%i.fits' % chip):
+            stackimg.append(f)
+    for f in stackimg:
+        pre = os.path.splitext(f)[0]
+        com = ["solve-field ", '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg'
+            ,' --scale-units arcsecperpix', ' --scale-low 0.45',' --scale-high 0.55',' --no-verify',' -U none', ' --axy none', ' -S none', ' -M none', ' -R none', ' -B none', ' -O',
+            ' -p', ' -z 4', ' -D ' + dir, ' ' + dir + f] #can change downsample w/ z, or change what outputs here
+        s0 = ''
+        com = s0.join(com)
+        out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)   #include stdout and stderr to suppress astrom.net output
+        out.wait()
+        #renaming
+        os.remove(dir+f)
+        os.rename(dir+pre+'.new',dir+f)
+
+    print('final image generated, original stack discarded!')
 
 
 #%%
@@ -76,20 +141,31 @@ print(save_name)"""
 
 #%%
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Runs swarp to stack imgs, if using -mask flag, do not keyboard interupt')
-    parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
+    parser = argparse.ArgumentParser(description='Runs swarp to stack imgs, then reruns astrometry for improved wcs *NOTE* if using -mask flag, do not keyboard interrupt')
+    #parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
+    parser.add_argument('-no_astrom', action='store_true', help='optional flag, use if you just want the swarped image, not the image with improved astrometry')
+    parser.add_argument('-astrom_only', action='store_true',
+                        help='optional flag, use if you already have the swarped image, but want improved astrometry')
+    parser.add_argument('-increm', action='store_true',
+                        help='optional flag, use if you want to generate a stacked img from increments of images, ex. 5 stack, then 10 stack, etc.')
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
-    parser.add_argument('-parent', type=str, help='[str] Parent directory where all img folders are stored *USE ONLY W/ -MASK FLAG*',
-                        default=None)
-    parser.add_argument('-chip', type=int, help='[int] Detector chip number *USE ONLY W/ -MASK FLAG*',
-                        default=None)
+    parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by')
+    #parser.add_argument('-parent', type=str, help='*USE ONLY W/ -MASK FLAG* [str] Parent directory where all img folders are stored', default=None)
+    parser.add_argument('-chip', type=int, help='*USE ONLY W/O -no_astrom FLAG* [int] Detector chip number', default=None)
     args = parser.parse_args()
-    if args.mask:
-        otherdir = badpixmask(args.parent,args.sub,args.chip)
-        print('removing temp dir...')
-        shutil.rmtree(otherdir)
-    swarp(args.sub,args.stack)
+    #if args.mask:
+        #otherdir = badpixmask(args.parent,args.sub,args.chip)
+        #print('removing temp dir...')
+        #shutil.rmtree(otherdir)
+    if args.no_astrom:
+        swarp(args.sub, args.stack)
+    elif args.astrom_only:
+        astromfin(args.stack,args.chip)
+    elif args.increm:
+        swarp_increm(args.sub,args.stack,args.num)
+        astromfin(args.stack,args.chip)
+    else:
+        swarp(args.sub,args.stack)
+        astromfin(args.stack,args.chip)
 
-#%%
-"""swarp('/Users/orion/Desktop/PRIME/GRB/H_band/H_backs/','/Users/orion/Desktop/PRIME/GRB/H_band/H_swarp/')"""

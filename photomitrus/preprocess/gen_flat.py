@@ -55,59 +55,85 @@ def flatlists(path, chip):
     else:
         print('No flats found... ')
 
-    start_images_names_1 = log_start_flats[:int(len(log_start_flats)/2)]
-    start_images_names_2 = log_start_flats[int(len(log_start_flats)/2):]
+    if log_start_flats:
+        if not log_end_flats:
+            start_images_names_1 = log_start_flats[:int(len(log_start_flats)/2)]
+            start_images_names_2 = log_start_flats[int(len(log_start_flats)/2):]
+            end_images_names_1 = 0
+            end_images_names_2 = 0
+            #flag = 'start'
 
-    end_images_names_1 = log_end_flats[:int(len(log_end_flats)/2)]
-    end_images_names_2 = log_end_flats[int(len(log_end_flats)/2):]
-    return start_images_names_1,start_images_names_2,end_images_names_1,end_images_names_2
+    if log_end_flats:
+        start_images_names_1 = 0
+        start_images_names_2 = 0
+        end_images_names_1 = log_end_flats[:int(len(log_end_flats)/2)]
+        end_images_names_2 = log_end_flats[int(len(log_end_flats)/2):]
+        #flag = 'end'
+
+    if log_start_flats:
+        if log_end_flats:
+            start_images_names_1 = log_start_flats[:int(len(log_start_flats) / 2)]
+            start_images_names_2 = log_start_flats[int(len(log_start_flats) / 2):]
+            end_images_names_1 = log_end_flats[:int(len(log_end_flats) / 2)]
+            end_images_names_2 = log_end_flats[int(len(log_end_flats) / 2):]
+            #flag = 'both'
+
+    return start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2
+
 #%% getting data for all groups and stacking along 3rd dim
-def flatprocessing(start_images_names_1,start_images_names_2,end_images_names_1,end_images_names_2,direct):
+def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,end_images_names_1=None,end_images_names_2=None):
     print('getting data for groups of flats and stacking...')
-    image_list_1 = []
-    for f in start_images_names_1:
-        img = fits.getdata(f)
-        image_list_1.append(img)
-    start_images_1 = np.stack(image_list_1)
-    start_images_1 = start_images_1[:,4:4092,10:]
 
-    image_list_2 = []
-    for f in start_images_names_2:
-        img = fits.getdata(f)
-        image_list_2.append(img)
-    start_images_2 = np.stack(image_list_2)
-    start_images_2 = start_images_2[:,4:4092,10:]
+    if start_images_names_1:
+        image_list_1 = []
+        for f in start_images_names_1:
+            img = fits.getdata(f)
+            image_list_1.append(img)
+        start_images_1 = np.stack(image_list_1)
+        start_images_1 = start_images_1[:,4:4092,4:4092]
 
-    image_list_3 = []
-    for f in end_images_names_1:
-        img = fits.getdata(f)
-        image_list_3.append(img)
-    end_images_1 = np.stack(image_list_3)
-    end_images_1 = end_images_1[:,4:4092,10:]   #remove if cropping issue is fixed
+        image_list_2 = []
+        for f in start_images_names_2:
+            img = fits.getdata(f)
+            image_list_2.append(img)
+        start_images_2 = np.stack(image_list_2)
+        start_images_2 = start_images_2[:,4:4092,4:4092]
 
-    image_list_4 = []
-    for f in end_images_names_2:
-        img = fits.getdata(f)
-        image_list_4.append(img)
-    end_images_2 = np.stack(image_list_4)
-    end_images_2 = end_images_2[:,4:4092,10:]   #remove if cropping issue is fixed
+        # subtraction, averaging, then normalizing
+        print('start of night: subtracting, normalizing, then median combining...')
 
-    #subtraction, averaging, then normalizing
-    print('subtracting, normalizing, then median combining...')
+        start_median = []
+        for i, j in zip(start_images_1, start_images_2):
+            sub = i - j
+            normsub = sub / np.nanmedian(sub)
+            start_median.append(normsub)
+        start_median_norm = np.nanmedian(np.stack(start_median), axis=0)
 
-    start_median = []
-    for i,j in zip(start_images_1,start_images_2):
-        sub = i - j
-        normsub = sub/np.nanmedian(sub)
-        start_median.append(normsub)
-    start_median_norm = np.nanmedian(np.stack(start_median),axis=0)
+    if end_images_names_1:
+        image_list_3 = []
+        for f in end_images_names_1:
+            img = fits.getdata(f)
+            image_list_3.append(img)
+        end_images_1 = np.stack(image_list_3)
+        end_images_1 = end_images_1[:,4:4092,4:4092]   #remove if cropping issue is fixed
 
-    end_median = []
-    for i,j in zip(end_images_1,end_images_2):
-        sub = i - j
-        normsub = sub/np.nanmedian(sub)
-        end_median.append(normsub)
-    end_median_norm = np.nanmedian(np.stack(end_median),axis=0)
+        image_list_4 = []
+        for f in end_images_names_2:
+            img = fits.getdata(f)
+            image_list_4.append(img)
+        end_images_2 = np.stack(image_list_4)
+        end_images_2 = end_images_2[:,4:4092,4:4092]   #remove if cropping issue is fixed
+
+        # subtraction, averaging, then normalizing
+        print('end of night: subtracting, normalizing, then median combining...')
+
+        end_median = []
+        for i, j in zip(end_images_1, end_images_2):
+            sub = i - j
+            normsub = sub / np.nanmedian(sub)
+            end_median.append(normsub)
+        end_median_norm = np.nanmedian(np.stack(end_median), axis=0)
+
     """
     #    old algo
     start_sub = start_images_1 - start_images_2
@@ -131,25 +157,28 @@ def flatprocessing(start_images_names_1,start_images_names_2,end_images_names_1,
     isExist = os.path.exists('mflats')
     if not isExist:
         os.mkdir('mflats')
-    header_start = fits.getheader(start_images_names_1[-1])
-    filter1_start = header_start.get('FILTER1', 'unknown')
-    filter2_start = header_start.get('FILTER2', 'unknown')
-    save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start, start_images_names_1[0][-20:-12],
-                                                    start_images_names_2[-1][-20:-12], start_images_names_1[0][-11])
-    output_fname_start = os.path.join(direct+'mflats/', save_name_start)
-    print(output_fname_start + ' created!')
 
-    fits.HDUList(fits.PrimaryHDU(header=header_start, data=start_median_norm)).writeto(output_fname_start, overwrite=True)
+    if start_images_names_1:
+        header_start = fits.getheader(start_images_names_1[-1])
+        filter1_start = header_start.get('FILTER1', 'unknown')
+        filter2_start = header_start.get('FILTER2', 'unknown')
+        save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start, start_images_names_1[0][-20:-12],
+                                                        start_images_names_2[-1][-20:-12], start_images_names_1[0][-11])
+        output_fname_start = os.path.join(direct+'mflats/', save_name_start)
+        print(output_fname_start + ' created!')
 
-    header_end = fits.getheader(end_images_names_1[-1])
-    filter1_end = header_end.get('FILTER1', 'unknown')
-    filter2_end = header_end.get('FILTER2', 'unknown')
-    save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end, end_images_names_1[0][-20:-12],
-                                                    end_images_names_2[-1][-20:-12], end_images_names_1[0][-11])
-    output_fname_end = os.path.join(direct+'mflats/', save_name_end)
-    print(output_fname_end + ' created!')
+        fits.HDUList(fits.PrimaryHDU(header=header_start, data=start_median_norm)).writeto(output_fname_start, overwrite=True)
 
-    fits.HDUList(fits.PrimaryHDU(header=header_end, data=end_median_norm)).writeto(output_fname_end, overwrite=True)
+    if end_images_names_1:
+        header_end = fits.getheader(end_images_names_1[-1])
+        filter1_end = header_end.get('FILTER1', 'unknown')
+        filter2_end = header_end.get('FILTER2', 'unknown')
+        save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end, end_images_names_1[0][-20:-12],
+                                                        end_images_names_2[-1][-20:-12], end_images_names_1[0][-11])
+        output_fname_end = os.path.join(direct+'mflats/', save_name_end)
+        print(output_fname_end + ' created!')
+
+        fits.HDUList(fits.PrimaryHDU(header=header_end, data=end_median_norm)).writeto(output_fname_end, overwrite=True)
 #%%
 
 if __name__ == "__main__":
@@ -159,8 +188,8 @@ if __name__ == "__main__":
     parser.add_argument('-chip', type=int, help='[int], number of detector')
     args = parser.parse_args()
 
-    start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2 = flatlists(args.dir,args.chip)
-    flatprocessing(start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2,args.dir)
+    start_images_names_1, start_images_names_2,end_images_names_1, end_images_names_2 = flatlists(args.dir,args.chip)
+    flatprocessing(args.dir,start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2)
 
 
 

@@ -18,7 +18,7 @@ def sex(imgdir):
     sx = gen_config_file_name('sex.config')
     ap = gen_config_file_name('astrom.param')
     for f in sorted(os.listdir(str(imgdir))):
-        if f.endswith('.fits'):
+        if f.endswith('.fits') or f.endswith('.new'):
             pre = os.path.splitext(f)[0]
             ext = os.path.splitext(f)[1]
             com = ["sex ", imgdir + pre + ext, ' -c '+sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME '+ap]
@@ -33,7 +33,7 @@ def sexback(imgdir):
     sx = gen_config_file_name('sex.config')
     ap = gen_config_file_name('astrom.param')
     for f in sorted(os.listdir(str(imgdir))):
-        if f.endswith('ramp.new'):
+        if f.endswith('ramp.fits'):
             pre = os.path.splitext(f)[0]
             ext = os.path.splitext(f)[1]
             com = ["sex ", imgdir + pre + ext, ' -c '+sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME '+ap,

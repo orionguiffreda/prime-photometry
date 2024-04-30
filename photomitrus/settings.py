@@ -7,6 +7,7 @@ Settings for pipeline
 """
 #%% Config File Names
 import os
+import fnmatch
 #base_dir = os.path.dirname(__file__)
 #base_dir = os.path.dirname(os.path.abspath('__file__'))
 
@@ -19,61 +20,20 @@ def gen_mask_file_name(filename):
     base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
     return os.path.join(base_dir, 'weightmaps', filename)
 
-#%% Filter Settings
-def filter(filter):
-    if filter == 'H':
-        # GRB-Open-H settings
-        nint = 90
-        sky_size = 30
-        # nint = 11
-        nframes = 4
-        start_index = 406203
-        # start_index = 406523
-        # raw_directory_format = "{}/Users/orion/Desktop/PRIME/HBAND/grb-H"
-        raw_directory_format = r"G:\My Drive\PRIME\prime_data\GRB230815A\raw\C2\GRB-Open-H{}"
-        cds_dir = '/Users/orion/Desktop/PRIME/GRB/H_band/GRB-Open-H/'
-        return nint,nframes,sky_size,start_index #raw_directory_format,cds_dir
-    if filter == 'J':
-        nint = 9
-        nframes = 8
-        sky_size = 15
-        # start_index = 406955
-        # start_index = 407083
-        start_index = 407243
-        # raw_directory_format = "{}/Users/orion/Desktop/PRIME/HBAND/grb-H"
-        raw_directory_format = r"G:\My Drive\PRIME\prime_data\GRB230815A\raw\C2\GRB-Open-J{}"
-        # cds_dir = r'G:\My Drive\PRIME\prime_data\GRB230815A\cds\C2\GRB-Open-J'
-        cds_dir = '/Users/jdurbak/Documents/prime_data/GRB230815A/cds/C2/GRB-Open-J'
-        return nint, nframes, sky_size, start_index
-    if filter == 'Y':
-        # GRB-Open-Y settings
-        # nint = 45
-        # nint = 30
-        nint = 22
-        nframes = 8
-        sky_size = 15
-        # start_index = 406579
-        # start_index = 406699
-        # start_index = 406763
-        start_index = 406781
-        # raw_directory_format = "{}/Users/orion/Desktop/PRIME/HBAND/grb-H"
-        raw_directory_format = r"G:\My Drive\PRIME\prime_data\GRB230815A\raw\C2\GRB-Open-Y{}"
-        cds_dir = r'G:\My Drive\PRIME\prime_data\GRB230815A\cds\C2\GRB-Open-Y'
-        return nint, nframes, sky_size, start_index
-    if filter == 'Z':
-        # GRB-Z-Open settings
-        nint = 45
-        nframes = 8
-        sky_size = 15
-        # start_index = 407331
-        start_index = 407451
+def gen_pipeline_file_name():
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    return base_dir
 
-        # raw_directory_format = "{}/Users/orion/Desktop/PRIME/HBAND/grb-H"
-        raw_directory_format = r"G:\My Drive\PRIME\prime_data\GRB230815A\raw\C2\GRB-Z-Open{}"
-        cds_dir = r'G:\My Drive\PRIME\prime_data\GRB230815A\cds\C2\GRB-Z-Open'
-        return nint, nframes, sky_size, start_index
-    else:
-        print('Filters must be specified as H, J, Y or Z!')
+def gen_mflat_file_name(filter,chip):
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    for f in sorted(os.listdir(base_dir+'/mflats/')):
+        if fnmatch.fnmatch(f,'*.Open-%s.C%s.fits' % (filter,chip)):
+            filename = f
+    return os.path.join(base_dir, 'mflats', filename)
+
+#%%
+#os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
+#test = gen_mflat_file_name('J',1)
 
 #%%
 import pandas as pd
@@ -108,7 +68,6 @@ def flist(Object=object, Filter=filter, Chip=chip):
 
 a = flist()
 #%% make directories
-import os
 from pathlib import Path
 def makedirs(dir,chip):
     os.chdir(dir)
@@ -139,18 +98,35 @@ def makedirs(dir,chip):
     if subexists:
         print(dir + sub+' already exists!')
     dirnames = os.listdir('.')
-    astromlist = [i for i in dirnames if a in i]
+    astromlist = [i for i in dirnames if i.endswith(a)]
     astrom = ' '.join(astromlist)
-    sublist = [i for i in dirnames if sub in i]
+    sublist = [i for i in dirnames if i.endswith(sub)]
     sub = ' '.join(sublist)
-    skylist = [i for i in dirnames if 'sky' in i]
+    skylist = [i for i in dirnames if i.endswith('sky')]
     sky = ' '.join(skylist)
-    stacklist = [i for i in dirnames if 'stack' in i]
+    stacklist = [i for i in dirnames if i.endswith('stack')]
     stack = ' '.join(stacklist)
     return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
 
+#flat field directory creation
+def makedirsFF(dir,chip):
+    os.chdir(dir)
+    FF = 'C%i_FF' % chip
+    skyexists = os.path.exists(FF)
+    if not skyexists:
+        os.mkdir(FF)
+        print(dir + FF)
+    if skyexists:
+        print(dir + FF +' already exists!')
+    dirnames = os.listdir('.')
+    FFdir = [i for i in dirnames if i.endswith(FF)]
+    FFname = ' '.join(FFdir)
+    return dir + FFname + '/'
+
+
 #%%
 #astrom, sky, sub, stack = makedirs('/mnt/d/PRIME_photometry_test_files/GRB240205B/J_Band/flats/',1)
+#FF = makedirsFF('/mnt/d/PRIME_photometry_test_files/xrf_3_20240318/J_Band/',2)
 
 #%% for multiple object fields
 """
