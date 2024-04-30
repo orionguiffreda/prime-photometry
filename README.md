@@ -23,6 +23,13 @@ This is the photometry pipeline for PRIME telescope.
 
         conda activate prime-photometry
 
+Currently, to get the pipeline ready for use, I utilize these commands:
+
+        conda activate prime-photometrus
+        cd /mnt/c/PycharmProjects/prime-photometry/photomitrus/
+        export PYTHONPATH=.
+
+
 ## Index file installation
 
 ### About index files

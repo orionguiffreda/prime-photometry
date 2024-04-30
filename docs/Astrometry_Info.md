@@ -12,11 +12,11 @@ Running the --help flag reveals the formatting is:
 
 > gen_astrometry.py [-h] [-list] [-output OUTPUT] [-input INPUT]
 
--_-list_ is an optional flag, for use only if you're using a list of image paths as input.  Currently, this really isn't used.  However, if the ramp and raw image directories are mounted to PC-1, then this will likely see use. 
+- _-list_ is an optional flag, for use only if you're using a list of image paths as input.  Currently, this really isn't used.  However, if the ramp and raw image directories are mounted to PC-1, then this will likely see use. 
 
--_output_ is the output path for the images w/ new astrometry.  
+- _output_ is the output path for the images w/ new astrometry.  
 
--_input_ is the input field.  This is most likely a directory with ramp FITS images (currently).    
+- _input_ is the input field.  This is most likely a directory with ramp FITS images (currently).    
 
 The output files are new FITS files w/ WCS in the header, with the format '.ramp.new'.  It also outputs separate wcs files as '.ramp.wcs.'
 
@@ -30,10 +30,10 @@ Running the --help flag reveals the formatting is:
 
 > astrometry.py [-h] [-sex] [-scamp] [-all] [-path PATH]
 
--_-sex_ is an optional flag, use this if you want to only use sextractor on input images.
+- _-sex_ is an optional flag, use this if you want to only use sextractor on input images.
 
--_-scamp_ is an optional flag, use this if you want to only use scamp.  This step requires .cat sextractor catalogues to work.
+- _-scamp_ is an optional flag, use this if you want to only use scamp.  This step requires .cat sextractor catalogues to work.
 
--_-all_ is an optional flag, use this if you want to use sextractor, then scamp right after.  This will be the one you use most often, and is the flag used in _master.py_.  
+- _-all_ is an optional flag, use this if you want to use sextractor, then scamp right after.  This will be the one you use most often, and is the flag used in _master.py_.  
 
 There are two types of output files.  '.cat' files are the sextractor catalogues, while '.head' files are the external headers.
