@@ -6,6 +6,7 @@ from astropy.io import fits
 import subprocess
 import argparse
 from settings import gen_config_file_name
+import numpy as np
 #%%
 def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
     if not os.path.isdir(output_data_dir):
@@ -23,7 +24,7 @@ def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
             CRPIX2 = (header['CRPIX2'])
             header.set('CRPIX1', value=CRPIX1 - 4)
             header.set('CRPIX2', value=CRPIX2 - 4)
-        reduced_image = (cropimage-cropsky)
+        reduced_image = (cropimage-cropsky*np.nanmedian(cropimage))
         output_fname = os.path.basename(f)
         output_fname = output_fname.replace('.ramp.new', '.sky.flat.fits')
         output_fname = os.path.join(output_data_dir, output_fname)
@@ -47,7 +48,7 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
             CRPIX2 = (header['CRPIX2'])
             header.set('CRPIX1', value=CRPIX1 - 4)
             header.set('CRPIX2', value=CRPIX2 - 4)
-        reduced_image = (cropimage-cropsky)
+        reduced_image = (cropimage-cropsky*np.nanmedian(cropimage))
         output_fname = os.path.basename(f)
         output_fname = output_fname.replace('.flat.fits', '.sky.flat.fits')
         output_fname = os.path.join(output_data_dir, output_fname)

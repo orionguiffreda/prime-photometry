@@ -171,7 +171,7 @@ def fpack(stackpath,chip):
             stackimg.append(f)
     for f in stackimg:
         try:
-            command = 'fpack -F -Y %s%s' % (stackpath,f)
+            command = 'fpack -D -Y %s%s' % (stackpath,f)
             #print('Executing command: %s' % command)
             rval = subprocess.run(command.split(), check=True)
         except subprocess.CalledProcessError as err:
@@ -209,11 +209,34 @@ if __name__ == "__main__":
             if args.skygen_start:
                 astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
                 FFdir = makedirectoriesFF(args.parent, args.chip)
-                flatfield(astromdir, FFdir, args.filter, args.chip)
+                #flatfield(astromdir, FFdir, args.filter, args.chip)
                 sky(FFdir, skydir, args.sigma)
                 skysub(FFdir, subdir, skydir, args.chip)
-                astrometry(subdir)
-                stack(subdir, stackdir,args.chip)
+                if args.refine:
+                    initastrom(subdir, subdir)
+                    oldlist = [f for f in sorted(os.listdir(subdir)) if f.endswith('.flat.fits')]
+                    newlist = [j for j in sorted(os.listdir(subdir)) if j.endswith('.flat.new')]
+                    if len(oldlist) <= 15:
+                        errnum = 3
+                    else:
+                        errnum = 5
+                    if len(newlist) < len(oldlist)-errnum:
+                        print('Not enough success with new astrometry! Continuing with initial astrometry...')
+                        for f in newlist:
+                            os.remove(subdir + f)
+                    else:
+                        for f in oldlist:
+                            os.remove(subdir + f)
+                    print('%i files refined! removed old fits files' % len(newlist))
+                    astrometry(subdir)
+                    stack(subdir, stackdir,args.chip)
+                    if args.fpack:
+                        fpack(stackdir,args.chip)
+                else:
+                    astrometry(subdir)
+                    stack(subdir, stackdir,args.chip)
+                    if args.fpack:
+                        fpack(stackdir, args.chip)
             elif args.skysub_start:
                 astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
                 FFdir = makedirectoriesFF(args.parent, args.chip)
@@ -233,6 +256,8 @@ if __name__ == "__main__":
                 astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
                 FFdir = makedirectoriesFF(args.parent, args.chip)
                 stack(subdir, stackdir,args.chip)
+                if args.fpack:
+                    fpack(stackdir, args.chip)
             else:
                 astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
                 FFdir = makedirectoriesFF(args.parent, args.chip)

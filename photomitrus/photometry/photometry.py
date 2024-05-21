@@ -346,6 +346,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     else:
         print('Surveys other than 2MASS, VHS, or VVV currently not supported')
 
+    chip = imageName[-6]
     num = imageName[-16:-8]
 
     # mag comparison plot
@@ -359,7 +360,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     plt.xlabel('PRIME Mags', fontsize=15)
     plt.ylabel('%s Mags' % survey, fontsize=15)
     plt.grid()
-    plt.savefig('%s_mag_comp_plot_%s.png' % (survey,num))
+    plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey,chip,num))
     print('Saved mag comparison plot to dir!')
 
     #residual fits
@@ -398,7 +399,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     info = ('eqn: y = mx'+'\nslope = %.5f +/- %.5f' % (m,merr))+('\nR$^{2}$ = %.3f' % rsquare)+('\nRSS = %d' % rss)
     #+('\nintercept = %.3f +/- %.3f' % (b,berr))
     plt.text(15,-1.25,info,bbox=dict(facecolor='white',edgecolor='black',alpha=1,pad=5.0))
-    plt.savefig('%s_residual_plot_%s.png' % (survey,num),dpi=300)
+    plt.savefig('%s_C%s_residual_plot_%s.png' % (survey,chip,num),dpi=300)
     print('Saved residual plot to dir!')
 
     #res plot, y int included
@@ -417,7 +418,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % res2_err, r'2 $\sigma$ = %.3f' % (2*res2_err)], loc='lower left')
     info2 = ('eqn: y = mx+b'+'\nslope = %.4f +/- %.4f' % (m2,m2err))+('\nintercept = %.3f +/- %.3f' % (b2,b2err))+('\nR$^{2}$ = %.3f' % rsquare2)+('\nRSS = %d' % rss2)
     plt.text(15,-1.25,info2,bbox=dict(facecolor='white',edgecolor='black',pad=5.0))
-    plt.savefig('%s_residual_plot_int_%s.png' % (survey,num),dpi=300)
+    plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey,chip,num),dpi=300)
     print('Saved y-int residual plot to dir!')
 
 #%% optional removal of intermediate files
