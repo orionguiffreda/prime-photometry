@@ -200,6 +200,7 @@ def update_ra_dec_directory(directory):
     for fits_file in fits_files:
         update_ra_dec(fits_file)
 
+
 def update_ra_dec_move_directory(input,output):
     for f in sorted(os.listdir(input)):
         if f.endswith('.ramp.fits'):
@@ -209,6 +210,16 @@ def update_ra_dec_move_directory(input,output):
             shutil.copyfile(origpath, newpath)
             update_ra_dec(newpath)
             print('%s updated, renamed, and moved!' % fnewname)
+
+
+def update_ra_dec_move(f,output):
+    input = ''                  # TODO: put in directory of mounted drive when that's done
+    origpath = os.path.join(input, f)
+    fnewname = f.replace('.ramp.fits', '.ramp.new')
+    newpath = os.path.join(output,fnewname)
+    shutil.copyfile(origpath, newpath)
+    update_ra_dec(newpath)
+    print('%s updated, renamed, and moved!' % fnewname)
 
 
 def old_main():
@@ -238,7 +249,11 @@ if __name__ == "__main__":
     if os.path.isdir(args.input):
         if args.output:
             update_ra_dec_move_directory(args.input,args.output)
-        if not args.output:
+        else:
             update_ra_dec_directory(args.input)
     elif os.path.isfile(args.input):
         update_ra_dec(args.input)
+        if args.output:
+            update_ra_dec_move(args.input,args.output)
+        else:
+            pass

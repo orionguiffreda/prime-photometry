@@ -17,7 +17,7 @@ def sex(imgdir):
     os.chdir(str(imgdir))
     sx = gen_config_file_name('sex.config')
     ap = gen_config_file_name('astrom.param')
-    for f in sorted(os.listdir(str(imgdir))):
+    for f in sorted(os.listdir(imgdir)):
         if f.endswith('.fits') or f.endswith('.new'):
             pre = os.path.splitext(f)[0]
             ext = os.path.splitext(f)[1]
@@ -47,16 +47,15 @@ def sexback(imgdir):
 def scamp(imgdir):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
-    for f in sorted(os.listdir(str(imgdir))):  # loop to generate scamp .head headers
-        if f.endswith('.cat'):
-            pre = os.path.splitext(f)[0]
-            ext = os.path.splitext(f)[1]
-            com = ["scamp ", imgdir + pre + ext, ' -c '+sc]
-            s0 = ''
-            com = s0.join(com)
-            out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            out.wait()
-            print(pre + ext + ' scamped!')
+    img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+    img_list = [imgdir + f for f in img_list]
+    img_list = ','.join(img_list)
+    com = ["scamp ", img_list, ' -c ' + sc]
+    com = ' '.join(com)
+    out = subprocess.Popen([com], shell=True)
+    out.wait()
+    #print(pre + ext + ' scamped!')
+
 
 #%%
 if __name__ == "__main__":

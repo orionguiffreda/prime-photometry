@@ -75,7 +75,7 @@ def swarp(imgdir, finout):
 
 def swarp_increm(imgdir, finout,im_num):
     batch_size = im_num
-    files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.fits')]
+    files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
     total_files = len(files)
 
     for i in range(0, total_files, batch_size):
@@ -87,11 +87,19 @@ def swarp_increm(imgdir, finout,im_num):
         header = fits.getheader(image_fnames[-1])
         filter1 = header.get('FILTER1', 'unknown')
         filter2 = header.get('FILTER2', 'unknown')
-        save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
-        print(save_name)
-        weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+        ext = os.path.splitext(image_fnames[-1])[1]
+        if ext == '.new':
+            save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                            image_fnames[-1][-23:-15], image_fnames[0][-13])
+            print(save_name)
+            weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                               image_fnames[-1][-23:-15], image_fnames[0][-14])
+        elif ext == '.fits':
+            save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                            image_fnames[-1][-24:-16], image_fnames[0][-15])
+            print(save_name)
+            weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                               image_fnames[-1][-24:-16], image_fnames[0][-15])
         os.chdir(str(finout))
         sw = gen_config_file_name('default.swarp')
         #save_name = 'coaddastr.fits'
@@ -105,6 +113,62 @@ def swarp_increm(imgdir, finout,im_num):
         out.wait()
         print('Co-added image created, all done!')
 
+def swarp_alt(imgdir, imout):
+    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
+    image_fnames.sort()
+    image_fnames_1 = image_fnames[::2]
+    image_fnames_2 = image_fnames[1::2]
+    print('1st stack = ', len(image_fnames_1))
+    print('2nd stack = ', len(image_fnames_2))
+
+    header = fits.getheader(image_fnames[-1])
+    filter1 = header.get('FILTER1', 'unknown')
+    filter2 = header.get('FILTER2', 'unknown')
+    ext = os.path.splitext(image_fnames_1[-1])[1]
+    if ext == '.new':
+        save_name1 = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_1[0][-23:-15],
+                                                        image_fnames_1[-1][-23:-15], image_fnames_1[0][-14])
+        print(save_name1)
+        weight_name1 = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_1[0][-23:-15],
+                                                           image_fnames_1[-1][-23:-15], image_fnames_1[0][-14])
+
+        save_name2 = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_2[0][-23:-15],
+                                                        image_fnames_2[-1][-23:-15], image_fnames_2[0][-14])
+        print(save_name2)
+        weight_name2 = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_2[0][-23:-15],
+                                                           image_fnames_2[-1][-23:-15], image_fnames_2[0][-14])
+    elif ext == '.fits':
+        save_name1 = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_1[0][-24:-16],
+                                                        image_fnames_1[-1][-24:-16], image_fnames_1[0][-15])
+        print(save_name1)
+        weight_name1 = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_1[0][-24:-16],
+                                                           image_fnames_1[-1][-24:-16], image_fnames_1[0][-15])
+
+        save_name2 = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_2[0][-24:-16],
+                                                        image_fnames_2[-1][-24:-16], image_fnames_2[0][-15])
+        print(save_name2)
+        weight_name2 = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames_2[0][-24:-16],
+                                                           image_fnames_2[-1][-24:-16], image_fnames_2[0][-15])
+    os.chdir(str(imout))
+    sw = gen_config_file_name('default.swarp')
+    # save_name = 'coaddastr.fits'
+    # weight_name = 'coaddastrweight.fits'
+    image_list1 = (',').join(image_fnames_1)
+    image_list2 = (',').join(image_fnames_2)
+    com = ["swarp ", image_list1, ' -c ' + sw
+        , ' -IMAGEOUT_NAME ' + save_name1, ' -WEIGHTOUT_NAME ' + weight_name1]
+    com = ''.join(com)
+    out = subprocess.Popen([com], shell=True)
+    out.wait()
+    print('First set co-added image created, all done!')
+
+    com2 = ["swarp ", image_list2, ' -c ' + sw
+        , ' -IMAGEOUT_NAME ' + save_name2, ' -WEIGHTOUT_NAME ' + weight_name2]
+    com2 = ''.join(com2)
+    out2 = subprocess.Popen([com2], shell=True)
+    out2.wait()
+    print('2nd set co-added image created, all done!')
+
 def astromfin(dir,chip):
     print('Re-running astrometry on swarped image!')
     import fnmatch
@@ -116,7 +180,7 @@ def astromfin(dir,chip):
     for f in stackimg:
         pre = os.path.splitext(f)[0]
         com = ["solve-field ", '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg'
-            ,' --scale-units arcsecperpix', ' --scale-low 0.45',' --scale-high 0.55',' --no-verify',' -U none', ' --axy none', ' -S none', ' -M none', ' -R none', ' -B none', ' -O',
+            ,' --scale-units arcsecperpix', ' --scale-low 0.45',' --scale-high 0.55',' -U none', ' --axy none', ' -S none', ' -M none', ' -R none', ' -B none', ' -O',
             ' -p', ' -z 4', ' -D ' + dir, ' ' + dir + f] #can change downsample w/ z, or change what outputs here
         s0 = ''
         com = s0.join(com)
@@ -148,6 +212,8 @@ if __name__ == "__main__":
                         help='optional flag, use if you already have the swarped image, but want improved astrometry')
     parser.add_argument('-increm', action='store_true',
                         help='optional flag, use if you want to generate a stacked img from increments of images, ex. 5 stack, then 10 stack, etc.')
+    parser.add_argument('-alt', action='store_true',
+                        help='create 2 stacked images from 1 set of data, alternating images used')
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
     parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by')
@@ -164,6 +230,9 @@ if __name__ == "__main__":
         astromfin(args.stack,args.chip)
     elif args.increm:
         swarp_increm(args.sub,args.stack,args.num)
+        astromfin(args.stack,args.chip)
+    elif args.alt:
+        swarp_alt(args.sub,args.stack)
         astromfin(args.stack,args.chip)
     else:
         swarp(args.sub,args.stack)

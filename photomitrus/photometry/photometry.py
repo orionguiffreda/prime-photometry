@@ -190,14 +190,17 @@ def tables(Q,psfcatalogName,crop):
 
     psfsourceTable = get_table_from_ldac(psfcatalogName)
 
+    PSFSources = psfsourceTable[(psfsourceTable['XMODEL_IMAGE'] < (max_x-crop)) & (psfsourceTable['XMODEL_IMAGE']>crop)
+                & (psfsourceTable['YMODEL_IMAGE']<(max_y)-crop) & (psfsourceTable['YMODEL_IMAGE']>crop)]
+
     cleanPSFSources = psfsourceTable[(psfsourceTable['FLAGS']==0) & (psfsourceTable['FLAGS_MODEL']==0) & (psfsourceTable['XMODEL_IMAGE']
                 < (max_x-crop)) & (psfsourceTable['XMODEL_IMAGE']>crop) & (psfsourceTable['YMODEL_IMAGE']<(max_y)-crop)
                 & (psfsourceTable['YMODEL_IMAGE']>crop)]
 
-    magmean = cleanPSFSources['MAG_POINTSOURCE'].mean()  #trimming sources more than 4 sig away from mean (outliers)
-    magerr = cleanPSFSources['MAG_POINTSOURCE'].std()
-    maglow = magmean - 4 * magerr
-    maghigh = magmean + 4 * magerr
+    #magmean = cleanPSFSources['MAG_POINTSOURCE'].mean()  #trimming sources more than 4 sig away from mean (outliers)
+    #magerr = cleanPSFSources['MAG_POINTSOURCE'].std()
+    #maglow = magmean - 4 * magerr
+    #maghigh = magmean + 4 * magerr
 
     #cleanPSFSources = cleanPSFSources[(cleanPSFSources['MAG_POINTSOURCE'] >= maglow) & (cleanPSFSources['MAG_POINTSOURCE'] <= maghigh)]
 
@@ -213,7 +216,7 @@ def tables(Q,psfcatalogName,crop):
     #idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
 
     print('Found %d good cross-matches'%len(idx_psfmass))
-    return good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage
+    return good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage
 
 def queryexport(good_cat_stars, imageName,survey):
     table = good_cat_stars
@@ -224,7 +227,7 @@ def queryexport(good_cat_stars, imageName,survey):
 #good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage = tables(Q,psfcatalogName)
 #%%
 #derive zero pt / put in swarped header
-def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,filter,survey):
+def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,imageName,filter,survey):
     if survey == '2MASS':
         psfoffsets = ma.array(good_cat_stars['%smag' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
         psfoffsets = psfoffsets.data
@@ -240,16 +243,16 @@ def zeropt(good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage,imageName,fil
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     #print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
-    psfmag = zero_psfmed + cleanPSFSources['MAG_POINTSOURCE']
-    psfmagerr = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+    psfmag = zero_psfmed + PSFSources['MAG_POINTSOURCE']
+    psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
     psfmagcol = Column(psfmag, name = '%sMAG_PSF' % filter,unit='mag')
     psfmagerrcol = Column(psfmagerr, name = 'e_%sMAG_PSF' % filter,unit='mag')
-    cleanPSFSources.add_column(psfmagcol)
-    cleanPSFSources.add_column(psfmagerrcol)
-    cleanPSFSources.remove_column('VIGNET')
+    PSFSources.add_column(psfmagcol)
+    PSFSources.add_column(psfmagerrcol)
+    PSFSources.remove_column('VIGNET')
 
-    cleanPSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
+    PSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
 
 #%% optional GRB-specific photom
@@ -470,7 +473,7 @@ if __name__ == "__main__":
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         plots(args.dir, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
     elif args.exp_query_only:
         psfcatalogName = []
@@ -480,7 +483,7 @@ if __name__ == "__main__":
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         queryexport(good_cat_stars,args.name,args.survey)
     else:
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
@@ -488,10 +491,10 @@ if __name__ == "__main__":
         catalogName = sex1(args.name)
         psfex(catalogName)
         psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         if args.exp_query:
             queryexport(good_cat_stars, args.name, args.survey)
-        zeropt(good_cat_stars, cleanPSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
+        zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfimage, args.name, args.filter, args.survey)
         if args.grb:
             GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
         if args.plots:
