@@ -15,6 +15,7 @@ from astropy.io import fits
 from astropy.io import ascii
 import os
 from astropy.table import Column
+from astropy.table import Table
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import subprocess
@@ -243,6 +244,17 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     #print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
+    #catalog for just clean sources (no flags)
+    psfmag_clean = zero_psfmed + cleanPSFSources['MAG_POINTSOURCE']
+    psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+
+    psfmagcol_clean = Column(psfmag_clean, name = '%sMAG_PSF' % filter,unit='mag')
+    psfmagerrcol_clean = Column(psfmagerr_clean, name = 'e_%sMAG_PSF' % filter,unit='mag')
+    cleanPSFSources.add_column(psfmagcol_clean)
+    cleanPSFSources.add_column(psfmagerrcol_clean)
+    cleanPSFSources.remove_column('VIGNET')
+
+    #catalog for all detected sources
     psfmag = zero_psfmed + PSFSources['MAG_POINTSOURCE']
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
@@ -255,9 +267,10 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     PSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
 
+    return cleanPSFSources
+
 #%% optional GRB-specific photom
 def GRB(ra,dec,imageName,survey,filter,thresh):
-    from astropy.table import Table
     GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
 
     mag_ecsvname = '%s.%s.ecsv' % (imageName,survey)
@@ -338,7 +351,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
         print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
 
 #%% optional plots
-def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
+def plots(cleanPSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
     #appropriate mag column
     if survey == '2MASS':
         magcol = '%smag' % filter
@@ -353,9 +366,8 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     num = imageName[-16:-8]
 
     # mag comparison plot
-    PRIMEdata = ascii.read(directory + imageName + '.' + survey + '.ecsv')
     plt.figure(1,figsize=(8, 8))
-    plt.plot(PRIMEdata['%sMAG_PSF' % filter][idx_psfimage],good_cat_stars['%s' % magcol][idx_psfmass],
+    plt.plot(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage],good_cat_stars['%s' % magcol][idx_psfmass],
              'r.', markersize=14, markeredgecolor='black',)
     plt.xlim(10, 22)
     plt.ylim(10, 22)
@@ -367,7 +379,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
     print('Saved mag comparison plot to dir!')
 
     #residual fits
-    x = PRIMEdata['%sMAG_PSF' % filter][idx_psfimage]
+    x = cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage]
     y = good_cat_stars['%s' % magcol][idx_psfmass]
     x_const = sm.add_constant(x)
     model = sm.OLS(y, x).fit()
@@ -387,7 +399,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
 
     #residual plot - y int forced to zero
     plt.figure(2, figsize=(8, 6))
-    plt.scatter(PRIMEdata['%sMAG_PSF' % filter][idx_psfimage], model.resid, color='red')
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage], model.resid, color='red')
     plt.ylim(-1.5, 1.5)
     plt.xlim(10,21)
     plt.title('PRIME vs %s Residuals' % survey)
@@ -407,7 +419,7 @@ def plots(directory,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfim
 
     #res plot, y int included
     plt.figure(3, figsize=(8, 6))
-    plt.scatter(PRIMEdata['%sMAG_PSF' % filter][idx_psfimage], model2.resid, color='red')
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage], model2.resid, color='red')
     plt.ylim(-1.5, 1.5)
     plt.xlim(10,21)
     plt.title('PRIME vs %s Residuals' % survey)
@@ -494,10 +506,10 @@ if __name__ == "__main__":
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         if args.exp_query:
             queryexport(good_cat_stars, args.name, args.survey)
-        zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfimage, args.name, args.filter, args.survey)
+        cleanPSFSources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
         if args.grb:
             GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
         if args.plots:
-            plots(args.dir, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
+            plots(cleanPSFSources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
         if args.remove:
             removal(args.dir)
