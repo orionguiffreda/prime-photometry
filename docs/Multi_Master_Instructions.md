@@ -40,6 +40,7 @@ Now that we've gone over the arguments associated with this script, we'll go ove
 
 - To begin, _getdata.py_ is utilized to download a specified observation's data for all 4 chips to the parent directory, along with the accompanying log file.
 - Once the data is downloaded, _master.py_ is run on each chip individually, or a single chip if specified.  Refer to the documentation on _master.py_ to see the inner workings of that processing.
+- Once the final stacked image is created, _multi_master.py_ is currently set up to automatically correct for any weak astrometry on the edges of the image through running astrometry.net on the stacked image.  This regenerates the stacked image with new astrometry, along with creating a .wcs file for each stack. 
 
 ## Data Products
 
@@ -79,6 +80,10 @@ There are many, many data products from this pipeline.  Simply enough, it is 4x 
       │   │   ├── coadd.Open-#.12345678-12345678.C2.fits
       │   │   ├── coadd.Open-#.12345678-12345678.C3.fits
       │   │   ├── coadd.Open-#.12345678-12345678.C4.fits
+      │   │   ├── coadd.Open-#.12345678-12345678.C1.wcs
+      │   │   ├── coadd.Open-#.12345678-12345678.C2.wcs
+      │   │   ├── coadd.Open-#.12345678-12345678.C3.wcs
+      │   │   ├── coadd.Open-#.12345678-12345678.C4.wcs
       │   │   ├── weight.Open-#.12345678-12345678.C1.fits
       │   │   ├── weight.Open-#.12345678-12345678.C2.fits
       │   │   ├── weight.Open-#.12345678-12345678.C3.fits
