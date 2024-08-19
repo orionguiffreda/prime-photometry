@@ -50,7 +50,7 @@ def scamp(imgdir):
     img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
     img_list = [imgdir + f for f in img_list]
     img_list = ','.join(img_list)
-    com = ["scamp ", img_list, ' -c ' + sc]
+    com = ["scamp ", img_list, '-c ' + sc]
     com = ' '.join(com)
     out = subprocess.Popen([com], shell=True)
     out.wait()

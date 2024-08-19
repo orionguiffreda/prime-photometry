@@ -187,10 +187,12 @@ def astromfin(dir,chip):
         out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)   #include stdout and stderr to suppress astrom.net output
         out.wait()
         #renaming
-        os.remove(dir+f)
-        os.rename(dir+pre+'.new',dir+f)
-
-    print('final image generated, original stack discarded!')
+        if os.path.isfile(dir+pre+'.wcs'):
+            os.remove(dir+f)
+            os.rename(dir+pre+'.new',dir+f)
+            print('final image generated, original stack discarded!')
+        else:
+            print('New astrometry on stacked image failed, defaulting to original...')
 
 
 #%%

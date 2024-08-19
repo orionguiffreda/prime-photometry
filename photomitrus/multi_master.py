@@ -20,7 +20,7 @@ def datadownload(parentdir,target,filter,date):
 def refineprocess(parentdir,chip,filter):
     if chip == 1 or chip == 2:
         try:
-            command = ('python ./master.py -FF -angle -fpack -refine -parent %s '
+            command = ('python ./master.py -FF -angle -parent %s '
                        '-chip %i -filter %s -sigma 4') % (parentdir,chip,filter)
             print('Executing command: %s' % command)
             rval = subprocess.run(command.split(), check=True)
@@ -28,7 +28,7 @@ def refineprocess(parentdir,chip,filter):
             print('Could not run with exit error %s' % err)
     elif chip == 3 or chip == 4:
         try:
-            command = ('python ./master.py -FF -angle -fpack -refine -parent %s '
+            command = ('python ./master.py -FF -angle -parent %s '
                        '-chip %i -filter %s -sigma 6') % (parentdir,chip,filter)
             print('Executing command: %s' % command)
             rval = subprocess.run(command.split(), check=True)
@@ -72,6 +72,7 @@ def checkprocessparallel(parentdir,chips,filter):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Use to process whole observations (all chips)')
     parser.add_argument('-parallel', action='store_true', help='optional flag, process multiple chips simultaneously')
+    parser.add_argument('-no_download', action='store_true', help='optional flag, use if you already have the data')
     parser.add_argument('-parent', type=str, help='[str] parent directory to store all data products')
     parser.add_argument('-target', type=str, help='[str] target field, objname in log, ex. "field1234"')
     parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
@@ -79,21 +80,29 @@ if __name__ == "__main__":
     parser.add_argument('-chip', type=int, help='[int] Optional, use to process only 1 specific chip',default=None)
     args = parser.parse_args()
 
-    datadownload(args.parent,args.target,args.filter,args.date)
-
-    if not args.chip:
-        chips = [1, 2, 3, 4]
+    if args.no_download:
+        pass
     else:
-        chips = [args.chip]
-    #refinechips = [f for f in chips if f == 1 or f == 3]
-    #checkchips = [f for f in chips if f == 2 or f == 4]
+        datadownload(args.parent,args.target,args.filter,args.date)
 
-    #if args.parallel:
-    #    refineprocessparallel(args.parent,refinechips,args.filter)
-    #    for f in checkchips:
-    #        checkprocess(args.parent, f, args.filter)
+    chip_path = args.parent+'C1/'
 
-    for f in chips:
-        refineprocess(args.parent,f,args.filter)
-        #for f in checkchips:
-       #     checkprocess(args.parent,f,args.filter)
+    if not os.listdir(chip_path):
+        print('Error downloading! perhaps wrong date or target?')
+    else:
+        if not args.chip:
+            chips = [1, 2, 3, 4]
+        else:
+            chips = [args.chip]
+        #refinechips = [f for f in chips if f == 1 or f == 3]
+        #checkchips = [f for f in chips if f == 2 or f == 4]
+
+        #if args.parallel:
+        #    refineprocessparallel(args.parent,refinechips,args.filter)
+        #    for f in checkchips:
+        #        checkprocess(args.parent, f, args.filter)
+
+        for f in chips:
+            refineprocess(args.parent,f,args.filter)
+            #for f in checkchips:
+           #     checkprocess(args.parent,f,args.filter)

@@ -244,6 +244,7 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     #print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
+    print('zp = %.4f' % zero_psfmed)
     #catalog for just clean sources (no flags)
     psfmag_clean = zero_psfmed + cleanPSFSources['MAG_POINTSOURCE']
     psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
@@ -263,11 +264,12 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
+    print('Total source # = ',len(PSFSources))
 
     PSFSources.write('%s.%s.ecsv' % (imageName,survey),overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName,survey))
 
-    return cleanPSFSources
+    return cleanPSFSources, PSFSources
 
 #%% optional GRB-specific photom
 def GRB(ra,dec,imageName,survey,filter,thresh):
@@ -275,7 +277,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
 
     mag_ecsvname = '%s.%s.ecsv' % (imageName,survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
-    mag_ecsvcleanSources = mag_ecsvtable[(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
+    mag_ecsvcleanSources = mag_ecsvtable #[(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'], frame='icrs',
                                   unit='degree')
 
@@ -351,7 +353,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
         print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
 
 #%% optional plots
-def plots(cleanPSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
+def plots(cleanPSFsources,PSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
     #appropriate mag column
     if survey == '2MASS':
         magcol = '%smag' % filter
@@ -436,6 +438,65 @@ def plots(cleanPSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx
     plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey,chip,num),dpi=300)
     print('Saved y-int residual plot to dir!')
 
+    # Limiting Mag Plot
+    # binning
+    all_mags_all = PSFsources[PSFsources['%sMAG_PSF' % filter] < 25]
+    all_mags = all_mags_all['%sMAG_PSF' % filter]
+
+    bin_vals = np.array(np.arange(12, 25.5, 0.1))
+    idxs = np.digitize(all_mags, bins=bin_vals)
+
+    indices = {i: [] for i in range(len(bin_vals))}
+    for idx, value in enumerate(idxs):
+        indices[value].append(idx)
+    sorted_indices_lists = list(indices.values())
+
+    all_sources = []
+    for i in sorted_indices_lists:
+        number = len(i)
+        all_sources.append(number)
+
+    # plotting
+    idxmax = all_sources.index(max(all_sources))
+
+    split_sources = all_sources[idxmax:]
+
+    halfmax = max(all_sources) / 2
+    halfmaxpt = list(min(enumerate(split_sources), key=lambda x: abs(halfmax - x[1])))
+    halfmaxpt = [halfmaxpt[0] + idxmax, halfmaxpt[1]]
+
+    limmag = round(bin_vals[halfmaxpt[0]], 1)
+
+    print('Lim Mag = ', limmag)
+
+    plt.figure(figsize=(24, 8))
+    plt.bar(bin_vals, height=all_sources, width=0.1, align='edge', color='red', edgecolor='black')
+    plt.axhline(halfmax,linestyle='--')
+    plt.axvline(limmag,color='b',linewidth=2)
+    # plt.bar(bin_vals,height=all_osaka_sources,width=0.1,align='edge',color='blue',edgecolor='black',alpha=0.5)
+    # plt.bar(bin_vals-0.5,height=avginvsnr,width=0.5,align='edge',color='blue',edgecolor='black')
+    # plt.axvline(x=bin_vals[imin+1],linestyle='--',linewidth=2)
+    # plt.axvline(x=bin_vals[iimin+1],linestyle='--',linewidth=2,color='green')
+    # plt.axhline(y=0.3,color='black', linestyle='-.', linewidth=1)
+    # plt.axhline(y=0.2,color='black', linestyle='-.', linewidth=1)
+    # bin_ticks = np.arange(12,21.25,0.5)
+    xticks = np.arange(12, 25.5, 0.5)
+    plt.xticks(xticks, fontsize=10)
+    plt.grid()
+    plt.ylim(0, 2000)
+    # plt.yscale('log')
+    # plt.yticks([0,0.05,0.1,0.15,0.2,0.25])
+    # plt.legend([r'5 $\sigma$ Limit'],loc='upper left',fontsize=12)
+    # plt.legend([f'Bin of 0.2 Error = {bin_vals[imin+1]}',f'Bin of 0.3 Error = {bin_vals[iimin+1]}'])
+    # plt.legend([f'Bin of 0.2 Error (>16 mag) = {bin_vals[imin+1]}'])
+    # plt.legend(['Our Field','Osaka Field'],loc='upper right')
+    plt.title('PRIME Limiting Mag Plot')
+    plt.ylabel('Number of Sources')
+    plt.xlabel('%s Magnitude' % filter)
+    plt.legend(['Half Max = %s' % round(halfmax,1),'Limiting Mag = %s' % round(limmag,1)],fontsize=15)
+    plt.savefig('%s_C%s_lim_mag_plot_%s.png' % (survey, chip, num), dpi=300)
+    print('Saved lim mag plot to dir!')
+
 #%% optional removal of intermediate files
 def removal(directory):
     fnames = ['.cat','.psf']
@@ -485,8 +546,10 @@ if __name__ == "__main__":
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        plots(args.dir, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
+        good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
+                                             args.name, args.filter, args.survey)
+        plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
     elif args.exp_query_only:
         psfcatalogName = []
         for f in os.listdir(args.dir):
@@ -506,10 +569,10 @@ if __name__ == "__main__":
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         if args.exp_query:
             queryexport(good_cat_stars, args.name, args.survey)
-        cleanPSFSources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
+        cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
         if args.grb:
             GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
         if args.plots:
-            plots(cleanPSFSources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
+            plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
         if args.remove:
             removal(args.dir)

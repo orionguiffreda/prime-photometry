@@ -59,7 +59,7 @@ def astrom_angle(astrompath,parentdir, chip):
     ramppath = parentdir + 'C%i/' % (chip)
     print('running initial astrometry on ramp imgs...')
     try:
-        command = 'python ./preprocess/astromangle.py -input %s -output %s' % (ramppath, astrompath)
+        command = 'python ./preprocess/astromangle_new.py -input %s -output %s' % (ramppath, astrompath)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:
@@ -130,6 +130,19 @@ def sexskysub(astrompath,subpath):
     except subprocess.CalledProcessError as err:
         print('Could not run with exit error %s' % err)
 
+#%% astrometry shift
+def shift(subpath, filter):
+    os.chdir(gen_pipeline_file_name())
+    print('Shifting astrometry...')
+    all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
+    imgname = all_fits[0]
+    try:
+        command = 'python ./astrom/astrom_shift.py -remove -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
+        print('Executing command: %s' % command)
+        rval = subprocess.run(command.split(), check=True)
+    except subprocess.CalledProcessError as err:
+        print('Could not run with exit error %s' % err)
+
 #%% better astrometry
 def astrometry(subpath,sex=None):
     os.chdir(gen_pipeline_file_name())
@@ -186,7 +199,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
     parser.add_argument('-FF', action='store_true', help='optional flag, changes the default pipeline to include a flat fielding step, should improve photometry')
     parser.add_argument('-angle', action='store_true', help='optional flag, forgoes astrometry.net, utilizes center and corner positions to create wcs')
-    parser.add_argument('-sex', action='store_true', help='optional flag, to utlize sextractor background subtraction instead')
+    parser.add_argument('-sex', action='store_true', help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
     parser.add_argument('-fpack', action='store_true',help='optional flag, use fpack to compress stacked images')
     parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
     parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
@@ -219,7 +232,7 @@ if __name__ == "__main__":
                     if len(oldlist) <= 15:
                         errnum = 3
                     else:
-                        errnum = 5
+                        errnum = 6
                     if len(newlist) < len(oldlist)-errnum:
                         print('Not enough success with new astrometry! Continuing with initial astrometry...')
                         for f in newlist:
@@ -283,18 +296,19 @@ if __name__ == "__main__":
                     else:
                         errnum = 5
                     if len(newlist) < len(oldlist)-errnum:
-                        print('Not enough success with new astrometry! Continuing with initial astrometry...')
+                        print('Not enough success with new astrometry! (%i fields) Continuing with initial astrometry...' % len(newlist))
                         for f in newlist:
                             os.remove(subdir + f)
                     else:
                         for f in oldlist:
                             os.remove(subdir + f)
-                    print('%i files refined! removed old fits files' % len(newlist))
+                        print('%i files refined! removed old fits files' % len(newlist))
                     astrometry(subdir)
                     stack(subdir, stackdir,args.chip)
                     if args.fpack:
                         fpack(stackdir,args.chip)
                 else:
+                    shift(subdir,args.filter)
                     astrometry(subdir,args.sex)
                     stack(subdir, stackdir,args.chip)
                     if args.fpack:

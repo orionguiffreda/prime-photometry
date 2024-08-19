@@ -56,7 +56,7 @@ FSCALE_KEYWORD         FLXSCALE        # FITS keyword for the multiplicative
 FSCALE_DEFAULT         1.0             # Default FSCALE value if not in header
  
 GAIN_KEYWORD           GAIN            # FITS keyword for effect. gain (e-/ADU)
-GAIN_DEFAULT           0.0             # Default gain if no FITS keyword found
+GAIN_DEFAULT           2.0             # Default gain if no FITS keyword found
  
 #--------------------------- Background subtraction ---------------------------
  
