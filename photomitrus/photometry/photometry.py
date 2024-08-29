@@ -109,14 +109,14 @@ def query(raImage, decImage,filter, width, height, survey):
         except:
             print(
                 'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  H band is also not well covered!')
-    elif survey == 'VVV':
+    elif survey == 'VIKING':
         # catNum = 'II/348/vvv2'  # changing to vista
-        catNum = 'II/348'
+        catNum = 'II/343/viking2'
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag3' % filter,'e_%smag3' % filter], column_filters={"%smag3" % filter: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % filter,'e_%sap3' % filter], column_filters={"%sap3" % filter: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -232,7 +232,7 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     if survey == '2MASS':
         psfoffsets = ma.array(good_cat_stars['%smag' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
         psfoffsets = psfoffsets.data
-    elif survey == 'VHS':
+    elif survey == 'VHS' or survey == 'VIKING':
         psfoffsets = ma.array(good_cat_stars['%sap3' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
         psfoffsets = psfoffsets.data
     elif survey == 'VVV':
@@ -357,7 +357,7 @@ def plots(cleanPSFsources,PSFsources,imageName,survey,filter,good_cat_stars,idx_
     #appropriate mag column
     if survey == '2MASS':
         magcol = '%smag' % filter
-    elif survey == 'VHS':
+    elif survey == 'VHS' or survey == 'VIKING':
         magcol = '%sap3' % filter
     elif survey == 'VVV':
         magcol = '%smag3' % filter

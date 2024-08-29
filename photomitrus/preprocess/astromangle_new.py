@@ -166,40 +166,11 @@ def update_ra_dec(fits_file):
             )
 
             header.update(gen_wcs(ra, dec, rotation, chip).to_header(relax=True))
-
-            # remove conflicting keywords (this is nuclear rn, should update in the future to just remove bad cards)
-            ctype1 = header['CTYPE1']
-            ctype2 = header['CTYPE2']
-            ra = header['RA-D']
-            dec = header['DEC-D']
-            gain = header['GAIN0']
-            del (header[-112:-100])
-            header.insert(-119, ('GAIN', gain, '[e-/ADU] gain value'))
-            del (header['GAIN0'])     # gain removal
-            del (header['GAIN1'])
-            del (header['GAIN2'])
-            del (header['GAIN3'])
-            del (header['DEC'])
-            del (header['RA'])
-            del (header['PV1_1'])
-            del (header['C0CRPIX1'])
-            del (header['C0CRPIX2'])
-            del (header['C1CRPIX1'])
-            del (header['C1CRPIX2'])
-            del (header['C2CRPIX1'])
-            del (header['C2CRPIX2'])
-            del (header['C3CRPIX2'])
-            #header.insert(5, ('CTYPE1', ctype1, 'Right ascension, gnomonic projection'))
-            #header.insert(6, ('CTYPE2', ctype2, 'Declination, gnomonic projection'))
-            #header.insert(7, ('RA-D', ra, 'Right ascension'))
-            #header.insert(8, ('DEC-D', dec, 'Declination'))
         else:
             print('Already updated')
 
     #update fits file pc matrix to cd matrix for reading by scamp
 
-    fits.delval(fits_file, 'CDELT1')
-    fits.delval(fits_file, 'CDELT2')
     #fits.delval(fits_file, 'CD1_1')
     #fits.delval(fits_file, 'CD1_2')
     #fits.delval(fits_file, 'CD2_2')

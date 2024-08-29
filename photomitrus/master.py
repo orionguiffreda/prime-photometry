@@ -201,6 +201,7 @@ if __name__ == "__main__":
     parser.add_argument('-angle', action='store_true', help='optional flag, forgoes astrometry.net, utilizes center and corner positions to create wcs')
     parser.add_argument('-sex', action='store_true', help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
     parser.add_argument('-fpack', action='store_true',help='optional flag, use fpack to compress stacked images')
+    parser.add_argument('-shift', action='store_true', help='optional flag, use astrometric shifting script')
     parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
     parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
     parser.add_argument('-astrom_start', action='store_true', help='optional flag, starts pipeline at sxtrctr / scamp step')
@@ -291,10 +292,7 @@ if __name__ == "__main__":
                     initastrom(subdir, subdir)
                     oldlist = [f for f in sorted(os.listdir(subdir)) if f.endswith('.flat.fits')]
                     newlist = [j for j in sorted(os.listdir(subdir)) if j.endswith('.flat.new')]
-                    if len(oldlist) <= 15:
-                        errnum = 3
-                    else:
-                        errnum = 5
+                    errnum = len(oldlist)*0.2
                     if len(newlist) < len(oldlist)-errnum:
                         print('Not enough success with new astrometry! (%i fields) Continuing with initial astrometry...' % len(newlist))
                         for f in newlist:
@@ -308,7 +306,8 @@ if __name__ == "__main__":
                     if args.fpack:
                         fpack(stackdir,args.chip)
                 else:
-                    shift(subdir,args.filter)
+                    if args.shift:
+                        shift(subdir,args.filter)
                     astrometry(subdir,args.sex)
                     stack(subdir, stackdir,args.chip)
                     if args.fpack:

@@ -44,13 +44,22 @@ def flatlists(path, chip):
 
     if log_start_flats:
         if log_end_flats:
-            log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
+            if log_start['FILTER1'][0] == 'Z':
+                log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+            else:
+                log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
             print('On this night, flats were taken in %s band, both at the start and end of the night' % log_filter[0])
         if not log_end_flats:
-            log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
+            if log_start['FILTER1'][0] == 'Z':
+                log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+            else:
+                log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
             print('On this night, flats were taken in %s band, just at the start of the night' % log_filter[0])
     elif log_end_flats:
-        log_filter = list(log_end['FILTER2'][log_end['OBJNAME'] == 'FLAT'])
+        if log_start['FILTER1'][0] == 'Z':
+            log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+        else:
+            log_filter = list(log_end['FILTER2'][log_end['OBJNAME'] == 'FLAT'])
         print('On this night, flats were taken in %s band, just at the end of the night' % log_filter[0])
     else:
         print('No flats found... ')

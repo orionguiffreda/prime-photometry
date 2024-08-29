@@ -27,8 +27,12 @@ def gen_pipeline_file_name():
 def gen_mflat_file_name(filter,chip):
     base_dir = os.path.dirname(os.path.realpath(__file__))
     for f in sorted(os.listdir(base_dir+'/mflats/')):
-        if fnmatch.fnmatch(f,'*.Open-%s.C%s.fits' % (filter,chip)):
-            filename = f
+        if filter == 'Z':
+            if fnmatch.fnmatch(f, '*.%s-Open.C%s.fits' % (filter, chip)):
+                filename = f
+        else:
+            if fnmatch.fnmatch(f,'*.Open-%s.C%s.fits' % (filter,chip)):
+                filename = f
     return os.path.join(base_dir, 'mflats', filename)
 
 #%%

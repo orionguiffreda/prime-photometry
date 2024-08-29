@@ -32,19 +32,35 @@ def imaging(directory,imageName):
 #%% catalog query
 def cat_query(raImage, decImage, filter):
     boxsize = 9
-    catNum = 'II/246'  # changing to 2mass
-    print('\nQuerying Vizier %s around RA %.4f, Dec %.4f, w/ box size %.2f' % (
-        catNum, raImage, decImage, boxsize))
-    try:
-        # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-        v = Vizier(columns=['*'], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
-        Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(boxsize) + 'm', catalog=catNum, cache=False)
-        # query vizier around (ra, dec) with a radius of boxsize
-        # print(Q[0])
-        print('Queried source total = ', len(Q[0]))
-    except:
-        print('I cannnot reach the Vizier database. Is the internet working?')
-    return Q
+    if filter == 'Z':
+        catNum = 'II/379/smssdr4'  # changing to skymapper
+        print('\nQuerying Vizier %s around RA %.4f, Dec %.4f, w/ box size %.2f' % (
+            catNum, raImage, decImage, boxsize))
+        try:
+            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['*'], column_filters={"%sPSF" % filter.lower(): ">12", "Nd": ">6"}, row_limit=-1)
+            Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
+                               catalog=catNum, cache=False)
+            # query vizier around (ra, dec) with a radius of boxsize
+            # print(Q[0])
+            print('Queried source total = ', len(Q[0]))
+        except:
+            print('I cannnot reach the Vizier database. Is the internet working?')
+        return Q
+    else:
+        catNum = 'II/246'  # changing to 2mass
+        print('\nQuerying Vizier %s around RA %.4f, Dec %.4f, w/ box size %.2f' % (
+            catNum, raImage, decImage, boxsize))
+        try:
+            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['*'], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
+            Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(boxsize) + 'm', catalog=catNum, cache=False)
+            # query vizier around (ra, dec) with a radius of boxsize
+            # print(Q[0])
+            print('Queried source total = ', len(Q[0]))
+        except:
+            print('I cannnot reach the Vizier database. Is the internet working?')
+        return Q
 
 #%% sextraction
 def sex1(imageName):
@@ -92,7 +108,10 @@ def make_tables(directory, data, w, catname, Q, filter):
     crop = 1600
     max_x = data.shape[0]
     max_y = data.shape[1]
-    mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
+    if filter == 'Z':
+        mass_imCoords = w.all_world2pix(Q[0]['RAICRS'], Q[0]['DEICRS'], 1)
+    else:
+        mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
     inner_catsources = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x-crop)) & (mass_imCoords[1] > crop)
                                    & (mass_imCoords[1] < (max_y-crop)))]
 
@@ -102,8 +121,12 @@ def make_tables(directory, data, w, catname, Q, filter):
 
     inner_primesources.sort('MAG_AUTO')
 
-    inner_catsources.sort('%smag' % filter)
-    cat_xy = w.all_world2pix(inner_catsources['RAJ2000'],inner_catsources['DEJ2000'],1)
+    if filter == 'Z':
+        inner_catsources.sort('%sPSF' % filter.lower())
+        cat_xy = w.all_world2pix(inner_catsources['RAICRS'], inner_catsources['DEICRS'], 1)
+    else:
+        inner_catsources.sort('%smag' % filter)
+        cat_xy = w.all_world2pix(inner_catsources['RAJ2000'],inner_catsources['DEJ2000'],1)
 
     xs = Column(cat_xy[0], name='X_IMAGE',unit='pix')
     ys = Column(cat_xy[1], name='Y_IMAGE', unit='pix')
@@ -321,12 +344,17 @@ if __name__ == "__main__":
                                                    'default = 1', default=defaults['stdev'])
     args = parser.parse_args()
 
+    if args.filter == 'Y':
+        filter_used = 'J'
+    else:
+        filter_used = args.filter
+
     data, header, w, raImage, decImage = imaging(args.dir, args.imagename)
-    Q = cat_query(raImage, decImage, args.filter)
+    Q = cat_query(raImage, decImage, filter_used)
     catalogName = sex1(args.imagename)
     psfex(catalogName)
     catname = sex2(args.imagename)
-    inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, args.filter)
+    inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, filter_used)
     first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, args.num)
     agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, args.range, args.length)
     xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, args.dir, header, data,
