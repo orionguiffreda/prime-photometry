@@ -16,7 +16,7 @@ You can run this file and see the arguments through the format:
 
 Here is the format:
 
-> python ./multi_master.py [-h] [-parallel] [-parent PARENT] [-target TARGET] [-date DATE] [-filter FILTER] [-chip CHIP]
+> python ./multi_master.py [-h] [-parallel] [-no_download] [-shift] [-astromnet] [-parent PARENT] [-target TARGET] [-date DATE] [-filter FILTER] [-chip CHIP]
 
 The necessary positional arguments include _-parent_, _-target_, _-date_, and _-filter_.  We will go over these now.
 - _-parent_ is is a string that is the pathname to the parent directory where you want your ramp file folders, along with the folders for the stacked images and intermediate images, to be stored.
@@ -27,35 +27,40 @@ The necessary positional arguments include _-parent_, _-target_, _-date_, and _-
 
 - _-filter_ is a 1 character string that denotes the filter of the observation you want to download.  'J' or 'H' is currently supported.  In the log, this corresponds to the FILTER2 field.
 
-Optional arguments include _-parallel_ and _-chip_.
+Optional arguments include _-parallel_, _-no_download_, _-shift_, _-astromnet_, & _-chip_.
 - _-parallel_ is an optional argument for running the processing of chips in parallel.  This is currently in development and should not be used.
 
-- _-chip_ is an optional argument.  If you want to only process a single chip's observations, you can specify the chip here.
+- _-no_download_ is an optional argument to run _multi_master.py_ if you already have the data downloaded.
 
-Now that we've gone over the arguments associated with this script, we'll go over a sample command.  Say we have observed a target in field1111 in J band only, on 06/06/2024.  We first create a parent directory '/field1111/'.  To download and process that target's data, this is how this script would be used.  
+- _-shift_ is an optional argument for the astrometry improvement step, utilizing _-shift_ arg for _master.py_ (examine the documentation for that or _astrom_shift.py_ for more info).  This is a quick way to solve for the inaccuracy in the initial astrometry step on _master.py_.
 
-    python ./multi_master.py -parent ../../field1111/ -target field1111 date 20240606 -filter J
+- _-astromnet_ is an optional argument for the astrometry improvement step, utilizing astrometry.net through _gen_astrometry.py_ in _master.py_ (examine the documentation for either script for more info).  This is less consistent and slower, but more accurate when it works.
+
+- _-chip_ is an optional argument.  If you want to only download and process a single chip's observations, you can specify the chip here.
+
+Now that we've gone over the arguments associated with this script, we'll go over a sample command.  Say we have observed a target in field1111 in J band only, on 06/06/2024.  We first create a parent directory '/field1111/'.  To download and process that target's data, this is how this script would be used in a normal scenario.  
+
+    python ./multi_master.py -shift -parent ../../field1111/ -target field1111 date 20240606 -filter J
 
 ## How Multi_master.py Works
 
 - To begin, _getdata.py_ is utilized to download a specified observation's data for all 4 chips to the parent directory, along with the accompanying log file.
 - Once the data is downloaded, _master.py_ is run on each chip individually, or a single chip if specified.  Refer to the documentation on _master.py_ to see the inner workings of that processing.
 - Once the final stacked image is created, _multi_master.py_ is currently set up to automatically correct for any weak astrometry on the edges of the image through running astrometry.net on the stacked image.  This regenerates the stacked image with new astrometry, along with creating a .wcs file for each stack.
-- Finally, the new stacked images are compressed into .fz files with fpack (optionally).  If you need to uncompress them (for perhaps photometry purposes) use funpack.
 
 ## Data Products
 
-There are many, many data products from this pipeline.  Simply enough, it is 4x the amount than a single run of _master.py_, delivering all those data products for each chip.  Below is a sample parent directory using the aforementioned example command.  Below, only the intermediate data products for C1 are shown (for the sake of space).
+There are many, many data products from this pipeline.  Simply enough, it is 4x the amount than a single run of _master.py_, delivering all those data products for each chip (if, of course, you ran this without the -chip optional arg).  Below is a sample parent directory using the aforementioned example command.  Below, only the intermediate data products for C1 are shown (for the sake of space).
 
       ├── field1111
       │   ├── C1
       │   │   ├── **C1.ramp.fits...
       │   ├── C1_astrom
       │   │   ├── **C1.ramp.new...
-      │   │   ├── **C1.ramp.wcs...
       │   ├── C1_FF
       │   │   ├── **C1.flat.fits...
       │   ├── C1_sub
+      │   │   ├── old
       │   │   ├── **C1.sky.flat.fits...
       │   │   ├── **C1.sky.flat.cat...
       │   │   ├── **C1.sky.flat.head...
