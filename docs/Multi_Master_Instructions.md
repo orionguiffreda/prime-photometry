@@ -41,7 +41,7 @@ Now that we've gone over the arguments associated with this script, we'll go ove
 - To begin, _getdata.py_ is utilized to download a specified observation's data for all 4 chips to the parent directory, along with the accompanying log file.
 - Once the data is downloaded, _master.py_ is run on each chip individually, or a single chip if specified.  Refer to the documentation on _master.py_ to see the inner workings of that processing.
 - Once the final stacked image is created, _multi_master.py_ is currently set up to automatically correct for any weak astrometry on the edges of the image through running astrometry.net on the stacked image.  This regenerates the stacked image with new astrometry, along with creating a .wcs file for each stack.
-- Finally, the new stacked images are compressed into .fz files with fpack.  If you need to uncompress them (for perhaps photometry purposes) use funpack.
+- Finally, the new stacked images are compressed into .fz files with fpack (optionally).  If you need to uncompress them (for perhaps photometry purposes) use funpack.
 
 ## Data Products
 
