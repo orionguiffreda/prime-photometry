@@ -137,7 +137,7 @@ def shift(subpath, filter):
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
     imgname = all_fits[0]
     try:
-        command = 'python ./astrom/astrom_shift.py -remove -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
+        command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
         print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True)
     except subprocess.CalledProcessError as err:

@@ -9,6 +9,7 @@ import argparse
 from astropy.table import Table
 import numpy as np
 from astropy.table import Column
+import math
 
 from settings import gen_config_file_name
 
@@ -30,8 +31,7 @@ def imaging(directory,imageName):
 #data,header,w,raImage,decImage = imaging('/mnt/d/PRIME_photometry_test_files/astrom_shift/','01504054C1.sky.flat.fits')
 
 #%% catalog query
-def cat_query(raImage, decImage, filter):
-    boxsize = 9
+def cat_query(raImage, decImage, filter, boxsize):
     if filter == 'Z':
         catNum = 'II/379/smssdr4'  # changing to skymapper
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f, w/ box size %.2f' % (
@@ -101,11 +101,10 @@ def sex2(imageName):
     return catname
 
 #%% creating & prepping tables for dist calc
-def make_tables(directory, data, w, catname, Q, filter):
+def make_tables(directory, data, w, catname, Q, filter, crop):
     print('Creating sorted catalog & prime tables...')
     sexcat = Table.read(directory+catname, hdu=2)
 
-    crop = 1600
     max_x = data.shape[0]
     max_y = data.shape[1]
     if filter == 'Z':
@@ -133,6 +132,60 @@ def make_tables(directory, data, w, catname, Q, filter):
     inner_catsources.add_column(xs)
     inner_catsources.add_column(ys)
     return inner_primesources,inner_catsources
+
+
+def split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, filter):
+    # Calculate the number of segments along one dimension
+    img_size = data.shape[0]
+    segs = int(np.sqrt(n_segs))
+    if segs * segs != n_segs:
+        segs += 1
+
+    # Calculate segment boundaries for x and y dimensions
+    x_bounds = np.linspace(0, img_size, segs + 1, endpoint=True)
+    y_bounds = np.linspace(0, img_size, segs + 1, endpoint=True)
+
+    # Create a dictionary to hold the coordinates for each segment
+    segments = {}
+
+    for i in range(segs):
+        for j in range(segs):
+            # Define the boundaries for the current segment
+            x_min = x_bounds[i]
+            x_max = x_bounds[i + 1]
+            y_min = y_bounds[j]
+            y_max = y_bounds[j + 1]
+
+            # Filter the coordinates within the current segment
+            segment_primedata = inner_primesources[
+                (inner_primesources['X_IMAGE'] >= x_min) & (inner_primesources['X_IMAGE'] < x_max) &
+                (inner_primesources['Y_IMAGE'] >= y_min) & (inner_primesources['Y_IMAGE'] < y_max)
+                ]
+
+            segment_catdata = inner_catsources[
+                (inner_catsources['X_IMAGE'] >= x_min) & (inner_catsources['X_IMAGE'] < x_max) &
+                (inner_catsources['Y_IMAGE'] >= y_min) & (inner_catsources['Y_IMAGE'] < y_max)
+                ]
+
+            segment_primedata.sort('MAG_AUTO')
+            if filter == 'Z':
+                segment_catdata.sort('%sPSF' % filter.lower())
+            else:
+                segment_catdata.sort('%smag' % filter)
+
+            first_primes_x = np.array(segment_primedata['X_IMAGE'][:num])
+            first_primes_y = np.array(segment_primedata['Y_IMAGE'][:num])
+            first_cats_x = np.array(segment_catdata['X_IMAGE'][:num])
+            first_cats_y = np.array(segment_catdata['Y_IMAGE'][:num])
+
+            first_primecoords = np.column_stack([first_primes_x, first_primes_y])
+            first_catcoords = np.column_stack([first_cats_x, first_cats_y])
+
+            # Store the segment data in the dictionary
+            segment_key = (i, j)
+            segments[segment_key] = first_primecoords,first_catcoords,segment_primedata,segment_catdata
+
+    return segments
 
 
 def prep_tables(inner_primesources,inner_catsources,num):
@@ -189,13 +242,13 @@ def find_agreeing_distances(table1, table2, acc_range, length):
     agreeing_pairs.sort()
     print(f"\nEuclidean distances that agree within {acc_range} pixels & < {length} pixels in length:")
     for pair, dist in zip(agreeing_pairs, agreeing_distances):
-        print(f"Row from prime: {pair[0]}, Row from 2mass: {pair[1]}, Distance (pix): {dist[1]}")
+        print(f"Row from prime: {pair[0]}, Row from catalog: {pair[1]}, Distance (pix): {dist[1]}")
 
     return agreeing_pairs, agreeing_distances
 
 
 #%% final shift calc and header update
-def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data, imageName, stdev):
+def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data, imageName, stdev, segments=None):
     indices_prime = [pair[0] for pair in pairs]
     indices_cat = [pair[1] for pair in pairs]
 
@@ -222,11 +275,11 @@ def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data
 
     #x_shiftarr = [x for x in x_shiftarr if (x_med + x_stdev) >= x >= (x_med - x_stdev)]
     for i in range(len(x_shiftarr)):
-        if x_shiftarr[i] <= (stdev*x_med - x_stdev) or x_shiftarr[i] >= (stdev*x_med + x_stdev):
+        if x_shiftarr[i] <= (x_med - stdev*x_stdev) or x_shiftarr[i] >= (x_med + stdev*x_stdev):
             x_shiftarr[i] = 0
     #y_shiftarr = [y for y in y_shiftarr if (y_med + x_stdev) >= y >= (y_med - y_stdev)]
     for i in range(len(y_shiftarr)):
-        if y_shiftarr[i] <= (stdev*y_med - y_stdev) or y_shiftarr[i] >= (stdev*y_med + y_stdev):
+        if y_shiftarr[i] <= (y_med - stdev*y_stdev) or y_shiftarr[i] >= (y_med + stdev*y_stdev):
             y_shiftarr[i] = 0
 
     x_shiftarr_prune = []
@@ -237,90 +290,191 @@ def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data
             x_shiftarr_prune.append(x_shiftarr[i])
             y_shiftarr_prune.append(y_shiftarr[i])
 
-    xy_shifts = np.column_stack([x_shiftarr_prune,y_shiftarr_prune])
+    if not x_shiftarr_prune:
+        print('No pairs left after pruning!')
+        xfinal_shift = 0
+        yfinal_shift = 0
+    else:
 
-    print('Sources considered: ')
-    for pt in xy_shifts:
-        print('X offset = %.3f, Y offset = %.3f' % (pt[0], pt[1]))
+        xy_shifts = np.column_stack([x_shiftarr_prune,y_shiftarr_prune])
 
-    xfinal_shift = np.median(x_shiftarr_prune)
-    yfinal_shift = np.median(y_shiftarr_prune)
-    print('\nfinal median shifts: x = %.3f, y = %.3f' % (xfinal_shift, yfinal_shift))
+        print('Sources considered: ')
+        for pt in xy_shifts:
+            print('X offset = %.3f, Y offset = %.3f' % (pt[0], pt[1]))
 
-    crpix1 = header['CRPIX1']
-    crpix2 = header['CRPIX2']
+        xfinal_shift = np.median(x_shiftarr_prune)
+        yfinal_shift = np.median(y_shiftarr_prune)
+        print('\nfinal median shifts: x = %.3f, y = %.3f' % (xfinal_shift, yfinal_shift))
 
-    header['CRPIX1'] = crpix1 + xfinal_shift
-    header['CRPIX2'] = crpix2 + yfinal_shift
+        if not segments:
+            crpix1 = header['CRPIX1']
+            crpix2 = header['CRPIX2']
 
-    imageshiftname = os.path.splitext(imageName)[0]
-    imageshiftname = imageshiftname + '.shift.fits'
+            header['CRPIX1'] = crpix1 + xfinal_shift
+            header['CRPIX2'] = crpix2 + yfinal_shift
 
-    print('Writing new FITS file w/ updated CRPIX: %s' % imageshiftname)
-    newpath = os.path.join(directory, imageshiftname)
-    oldpath = os.path.join(directory, imageName)
+            imageshiftname = os.path.splitext(imageName)[0]
+            imageshiftname = imageshiftname + '.shift.fits'
 
-    fits.writeto(newpath, data, header, overwrite=True)
+            print('Writing new FITS file w/ updated CRPIX: %s' % imageshiftname)
+            newpath = os.path.join(directory, imageshiftname)
+            oldpath = os.path.join(directory, imageName)
+
+            fits.writeto(newpath, data, header, overwrite=True)
+        else:
+            pass
 
     return xfinal_shift, yfinal_shift
 #%%
 
 
-def change_all_files(xfinal_shift, yfinal_shift, directory):
-    all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-    all_fits = all_fits[1:]     # all files but first one (first one is completed already)
+def segmentshift(segments, acc_range, length, directory, imageName, stdev, segstd, segtrue):
+    final_xshifts_arr = []
+    final_yshifts_arr = []
+    for seg in segments:
+        table1 = segments[seg][0]
+        table2 = segments[seg][1]
+        print(f'Calculating agreeing pairs and dists for Section {seg}')
+        pairs, distances = find_agreeing_distances(table1, table2, acc_range, length)
 
-    print('Rewriting all FITS images w/ new CRPIX vals...')
-    for f in all_fits:
-        imgpath = os.path.join(directory,f)
-        img = fits.open(imgpath)
-        data = img[0].data
-        header = img[0].header
+        print(f'Calculating median shifts for Section {seg}')
+        xfinal_shift, yfinal_shift = xyshift(pairs, segments[seg][2], segments[seg][3], directory, header, data, imageName, stdev, segments=segtrue)
+        final_xshifts_arr.append(xfinal_shift)
+        final_yshifts_arr.append(yfinal_shift)
+
+    print('\npruning outliers >= %.2f stdev from median for each segments shifts...' % segstd)
+    x_stdev = np.std(final_xshifts_arr)
+    x_med = np.median(final_xshifts_arr)
+    y_stdev = np.std(final_yshifts_arr)
+    y_med = np.median(final_yshifts_arr)
+
+    for i in range(len(final_xshifts_arr)):
+        if final_xshifts_arr[i] <= (x_med - segstd*x_stdev) or final_xshifts_arr[i] >= (x_med + segstd*x_stdev):
+            final_xshifts_arr[i] = 0
+
+    for i in range(len(final_yshifts_arr)):
+        if final_yshifts_arr[i] <= (y_med - segstd*y_stdev) or final_yshifts_arr[i] >= (y_med + segstd*y_stdev):
+            final_yshifts_arr[i] = 0
+
+    x_finalshift_prune = []
+    y_finalshift_prune = []
+
+    for i in range(len(final_xshifts_arr)):
+        if final_xshifts_arr[i] != 0 and final_yshifts_arr[i] != 0:
+            x_finalshift_prune.append(final_xshifts_arr[i])
+            y_finalshift_prune.append(final_yshifts_arr[i])
+
+    if not x_finalshift_prune:
+        print('All segments disagree w/in %.2f! Is there an issue with the image?' % segstd)
+        xfinal_shift = 0
+        yfinal_shift = 0
+    else:
+        xy_shifts = np.column_stack([x_finalshift_prune,y_finalshift_prune])
+
+        print('Final shifts considered: ')
+        for pt in xy_shifts:
+            print('X shift = %.3f, Y shift = %.3f' % (pt[0], pt[1]))
+
+        xfinal_shift = np.median(x_finalshift_prune)
+        yfinal_shift = np.median(y_finalshift_prune)
+        print('\nfinal median shifts across all segments: x = %.3f, y = %.3f' % (xfinal_shift, yfinal_shift))
 
         crpix1 = header['CRPIX1']
         crpix2 = header['CRPIX2']
+
         header['CRPIX1'] = crpix1 + xfinal_shift
         header['CRPIX2'] = crpix2 + yfinal_shift
 
-        imageshiftname = os.path.splitext(f)[0]
+        imageshiftname = os.path.splitext(imageName)[0]
         imageshiftname = imageshiftname + '.shift.fits'
+
+        print('Writing new FITS file w/ updated CRPIX: %s' % imageshiftname)
         newpath = os.path.join(directory, imageshiftname)
+        oldpath = os.path.join(directory, imageName)
 
         fits.writeto(newpath, data, header, overwrite=True)
 
-    print('Moving old files to %sold/ directory and renaming shifted images...' % directory)
-    os.mkdir(directory+'old/')
-    all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-    all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.fits')]
-    for f in all_fits_again:
-        currentpath = os.path.join(directory,f)
-        oldpath = os.path.join(directory+'old/',f)
-        os.rename(currentpath,oldpath)
+    return xfinal_shift, yfinal_shift
 
-    for f in all_fits_shift:
-        shiftpath = os.path.join(directory, f)
-        imagerename = os.path.splitext(f)[0]
-        fits_end = os.path.splitext(f)[1]
-        imagerename = imagerename[:-6]
-        imagerename = imagerename + fits_end
-        newpath = os.path.join(directory,imagerename)
-        os.rename(shiftpath,newpath)
+
+def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
+    if xfinal_shift == 0:
+        print('No agreement, thus cannot move forward with rewriting all files!')
+    else:
+        if all_fits_arr:
+            all_fits = all_fits_arr
+            all_fits = all_fits[1:]
+        else:
+            all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
+            all_fits = all_fits[1:]     # all files but first one (first one is completed already)
+
+        print('Rewriting all FITS images w/ new CRPIX vals...')
+        for f in all_fits:
+            imgpath = os.path.join(directory,f)
+            img = fits.open(imgpath)
+            data = img[0].data
+            header = img[0].header
+
+            crpix1 = header['CRPIX1']
+            crpix2 = header['CRPIX2']
+            header['CRPIX1'] = crpix1 + xfinal_shift
+            header['CRPIX2'] = crpix2 + yfinal_shift
+
+            imageshiftname = os.path.splitext(f)[0]
+            imageshiftname = imageshiftname + '.shift.fits'
+            newpath = os.path.join(directory, imageshiftname)
+
+            fits.writeto(newpath, data, header, overwrite=True)
+
+        print('Moving old files to %sold/ directory and renaming shifted images...' % directory)
+        old_storage_dir = directory+'old/'
+        if not os.path.exists(old_storage_dir):
+            os.mkdir(directory+'old/')
+        else:
+            pass
+        if all_fits_arr:
+            all_fits_again = all_fits_arr
+            all_fits_shift = []
+            for f in all_fits_again:
+                imageshiftname = os.path.splitext(f)[0]
+                imageshiftname = imageshiftname + '.shift.fits'
+                all_fits_shift.append(imageshiftname)
+        else:
+            all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
+            all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.fits')]
+
+        for f in all_fits_again:
+            currentpath = os.path.join(directory,f)
+            oldpath = os.path.join(old_storage_dir,f)
+            os.rename(currentpath,oldpath)
+
+        for f in all_fits_shift:
+            shiftpath = os.path.join(directory, f)
+            imagerename = os.path.splitext(f)[0]
+            fits_end = os.path.splitext(f)[1]
+            imagerename = imagerename[:-6]
+            imagerename = imagerename + fits_end
+            newpath = os.path.join(directory,imagerename)
+            os.rename(shiftpath,newpath)
 
 #%% intermediate file removal
 def removal(directory):
     fnames = ['.shift.cat','.psf']
-    for f in os.listdir(directory):
-        for name in fnames:
-            if f.endswith(name):
-                path = os.path.join(directory+f)
-                try:
-                    os.remove(path)
-                    #print(f"Removed file: {path}")
-                except Exception as e:
-                    print(f"Error removing file: {path} - {e}")
+    try:
+        for f in os.listdir(directory):
+            for name in fnames:
+                if f.endswith(name):
+                    path = os.path.join(directory+f)
+                    try:
+                        os.remove(path)
+                        #print(f"Removed file: {path}")
+                    except Exception as e:
+                        print(f"Error removing file: {path} - {e}")
+    except None as e:
+        print('No files found to remove')
 #%%
 
-defaults = dict(range=3,length=100,num=10,stdev=1)
+defaults = dict(range=3,length=100,num=10,stdev=1,segstd=2)
 
 #%%
 if __name__ == "__main__":
@@ -329,6 +483,11 @@ if __name__ == "__main__":
     parser.add_argument('-pipeline', action='store_true', help='For use in the pipeline, runs on all fits imgs'
                                                                'in the given directory')
     parser.add_argument('-remove', action='store_true', help='removes intermediate catalogs')
+    parser.add_argument('-segment', action='store_true', help='splits matching area into 4 segments for increased '
+                                                              'astrometric accuracy')
+    parser.add_argument('-split', action='store_true', help='for large observations, splits up file list by specified'
+                                                            ' # of files & runs multiple times *SHOULD '
+                                                            'ONLY BE USED IN PIPELINE w/ astrom_shift_large.py')
     parser.add_argument('-dir', type=str, help='[str] path where input file is stored (should run on proc. image, '
                                                'so likely should be /C#_sub/)')
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
@@ -342,6 +501,10 @@ if __name__ == "__main__":
                                                    'dist. calculation (dont make too large!), default = 10', default=defaults['num'])
     parser.add_argument('-stdev', type=float, help='[float] # of stdevs away from median to prune eucl. dists '
                                                    'default = 1', default=defaults['stdev'])
+    parser.add_argument('-segstd', type=float, help='[float] # of stdevs away from median to prune final shifts '
+                                                    '(for use with the -segment flag), default = 2', default=defaults['segstd'])
+    parser.add_argument('-arr', type=str, nargs='+', help='*FOR USE W/ -SPLIT IN PIPELINE*, list of files to be run on', default=None)
+
     args = parser.parse_args()
 
     if args.filter == 'Y':
@@ -349,18 +512,33 @@ if __name__ == "__main__":
     else:
         filter_used = args.filter
 
+    if args.segment:
+        crop = 1250
+        boxsize = 12
+        n_segs = 4
+    else:
+        crop = 1600
+        boxsize = 9
+
     data, header, w, raImage, decImage = imaging(args.dir, args.imagename)
-    Q = cat_query(raImage, decImage, filter_used)
+    Q = cat_query(raImage, decImage, filter_used, boxsize)
     catalogName = sex1(args.imagename)
     psfex(catalogName)
     catname = sex2(args.imagename)
-    inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, filter_used)
-    first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, args.num)
-    agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, args.range, args.length)
-    xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, args.dir, header, data,
-                                         args.imagename, args.stdev)
+    inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, filter_used, crop)
+    if args.segment:
+       segments = split_coordinates(n_segs, data, inner_primesources , inner_catsources, args.num, args.filter)
+       xfinal_shift, yfinal_shift = segmentshift(segments, args.range, args.length, args.dir, args.imagename, args.stdev, args.segstd, args.segment)
+    else:
+        first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, args.num)
+        agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, args.range, args.length)
+        xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, args.dir, header, data,
+                                             args.imagename, args.stdev)
     if args.remove:
         removal(args.dir)
     if args.pipeline:
-        change_all_files(xfinal_shift, yfinal_shift, args.dir)
+        if args.split:
+            change_all_files(xfinal_shift, yfinal_shift, args.dir, args.arr)
+        else:
+            change_all_files(xfinal_shift, yfinal_shift, args.dir)
 

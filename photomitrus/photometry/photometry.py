@@ -86,7 +86,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, (width), (height)))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['*'], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % filter, 'e_%smag' % filter], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -126,9 +126,64 @@ def query(raImage, decImage,filter, width, height, survey):
         except:
             print(
                 'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  H band is also not well covered!'
-                ' If you are in S.H., try VHS, VVV is only in a relatively small strip!')
+                ' If you are in S.H., VIKING is only in a relatively smaller strip!')
+    elif survey == 'Skymapper':
+        # catNum = 'II/348/vvv2'  # changing to vista
+        catNum = 'II/379/smssdr4'
+        print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
+        catNum, raImage, decImage, width, height))
+        try:
+            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % filter.lower(),'e_%sPSF' % filter.lower()], column_filters={"%sPSF" % filter.lower(): ">12"}, row_limit=-1)
+            print(v)
+            Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                               height=str(height) + 'm', catalog=catNum, cache=False)
+            # query vizier around (ra, dec) with a radius of boxsize
+            #print(Q[0])
+            print('Queried source total = ', len(Q[0]))
+        except:
+            print(
+                'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                '\n perhaps check skymapper coverage maps?')
+    elif survey == 'SDSS':
+        # catNum = 'II/348/vvv2'  # changing to vista
+        catNum = 'V/154/sdss16'
+        print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
+        catNum, raImage, decImage, width, height))
+        try:
+            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % filter.lower(),'e_%spmag' % filter.lower()], column_filters={"%spmag" % filter.lower(): ">12"
+                                                                                                                            ,"clean": "=1"}, row_limit=-1)
+            print(v)
+            Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                               height=str(height) + 'm', catalog=catNum, cache=False)
+            # query vizier around (ra, dec) with a radius of boxsize
+            #print(Q[0])
+            print('Queried source total = ', len(Q[0]))
+        except:
+            print(
+                'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                '\n perhaps check SDSS coverage maps?')
+    elif survey == 'UKIDSS':
+        # catNum = 'II/348/vvv2'  # changing to vista
+        catNum = 'II/319/las9'
+        print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
+        catNum, raImage, decImage, width, height))
+        try:
+            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % filter,'e_%smag' % filter], column_filters={"%smag" % filter: ">12"}, row_limit=-1)
+            print(v)
+            Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                               height=str(height) + 'm', catalog=catNum, cache=False)
+            # query vizier around (ra, dec) with a radius of boxsize
+            #print(Q[0])
+            print('Queried source total = ', len(Q[0]))
+        except:
+            print(
+                'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                '\n perhaps check UKIDSS coverage maps?')
     else:
-        print('No supported survey found, currently use either 2MASS, VHS, or VVV')
+        print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, or UKIDSS')
     return Q
 
 #Q = query(raImage, decImage, boxsize)
@@ -185,7 +240,11 @@ def tables(Q,psfcatalogName,crop):
     crop = int(crop)
     max_x = data.shape[0]
     max_y = data.shape[1]
-    mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
+    colnames = Q[0].colnames
+    RA = colnames[0]
+    DEC = colnames[1]
+
+    mass_imCoords = w.all_world2pix(Q[0][RA], Q[0][DEC], 1)
     good_cat_stars = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x-crop)) & (mass_imCoords[1] > crop) & (mass_imCoords[1] < (max_y-crop)))]
     print('Catalogue cropped, source total = ', len(good_cat_stars))
 
@@ -209,7 +268,7 @@ def tables(Q,psfcatalogName,crop):
 
     psfsourceCatCoords = utils.pixel_to_skycoord(cleanPSFSources['X_IMAGE'],cleanPSFSources['Y_IMAGE'],w,origin=1)
 
-    massCatCoords = SkyCoord(ra=good_cat_stars['RAJ2000'], dec=good_cat_stars['DEJ2000'], frame='icrs', unit='degree')
+    massCatCoords = SkyCoord(ra=good_cat_stars[RA], dec=good_cat_stars[DEC], frame='icrs', unit='degree')
     #Now cross match sources
     #Set the cross-match distance threshold to 0.6 arcsec, or just about one pixel
     photoDistThresh = 0.6
@@ -229,17 +288,11 @@ def queryexport(good_cat_stars, imageName,survey):
 #%%
 #derive zero pt / put in swarped header
 def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,imageName,filter,survey):
-    if survey == '2MASS':
-        psfoffsets = ma.array(good_cat_stars['%smag' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
-        psfoffsets = psfoffsets.data
-    elif survey == 'VHS' or survey == 'VIKING':
-        psfoffsets = ma.array(good_cat_stars['%sap3' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
-        psfoffsets = psfoffsets.data
-    elif survey == 'VVV':
-        psfoffsets = ma.array(good_cat_stars['%smag3' % filter][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
-        psfoffsets = psfoffsets.data
-    else:
-        print('Surveys other than 2MASS, VHS, or VVV currently not supported')
+    colnames = good_cat_stars.colnames
+    magcolname = colnames[2]
+    psfoffsets = ma.array(good_cat_stars[magcolname][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
+    psfoffsets = psfoffsets.data
+
     #Compute sigma clipped statistics
     zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     #print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
@@ -272,8 +325,7 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     return cleanPSFSources, PSFSources
 
 #%% optional GRB-specific photom
-def GRB(ra,dec,imageName,survey,filter,thresh):
-    GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
+def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
 
     mag_ecsvname = '%s.%s.ecsv' % (imageName,survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
@@ -282,87 +334,174 @@ def GRB(ra,dec,imageName,survey,filter,thresh):
                                   unit='degree')
 
     photoDistThresh = thresh
-    idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
-                                                                                 photoDistThresh * u.arcsec)
-    print('idx size = %d' % len(idx_GRBcleanpsf))
-    if len(idx_GRBcleanpsf) == 1:
-        print('GRB source at inputted coords %s and %s found!' % (ra,dec))
-
-        grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
-        grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
-
-        grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
-        grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
-        grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][0]
-        grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][0]
-        grb_dist = d2d[0].to(u.arcsec)
-        grb_dist = grb_dist/u.arcsec
-
-        print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
-        grb_ra, grb_dec, grb_rad, grb_snr))
-        print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
-
-        grbdata = Table()
-        grbdata['RA (deg)'] = np.array([grb_ra])
-        grbdata['DEC (deg)'] = np.array([grb_dec])
-        grbdata['%sMag' % filter] = np.array([grb_mag])
-        grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
-        grbdata['Radius (arcsec)'] = np.array([grb_rad])
-        grbdata['SNR'] = np.array([grb_snr])
-        grbdata['Distance (arcsec)'] = np.array([grb_dist])
-
-        grbdata.write('GRB_%s_Data.ecsv' % filter, overwrite=True)
-        print('Generated GRB data table!')
-    elif len(idx_GRBcleanpsf) > 1:
-        print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
-        mag_ar = []
-        mag_err_ar =[]
-        ra_ar =[]
-        dec_ar = []
-        rad_ar = []
-        snr_ar = []
-        dist_ar = []
-        idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
-        for i in idx_GRBcleanpsflist:
-            grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
-            mag_ar.append(grb_mag)
-            grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
-            mag_err_ar.append(grb_magerr)
-            grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
-            ra_ar.append(grb_ra)
-            grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][idx_GRBcleanpsflist.index(i)]
-            dec_ar.append(grb_dec)
-            grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][idx_GRBcleanpsflist.index(i)]
-            rad_ar.append(grb_rad)
-            grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][idx_GRBcleanpsflist.index(i)]
-            snr_ar.append(grb_snr)
-            dist = (d2d[idx_GRBcleanpsflist.index(i)]).to(u.arcsec)
-            dist = dist/u.arcsec
-            dist_ar.append(dist)
-        grbdata = Table()
-        grbdata['RA (deg)'] = np.array(ra_ar)
-        grbdata['DEC (deg)'] = np.array(dec_ar)
-        grbdata['%sMag' % filter] = np.array(mag_ar)
-        grbdata['%sMag_Err' % filter] = np.array(mag_err_ar)
-        grbdata['Radius (arcsec)'] = np.array(rad_ar)
-        grbdata['SNR'] = np.array(snr_ar)
-        grbdata['Distance (arcsec)'] = np.array(dist_ar)
-        grbdata.write('GRB_Multisource_%s_Data.ecsv' % filter, overwrite=True)
-        print('Generated GRB data table!')
+    if coordlist:
+        for i in range(len(coordlist)):
+            print('Checking GRB location %i: %s' % (i,coordlist[i]))
+        coordlist = tuple(eval(i) for i in coordlist)
+        try:
+            idx_GRBpsfdict = {}
+            keys = np.arange(0, len(coordlist), 1)
+            for i in range(len(coordlist)):
+                GRBcoords = SkyCoord(ra=[coordlist[i][0]], dec=[coordlist[i][1]], frame='icrs', unit='degree')
+                idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
+                                                                                               photoDistThresh * u.arcsec)
+                idx_GRBpsfdict[keys[i]] = idx_GRBcleanpsf, coordlist[i]
+        except NameError:
+            print('No Sources found!')
     else:
-        print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
+        GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
+        idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
+                                                                                     photoDistThresh * u.arcsec)
+
+    if coordlist:
+        for key in idx_GRBpsfdict:
+            values = idx_GRBpsfdict[key]
+            idx_GRBcleanpsf = values[0]
+            ra = values[1][0]
+            dec = values[1][1]
+            print('idx size = %d for location %d' % (len(idx_GRBcleanpsf), key))
+            if len(idx_GRBcleanpsf) == 1:
+                print('GRB source at inputted coords %s and %s found!' % (ra, dec))
+
+                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
+                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
+
+                grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
+                grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
+                grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][0]
+                grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][0]
+                grb_dist = d2d[0].to(u.arcsec)
+                grb_dist = grb_dist / u.arcsec
+
+                print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+                    grb_ra, grb_dec, grb_rad, grb_snr))
+                print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
+
+                grbdata = Table()
+                grbdata['RA (deg)'] = np.array([grb_ra])
+                grbdata['DEC (deg)'] = np.array([grb_dec])
+                grbdata['%sMag' % filter] = np.array([grb_mag])
+                grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
+                grbdata['Radius (arcsec)'] = np.array([grb_rad])
+                grbdata['SNR'] = np.array([grb_snr])
+                grbdata['Distance (arcsec)'] = np.array([grb_dist])
+
+                grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (filter, survey, key), overwrite=True)
+                print('Generated GRB data table!')
+            elif len(idx_GRBcleanpsf) > 1:
+                print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
+                mag_ar = []
+                mag_err_ar = []
+                ra_ar = []
+                dec_ar = []
+                rad_ar = []
+                snr_ar = []
+                dist_ar = []
+                idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
+                for i in idx_GRBcleanpsflist:
+                    grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                    mag_ar.append(grb_mag)
+                    grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][
+                        idx_GRBcleanpsflist.index(i)]
+                    mag_err_ar.append(grb_magerr)
+                    grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
+                    ra_ar.append(grb_ra)
+                    grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][idx_GRBcleanpsflist.index(i)]
+                    dec_ar.append(grb_dec)
+                    grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][idx_GRBcleanpsflist.index(i)]
+                    rad_ar.append(grb_rad)
+                    grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][idx_GRBcleanpsflist.index(i)]
+                    snr_ar.append(grb_snr)
+                    dist = (d2d[idx_GRBcleanpsflist.index(i)]).to(u.arcsec)
+                    dist = dist / u.arcsec
+                    dist_ar.append(dist)
+                grbdata = Table()
+                grbdata['RA (deg)'] = np.array(ra_ar)
+                grbdata['DEC (deg)'] = np.array(dec_ar)
+                grbdata['%sMag' % filter] = np.array(mag_ar)
+                grbdata['%sMag_Err' % filter] = np.array(mag_err_ar)
+                grbdata['Radius (arcsec)'] = np.array(rad_ar)
+                grbdata['SNR'] = np.array(snr_ar)
+                grbdata['Distance (arcsec)'] = np.array(dist_ar)
+                grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (filter, survey, key), overwrite=True)
+                print('Generated GRB data table!')
+            else:
+                print(
+                    'GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra, dec))
+    else:
+        print('idx size = %d' % len(idx_GRBcleanpsf))
+        if len(idx_GRBcleanpsf) == 1:
+            print('GRB source at inputted coords %s and %s found!' % (ra,dec))
+
+            grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
+            grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
+
+            grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
+            grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
+            grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][0]
+            grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][0]
+            grb_dist = d2d[0].to(u.arcsec)
+            grb_dist = grb_dist/u.arcsec
+
+            print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+            grb_ra, grb_dec, grb_rad, grb_snr))
+            print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
+
+            grbdata = Table()
+            grbdata['RA (deg)'] = np.array([grb_ra])
+            grbdata['DEC (deg)'] = np.array([grb_dec])
+            grbdata['%sMag' % filter] = np.array([grb_mag])
+            grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
+            grbdata['Radius (arcsec)'] = np.array([grb_rad])
+            grbdata['SNR'] = np.array([grb_snr])
+            grbdata['Distance (arcsec)'] = np.array([grb_dist])
+
+            grbdata.write('GRB_%s_Data_%s.ecsv' % (filter, survey), overwrite=True)
+            print('Generated GRB data table!')
+        elif len(idx_GRBcleanpsf) > 1:
+            print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
+            mag_ar = []
+            mag_err_ar =[]
+            ra_ar =[]
+            dec_ar = []
+            rad_ar = []
+            snr_ar = []
+            dist_ar = []
+            idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
+            for i in idx_GRBcleanpsflist:
+                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                mag_ar.append(grb_mag)
+                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                mag_err_ar.append(grb_magerr)
+                grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
+                ra_ar.append(grb_ra)
+                grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][idx_GRBcleanpsflist.index(i)]
+                dec_ar.append(grb_dec)
+                grb_rad = mag_ecsvcleanSources[idx_GRBcleanpsf]['FLUX_RADIUS'][idx_GRBcleanpsflist.index(i)]
+                rad_ar.append(grb_rad)
+                grb_snr = mag_ecsvcleanSources[idx_GRBcleanpsf]['SNR_WIN'][idx_GRBcleanpsflist.index(i)]
+                snr_ar.append(grb_snr)
+                dist = (d2d[idx_GRBcleanpsflist.index(i)]).to(u.arcsec)
+                dist = dist/u.arcsec
+                dist_ar.append(dist)
+            grbdata = Table()
+            grbdata['RA (deg)'] = np.array(ra_ar)
+            grbdata['DEC (deg)'] = np.array(dec_ar)
+            grbdata['%sMag' % filter] = np.array(mag_ar)
+            grbdata['%sMag_Err' % filter] = np.array(mag_err_ar)
+            grbdata['Radius (arcsec)'] = np.array(rad_ar)
+            grbdata['SNR'] = np.array(snr_ar)
+            grbdata['Distance (arcsec)'] = np.array(dist_ar)
+            grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (filter, survey), overwrite=True)
+            print('Generated GRB data table!')
+        else:
+            print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
 
 #%% optional plots
 def plots(cleanPSFsources,PSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
     #appropriate mag column
-    if survey == '2MASS':
-        magcol = '%smag' % filter
-    elif survey == 'VHS' or survey == 'VIKING':
-        magcol = '%sap3' % filter
-    elif survey == 'VVV':
-        magcol = '%smag3' % filter
-    else:
-        print('Surveys other than 2MASS, VHS, or VVV currently not supported')
+    colnames = good_cat_stars.colnames
+    magcol = colnames[2]
 
     chip = imageName[-6]
     num = imageName[-16:-8]
@@ -526,15 +665,20 @@ if __name__ == "__main__":
                         help='optional flag, use if you want to remove intermediate products after getting photom, i.e. the ".cat" and ".psf" files')
     parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
                                                           'specific coords, such as w/ a GRB')
+    parser.add_argument('-grb_only', action='store_true', help='optional flag, use if running -grb again on already created catalog')
     parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
     parser.add_argument('-name', type=str, help='[str], image name')
     parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
-    parser.add_argument('-survey', type=str, help='[str], survey to query, currently use either "2MASS" '
-                                                  'or "VHS" (for VISTA, J in s. hemi. only), default = 2MASS', default=defaults["survey"])
+    parser.add_argument('-survey', type=str, help='[str], survey to query, choose from VHS (best / reliable for J), 2MASS (reliable for H)'
+                                                  ', VIKING, Skymapper (reliable for Z), SDSS, and UKIDSS, default = 2MASS', default=defaults["survey"])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',default=defaults["crop"])
     parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["RA"])
     parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["DEC"])
-    parser.add_argument('-thresh', type=float, help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG*',
+    parser.add_argument('-coordlist', type=str, nargs='+', help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
+                                                     'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA & -DEC BUT'
+                                                     ' INCLUDE -THRESH*', default=None)
+    parser.add_argument('-thresh', type=float, help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
+                                                    ' AND -COORDLIST*',
                         default=defaults["thresh"])
     args = parser.parse_args()
 
@@ -560,6 +704,12 @@ if __name__ == "__main__":
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
         queryexport(good_cat_stars,args.name,args.survey)
+    elif args.grb_only:
+        os.chdir(args.dir)
+        if args.coordlist:
+            GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh, args.coordlist)
+        else:
+            GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh)
     else:
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
@@ -571,7 +721,10 @@ if __name__ == "__main__":
             queryexport(good_cat_stars, args.name, args.survey)
         cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
         if args.grb:
-            GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
+            if args.coordlist:
+                GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh, args.coordlist)
+            else:
+                GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
         if args.plots:
             plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
         if args.remove:

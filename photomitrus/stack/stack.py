@@ -175,7 +175,7 @@ def astromfin(dir,chip):
     instack = sorted(os.listdir(dir))
     stackimg = []
     for f in instack:
-        if fnmatch.fnmatch(f, 'coadd.Open-*.C%i.fits' % chip):
+        if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip):
             stackimg.append(f)
     for f in stackimg:
         pre = os.path.splitext(f)[0]
