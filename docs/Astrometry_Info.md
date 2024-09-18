@@ -44,31 +44,31 @@ Running the --help flag reveals the formatting is:
 
 Let's start with the positional arguments:
 
--_-dir_ is the directory the image (or images) are located in.
+- _-dir_ is the directory the image (or images) are located in.
 
--_-imagename_ is the filename of the image this script will be run on.
+- _-imagename_ is the filename of the image this script will be run on.
 
--_-filter_ is the filter used during the observation.
+- _-filter_ is the filter used during the observation.
 
 The optional arguments are:
 
--_-pipeline_ applies the solution found to all images in the directory and generates new images w/ the same name, moving the old images to a subdirectory '/old/' (this is done to combat a disk error on the computer).  This, obviously, is the default on the pipline itself.
+- _-pipeline_ applies the solution found to all images in the directory and generates new images w/ the same name, moving the old images to a subdirectory '/old/' (this is done to combat a disk error on the computer).  This, obviously, is the default on the pipline itself.
 
--_-remove_ removes intermediate catalogs created by sextractor and psfex, this is also default on the pipeline.
+- _-remove_ removes intermediate catalogs created by sextractor and psfex, this is also default on the pipeline.
 
--_-segment_ increases the accuracy of this script through splitting the box at the center of the image into 4 quadrants.  A final shift is generated for each quadrant, where a quadrant's final values will be pruned out if they do not agree w/in a specified # of stdevs (_-segstd_) from the median value.  This introduces redundancy, where if 1 quadrant is for some reason incorrect, it won't affect the final value.
+- _-segment_ increases the accuracy of this script through splitting the box at the center of the image into 4 quadrants.  A final shift is generated for each quadrant, where a quadrant's final values will be pruned out if they do not agree w/in a specified # of stdevs (_-segstd_) from the median value.  This introduces redundancy, where if 1 quadrant is for some reason incorrect, it won't affect the final value.
 
 The arguments below have default values and don't need to be specified in the command unless the user desires it.
 
--_-range_ is the acceptable range for calculated euclidean distances to agree, default = 3 pix.
+- _-range_ is the acceptable range for calculated euclidean distances to agree, default = 3 pix.
 
--_-length_ is the maximum length of the euclidean distance that can be considered, default = 100 pix.
+- _-length_ is the maximum length of the euclidean distance that can be considered, default = 100 pix.
 
--_-num_ is the number of sources from both the catalog and image to have euclidean distances calculated, default = 10.
+- _-num_ is the number of sources from both the catalog and image to have euclidean distances calculated, default = 10.
 
--_-stdev_ is the number of stdevs away from the median, above which considered pairs are pruned out, default = 1.
+- _-stdev_ is the number of stdevs away from the median, above which considered pairs are pruned out, default = 1.
 
--_-segstd_ is used with the _-segment_ flag, and specifies the # of stdevs away from the median above which final values are pruned.  The median is taken across all 4 quadrants' final X and Y values.
+- _-segstd_ is used with the _-segment_ flag, and specifies the # of stdevs away from the median above which final values are pruned.  The median is taken across all 4 quadrants' final X and Y values.
 
 Here is example usage of this command, in the setting of normal pipeline usage (in the pipeline, the first image is automatically selected from the image directory):
 
