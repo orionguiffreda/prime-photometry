@@ -68,7 +68,7 @@ The arguments below have default values and don't need to be specified in the co
 
 - _-stdev_ is the number of stdevs away from the median, above which considered pairs are pruned out, default = 1.
 
-- _-segstd_ is used with the _-segment_ flag, and specifies the # of stdevs away from the median above which final values are pruned.  The median is taken across all 4 quadrants' final X and Y values.
+- _-segstd_ is used with the _-segment_ flag, and specifies the # of stdevs away from the median above which final values are pruned.  The median is taken across all 4 quadrants' final X and Y values.  Default = 2.
 
 Here is example usage of this command, in the setting of normal pipeline usage (in the pipeline, the first image is automatically selected from the image directory):
 
