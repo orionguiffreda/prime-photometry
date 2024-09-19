@@ -46,7 +46,7 @@ Running the --help flag reveals the formatting is:
 
 - _input_ is the input field.  This is most likely a directory with ramp FITS images (currently).
 
-- _-rad_ is used with the -hard flag, and is the radius around the telescope's pointing in which to search.  Default = 1".
+- _-rad_ is used with the -hard flag, and is the radius around the telescope's pointing in which to search.  Default = 1'.
 
 - _-ds_ is used with the -hard flag, and is the amount to downsample the image before extracting sources.  Default = 4.
 
