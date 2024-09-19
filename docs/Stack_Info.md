@@ -1,18 +1,26 @@
 # PRIME Photometry Pipeline - Stacking Instructions
 
-_stack.py_ is this pipeline's script for stacking sets of images.  It utilizes a conda package for Swarp, which utilizes external header files (with improved astrometry) matched with processed images to create a final, median-combined, stacked image. 
+_stack.py_ is this pipeline's script for stacking sets of images.  It utilizes a conda package for Swarp, which utilizes external header files (with improved astrometry) matched with processed images to create a final, median-combined, stacked image.  It also, by default, runs astrometry.net on the final image, correcting for any astrometric error in the corners. 
 
 ## Usage
 
 _stack.py_ has the formatting as followed:
 
-> stack.py [-h] [-mask] [-sub SUB] [-stack STACK] [-parent PARENT] [-chip CHIP]
+> stack.py [-h] [-mask] [-no_astrom] [-astrom_only] [-sub SUB] [-stack STACK] [-parent PARENT] [-chip CHIP]
 
 The arguments you will utilize (currently) are the following:
 
 - _-sub_ is a string that is the path to where your input processed images are stored.  These will be stacked.
 
-- _-stack_ is a string that is the path to where your final stacked image & weight image will be stored. 
+- _-stack_ is a string that is the path to where your final stacked image & weight image will be stored.
+
+- _-no_astrom_ is an optional flag which will run the stacking without using astrometry.net after stacking.
+
+- _-astrom_only_ is an optional flag to only run astrometry.net on an already created stacked image.
+
+Here is an example command in normal pipeline usage:
+
+    python ./stack/stack.py -sub /obs_dir/C1_sub/ -stack /obs_dir/stack/ -chip 1
 
 ### Bad Pixel Mask - *IN DEVELOPMENT*
 
