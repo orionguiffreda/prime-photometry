@@ -2,11 +2,31 @@
 
 There are four scripts in the pipeline that deal with astrometry for input images.  
 
-For initial astrometry, one can choose either _astrom_angle.py_ or _gen_astrometry.py_.  The former uses the pointing of the telescope and default rotation offset to generate quicker astrometric solutions (this is the normal pipeline choice), while the latter generates initial astrometry for ramp images using astrometry.net.  
+For initial astrometry, one can choose either _astromangle_new.py_ or _gen_astrometry.py_.  The former uses the pointing of the telescope and default rotation offset to generate quicker astrometric solutions (this is the normal pipeline choice), while the latter generates initial astrometry for ramp images using astrometry.net.  
 
-If _astrom_angle.py_ is used, then a further improvement is run using _astrom_shift.py_, which corrects for translation error in the initial step.
+If _astromangle_new.py_ is used, then a further improvement is run using _astrom_shift.py_, which corrects for translation error in the initial step.
 
 _astrometry.py_ is the final refinement, utilizing sextractor and scamp to generate improved astrometry for the purpose of stacking processed images.  Below, usage and info for both scripts is shown.
+
+## Astromangle_new.py 
+
+This script uses the RA and DEC of the telescope's pointing, along with the default rotation offset to calculate the coordinates of the corners of the chip.  These corners are used with astropy to generate rough initial astrometry in the form of WCS.  The _CRPIX_ values from the initial solution is then slightly altered depending on the chip number for accuracy.  This WCS solution is generated and applied for each image in a given chip's observation.
+
+### Astromangle_new - Usage and output files
+
+Running the --help flag reveals the formatting is:
+
+> astromangle_new.py [-h] [-input] [-output]
+
+- _-input_ is the input path to either a single file to a directory with an chip's observation.
+
+- _-output_ is the output directory to store the final files.
+
+Here is an example command in the setting of normal pipeline usage:
+
+        python ./preprocess/astromangle_new.py -input /obs_dir/C1/ -output /obs_dir/C1_astrom/
+
+The output files include renamed ramp files w/ initial astrometry, renamed from '*.ramp.fits' to '*.ramp.new'. 
 
 ## Gen_astrometry.py 
 
@@ -24,7 +44,15 @@ Running the --help flag reveals the formatting is:
 
 - _output_ is the output path for the images w/ new astrometry.  
 
-- _input_ is the input field.  This is most likely a directory with ramp FITS images (currently).    
+- _input_ is the input field.  This is most likely a directory with ramp FITS images (currently).
+
+- _-rad_ is used with the -hard flag, and is the radius around the telescope's pointing in which to search.  Default = 1".
+
+- _-ds_ is used with the -hard flag, and is the amount to downsample the image before extracting sources.  Default = 4.
+
+Here is an example usage of the command, in the setting of normal pipeline usage:
+
+    `python ./preprocess/gen_astrometry.py -hard -output /obs_dir/C1_astrom/ -input /obs_dir/C1/ -rad 1 -ds 3
 
 The output files are new FITS files w/ WCS in the header, with the format '.ramp.new'.  It also outputs separate wcs files as '.ramp.wcs.'
 
@@ -74,6 +102,7 @@ Here is example usage of this command, in the setting of normal pipeline usage (
 
     python ./astrom/astrom_shift.py -remove -segment -dir /obs_dir/C1_sub/ -imagename /first_image.fits -filter J
 
+The output files simply replace the initial files in the directory, using the same name.  Technically, the initial files are also preserved in a subdirectory called '/old/'.
 
 ## Astrometry.py
 
