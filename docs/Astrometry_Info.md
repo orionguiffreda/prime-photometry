@@ -52,7 +52,7 @@ Running the --help flag reveals the formatting is:
 
 Here is an example usage of the command, in the setting of normal pipeline usage:
 
-    `python ./preprocess/gen_astrometry.py -hard -output /obs_dir/C1_astrom/ -input /obs_dir/C1/ -rad 1 -ds 3
+    python ./preprocess/gen_astrometry.py -hard -output /obs_dir/C1_astrom/ -input /obs_dir/C1/ -rad 1 -ds 3
 
 The output files are new FITS files w/ WCS in the header, with the format '.ramp.new'.  It also outputs separate wcs files as '.ramp.wcs.'
 
@@ -60,7 +60,7 @@ The output files are new FITS files w/ WCS in the header, with the format '.ramp
 
 This script uses sextractor (w/ psfex) and astroquery to compare the source positions in a known catalog to source positions from a given image, correcting for a translation offset between them.  
 
-For the sake of quickness, this comparison is done within a box of 9-12' at the center of the image.  Both the catalog & image sources are sorted by magnitude, then euclidean distances are calculated between each of the first specified # of sources in each group are calculated.  If distances agree w/in a specified # of pixels and are less than a specified # of pixels in length, they are a considered pair.  The X and Y pixel distances (distance between the catalog and image source) are examined for these considered pairs.  A median is taken for all the considered X and Y distances respectively, and any pair of sources that falls greater than a specified # of stdevs away from this median are pruned out.  Finally, a median is taken across the X and Y distances of the remaining pairs, and is used for the final X shift value and Y shift value.  These values are then written into the _CRPIX_ fields of the header of the given image.  
+For the sake of quickness, this comparison is done within a box of 9 or 12' at the center of the image.  Both the catalog & image sources are sorted by magnitude, then euclidean distances are calculated between each of the first specified # of sources in each group.  If distances agree w/in a specified # of pixels and are less than a specified # of pixels in length, they are a considered pair.  The X and Y pixel distances (distance between the catalog and image source in XY space) are examined for these considered pairs.  A median is taken for all the considered X and Y distances respectively, and any pair of sources that falls greater than a specified # of stdevs away from this median are pruned out.  Finally, a median is taken across the X and Y distances of the remaining pairs, and is used for the final X shift value and Y shift value.  These values are then written into the _CRPIX_ header fields of the given image.  
 
 In the pipeline, this solution is applied to all images in a given observation.
 
@@ -84,7 +84,7 @@ The optional arguments are:
 
 - _-remove_ removes intermediate catalogs created by sextractor and psfex, this is also default on the pipeline.
 
-- _-segment_ increases the accuracy of this script through splitting the box at the center of the image into 4 quadrants.  A final shift is generated for each quadrant, where a quadrant's final values will be pruned out if they do not agree w/in a specified # of stdevs (_-segstd_) from the median value.  This introduces redundancy, where if 1 quadrant is for some reason incorrect, it won't affect the final value.
+- _-segment_ increases the accuracy of this script through splitting the box at the center of the image into 4 quadrants.  A final shift is generated for each quadrant, where a quadrant's final values will be pruned out if they do not agree w/in a specified # of stdevs (_-segstd_) from the median value.  This introduces redundancy, where if 1 quadrant is for some reason greatly incorrect, it won't affect the final value.
 
 The arguments below have default values and don't need to be specified in the command unless the user desires it.
 
