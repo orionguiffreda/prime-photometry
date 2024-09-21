@@ -12,7 +12,7 @@ Once the pipeline is installed, make sure to add the _/photomitrus_ directory to
 
 Master.py should run with no errors and present text that details the format of the command line arguments.  Currently, the usage is as follows:
 
-> python ./master.py [-h] [-angle] [-fpack] [-shift] [-skygen_start] [-parent PARENT] [-chip CHIP] [-filter FILTER] [-sigma SIGMA]
+> python ./master.py [-h] [-FF] [-angle] [-fpack] [-shift] [-refine] [-skygen_start] [-parent PARENT] [-chip CHIP] [-filter FILTER] [-sigma SIGMA]
 
 We will learn what all these arguments mean, starting with the positional arguments.  
 - _-parent_ is a string that is the pathname to the directory where your pre-processed ramp FITS files are stored.  If the data was downloaded using _getdata.py_ then a good directory structure should look similar to this:
