@@ -10,7 +10,7 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 from astropy.wcs import utils
-from astropy.stats import sigma_clipped_stats
+# from astropy.stats import sigma_clipped_stats
 from astropy.stats import sigma_clip
 from astropy.io import fits
 from astropy.io import ascii
@@ -20,12 +20,15 @@ from astropy.table import Table
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import subprocess
-from scipy import stats
+# from scipy import stats
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
 #%%
 # Read LDAC tables
+
+defaults = dict(crop=300,survey='2MASS',RA=None,DEC=None,thresh=4.0)
+
 def get_table_from_ldac(filename, frame=1):
     """
     Load an astropy table from a fits_ldac by frame (Since the ldac format has column
@@ -47,6 +50,7 @@ def get_table_from_ldac(filename, frame=1):
 
 #%%
 #import img and get wcs
+
 
 def img(directory,imageName,crop):
     os.chdir(directory)
@@ -77,7 +81,7 @@ def img(directory,imageName,crop):
 from astroquery.vizier import Vizier
 #Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
 
-def query(raImage, decImage,filter, width, height, survey):
+def query(raImage, decImage, band, width, height, survey):
     # Use astroquery to get catalog search
     from astroquery.vizier import Vizier
     # Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
@@ -87,7 +91,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, (width), (height)))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % filter, 'e_%smag' % filter], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -101,7 +105,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % filter,'e_%sap3' % filter], column_filters={"%sap3" % filter: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -117,7 +121,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % filter,'e_%sap3' % filter], column_filters={"%sap3" % filter: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -135,7 +139,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % filter.lower(),'e_%sPSF' % filter.lower()], column_filters={"%sPSF" % filter.lower(): ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % band.lower(), 'e_%sPSF' % band.lower()], column_filters={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -153,7 +157,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % filter.lower(),'e_%spmag' % filter.lower()], column_filters={"%spmag" % filter.lower(): ">12"
+            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % band.lower(), 'e_%spmag' % band.lower()], column_filters={"%spmag" % band.lower(): ">12"
                                                                                                                             ,"clean": "=1"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
@@ -172,7 +176,7 @@ def query(raImage, decImage,filter, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % filter,'e_%smag' % filter], column_filters={"%smag" % filter: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -236,7 +240,7 @@ def sex2(imageName):
 
 #%%
 #read in tables, crossmatch
-def tables(Q,psfcatalogName,crop):
+def tables(Q,data,w,psfcatalogName,crop):
     print('Cross-matching sextracted and catalog sources...')
     crop = int(crop)
     max_x = data.shape[0]
@@ -530,7 +534,7 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
             print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
 
 #%% optional plots
-def plots(cleanPSFsources,PSFsources,imageName,survey,filter,good_cat_stars,idx_psfmass,idx_psfimage):
+def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, good_cat_stars, idx_psfmass, idx_psfimage):
     #appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
@@ -681,39 +685,12 @@ def removal(directory):
                 except Exception as e:
                     print(f"Error removing file: {path} - {e}")
 
-#%%
-defaults = dict(crop=300,survey='2MASS',RA=None,DEC=None,thresh=4.0)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
-                                                 'outputs ecsv w/ corrected mags')
-    parser.add_argument('-exp_query', action='store_true', help='optional flag, exports ecsv of astroquery results '
-                                                                'along with photometry')
-    parser.add_argument('-exp_query_only', action='store_true', help='optional flag, use if photom is run already to only generate query results')
-    parser.add_argument('-plots', action='store_true', help='optional flag, exports mag comparison plot betw. PRIME and survey, '
-                                                            'along with residual plot w/ statistics')
-    parser.add_argument('-plots_only', action='store_true', help='optional flag, use if photom is run already to only generate plots quicker')
-    parser.add_argument('-remove', action='store_true',
-                        help='optional flag, use if you want to remove intermediate products after getting photom, i.e. the ".cat" and ".psf" files')
-    parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
-                                                          'specific coords, such as w/ a GRB')
-    parser.add_argument('-grb_only', action='store_true', help='optional flag, use if running -grb again on already created catalog')
-    parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
-    parser.add_argument('-name', type=str, help='[str], image name')
-    parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
-    parser.add_argument('-survey', type=str, help='[str], survey to query, choose from VHS (best / reliable for J), 2MASS (reliable for H)'
-                                                  ', VIKING, Skymapper (reliable for Z), SDSS, and UKIDSS, default = 2MASS', default=defaults["survey"])
-    parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',default=defaults["crop"])
-    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["RA"])
-    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',default=defaults["DEC"])
-    parser.add_argument('-coordlist', type=str, nargs='+', help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
-                                                     'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA & -DEC BUT'
-                                                     ' INCLUDE -THRESH*', default=None)
-    parser.add_argument('-thresh', type=float, help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
-                                                    ' AND -COORDLIST*',
-                        default=defaults["thresh"])
-    args = parser.parse_args()
-
+def photometry(
+        directory, name, band, survey=defaults['survey'], crop=defaults['crop'], plots=True, plots_only=False,
+        remove=True, grb=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
+        grb_radius=defaults['thresh']
+):  # TODO: replaces args with arguments
     if args.plots_only:
         psfcatalogName = []
         for f in os.listdir(args.dir):
@@ -722,10 +699,11 @@ if __name__ == "__main__":
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
         cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
                                              args.name, args.filter, args.survey)
-        plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
+        photometry_plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass,
+                         idx_psfimage)
     elif args.exp_query_only:
         psfcatalogName = []
         for f in os.listdir(args.dir):
@@ -734,8 +712,8 @@ if __name__ == "__main__":
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
         Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
-        queryexport(good_cat_stars,args.name,args.survey)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
+        queryexport(good_cat_stars, args.name, args.survey)
     elif args.grb_only:
         os.chdir(args.dir)
         if args.coordlist:
@@ -748,16 +726,68 @@ if __name__ == "__main__":
         catalogName = sex1(args.name)
         psfex(catalogName)
         psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, psfcatalogName, args.crop)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
         if args.exp_query:
             queryexport(good_cat_stars, args.name, args.survey)
-        cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, args.name, args.filter, args.survey)
+        cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
+                                             args.name, args.filter, args.survey)
         if args.grb:
             if args.coordlist:
                 GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh, args.coordlist)
             else:
-                GRB(args.RA, args.DEC, args.name, args.survey, args.filter,args.thresh)
+                GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh)
         if args.plots:
-            plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass, idx_psfimage)
+            photometry_plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass,
+                             idx_psfimage)
         if args.remove:
             removal(args.dir)
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
+                    'outputs ecsv w/ corrected mags')
+    parser.add_argument('-exp_query', action='store_true', help='optional flag, exports ecsv of astroquery results '
+                                                                'along with photometry')
+    parser.add_argument('-exp_query_only', action='store_true',
+                        help='optional flag, use if photom is run already to only generate query results')
+    parser.add_argument('-plots', action='store_true',
+                        help='optional flag, exports mag comparison plot betw. PRIME and survey, '
+                             'along with residual plot w/ statistics')  # TODO: change to noplots
+    parser.add_argument('-plots_only', action='store_true',
+                        help='optional flag, use if photom is run already to only generate plots quicker')
+    parser.add_argument('-remove', action='store_true',
+                        help='optional flag, use if you want to remove intermediate products after getting photom, i.e. the ".cat" and ".psf" files')  # TODO: change to keep
+    parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
+                                                          'specific coords, such as w/ a GRB')
+    parser.add_argument('-grb_only', action='store_true',
+                        help='optional flag, use if running -grb again on already created catalog')
+    parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
+    parser.add_argument('-name', type=str, help='[str], image name')
+    parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
+    parser.add_argument('-survey', type=str,
+                        help='[str], survey to query, choose from VHS (best / reliable for J), 2MASS (reliable for H)'
+                             ', VIKING, Skymapper (reliable for Z), SDSS, and UKIDSS, default = 2MASS',
+                        default=defaults["survey"])
+    parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
+                        default=defaults["crop"])
+    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',
+                        default=defaults["RA"])
+    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',
+                        default=defaults["DEC"])
+    parser.add_argument('-coordlist', type=str, nargs='+',
+                        help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
+                             'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA & -DEC BUT'
+                             ' INCLUDE -THRESH*', default=None)
+    parser.add_argument('-thresh', type=float,
+                        help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
+                             ' AND -COORDLIST*',
+                        default=defaults["thresh"])
+    args = parser.parse_args()
+    photometry(args.dir, )  # TODO: fill in arguments
+
+
+
+#%%
+
+if __name__ == "__main__":
+    main()
