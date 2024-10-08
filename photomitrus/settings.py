@@ -70,7 +70,7 @@ def flist(Object=object, Filter=filter, Chip=chip):
         print('No files found for specified fields!')
     return fullnames
 
-a = flist()
+# a = flist()
 #%% make directories
 from pathlib import Path
 def makedirs(dir,chip):

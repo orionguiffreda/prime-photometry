@@ -7,6 +7,7 @@ import numpy.ma as ma
 import argparse
 import sys
 import astropy.units as u
+from astroquery.vizier import Vizier
 from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 from astropy.wcs import utils
@@ -25,9 +26,10 @@ import subprocess
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
 #%%
+defaults = dict(crop=300,survey='2MASS',RA=None,DEC=None,thresh=4.0)
+
 # Read LDAC tables
 
-defaults = dict(crop=300,survey='2MASS',RA=None,DEC=None,thresh=4.0)
 
 def get_table_from_ldac(filename, frame=1):
     """
@@ -49,7 +51,7 @@ def get_table_from_ldac(filename, frame=1):
     return tbl
 
 #%%
-#import img and get wcs
+# import img and get wcs
 
 
 def img(directory,imageName,crop):
@@ -75,23 +77,20 @@ def img(directory,imageName,crop):
 
     return data,header,w,raImage, decImage, width, height
 
-#data,header,w,raImage, decImage,boxsize = img('/mnt/d/PRIME_photometry_test_files/GRB_Followup/GRB_Followup_flat_tests/flatstack/','coadd.Open-J.00888557-00888869.C4.fits',300)
 #%%
 # Use astroquery to get catalog search
-from astroquery.vizier import Vizier
-#Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
+
 
 def query(raImage, decImage, band, width, height, survey):
     # Use astroquery to get catalog search
-    from astroquery.vizier import Vizier
     # Vizier.VIZIER_SERVER = 'vizier.ast.cam.ac.uk'
     if survey == '2MASS':
         catNum = 'II/246'  # changing to 2mass
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, (width), (height)))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_bands={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -104,8 +103,8 @@ def query(raImage, decImage, band, width, height, survey):
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_bands={"%sap3" % band: ">12"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -120,8 +119,8 @@ def query(raImage, decImage, band, width, height, survey):
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_bands={"%sap3" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -138,8 +137,8 @@ def query(raImage, decImage, band, width, height, survey):
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % band.lower(), 'e_%sPSF' % band.lower()], column_filters={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % band.lower(), 'e_%sPSF' % band.lower()], column_bands={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -156,8 +155,8 @@ def query(raImage, decImage, band, width, height, survey):
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % band.lower(), 'e_%spmag' % band.lower()], column_filters={"%spmag" % band.lower(): ">12"
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % band.lower(), 'e_%spmag' % band.lower()], column_bands={"%spmag" % band.lower(): ">12"
                                                                                                                             ,"clean": "=1"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
@@ -175,8 +174,8 @@ def query(raImage, decImage, band, width, height, survey):
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.3f and height %.3f arcmin' % (
         catNum, raImage, decImage, width, height))
         try:
-            # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12"}, row_limit=-1)
+            # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_bands={"%smag" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -191,11 +190,10 @@ def query(raImage, decImage, band, width, height, survey):
         print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, or UKIDSS')
     return Q
 
-#Q = query(raImage, decImage, boxsize)
-#table = Q[0]
-#table.write('2MASS_query.ecsv', overwrite=True)
 #%%
-#run sextractor on swarped img to find sources
+# run sextractor on swarped img to find sources
+
+
 def sex1(imageName):
     print('Running sextractor on img to initially find sources...')
     configFile = gen_config_file_name('sex2.config')
@@ -210,7 +208,9 @@ def sex1(imageName):
     return catalogName
 
 #%%
-#run psfex on sextractor LDAC from previous step
+# run psfex on sextractor LDAC from previous step
+
+
 def psfex(catalogName):
     print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
     psfConfigFile = gen_config_file_name('default.psfex')
@@ -222,7 +222,9 @@ def psfex(catalogName):
         print('Could not run psfex with exit error %s'%err)
 
 #%%
-#feed generated psf model back into sextractor w/ diff param (or you could use that param from the start but its slower)
+# feed generated psf model back into sextractor w/ diff param (or could use that param from the start but its slower)
+
+
 def sex2(imageName):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
@@ -292,12 +294,13 @@ def queryexport(good_cat_stars, imageName,survey):
 
 #%%
 
-def ab_convert(mag, filter):
+
+def ab_convert(mag, band):
     # jy zero points
     # TODO add more survey-specific zps once query is overhauled (ex. VISTA, etc)
     # from 2MASS
     zp_dict = {'zp_J': 1594, 'zp_H': 1024}
-    pick_zp = 'zp_' + filter
+    pick_zp = 'zp_' + band
 
     for k, v in zp_dict.items():
         if k == pick_zp:
@@ -309,8 +312,10 @@ def ab_convert(mag, filter):
     return ab_mag
 
 #%%
-#derive zero pt / put in swarped header
-def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,imageName,filter,survey):
+# derive zero pt / put in swarped header
+
+
+def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,imageName,band,survey):
     colnames = good_cat_stars.colnames
     magcolname = colnames[2]
     magerrcolname = colnames[3]
@@ -338,8 +343,8 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
     psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
-    psfmagcol_clean = Column(psfmag_clean, name = '%sMAG_PSF' % filter,unit='mag')
-    psfmagerrcol_clean = Column(psfmagerr_clean, name = 'e_%sMAG_PSF' % filter,unit='mag')
+    psfmagcol_clean = Column(psfmag_clean, name = '%sMAG_PSF' % band,unit='mag')
+    psfmagerrcol_clean = Column(psfmagerr_clean, name = 'e_%sMAG_PSF' % band,unit='mag')
     cleanPSFSources.add_column(psfmagcol_clean)
     cleanPSFSources.add_column(psfmagerrcol_clean)
     cleanPSFSources.remove_column('VIGNET')
@@ -348,8 +353,8 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
-    psfmagcol = Column(psfmag, name = '%sMAG_PSF' % filter,unit='mag')
-    psfmagerrcol = Column(psfmagerr, name = 'e_%sMAG_PSF' % filter,unit='mag')
+    psfmagcol = Column(psfmag, name = '%sMAG_PSF' % band,unit='mag')
+    psfmagerrcol = Column(psfmagerr, name = 'e_%sMAG_PSF' % band,unit='mag')
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
@@ -361,7 +366,9 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     return cleanPSFSources, PSFSources
 
 #%% optional GRB-specific photom
-def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
+
+
+def GRB(ra,dec,imageName,survey,band,thresh,coordlist=None):
 
     mag_ecsvname = '%s.%s.ecsv' % (imageName,survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
@@ -399,8 +406,8 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
             if len(idx_GRBcleanpsf) == 1:
                 print('GRB source at inputted coords %s and %s found!' % (ra, dec))
 
-                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
-                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
+                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
+                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
 
                 grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
                 grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
@@ -411,18 +418,18 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
 
                 print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
                     grb_ra, grb_dec, grb_rad, grb_snr))
-                print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
+                print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
                 grbdata = Table()
                 grbdata['RA (deg)'] = np.array([grb_ra])
                 grbdata['DEC (deg)'] = np.array([grb_dec])
-                grbdata['%sMag' % filter] = np.array([grb_mag])
-                grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
+                grbdata['%sMag' % band] = np.array([grb_mag])
+                grbdata['%sMag_Err' % band] = np.array([grb_magerr])
                 grbdata['Radius (arcsec)'] = np.array([grb_rad])
                 grbdata['SNR'] = np.array([grb_snr])
                 grbdata['Distance (arcsec)'] = np.array([grb_dist])
 
-                grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (filter, survey, key), overwrite=True)
+                grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
                 print('Generated GRB data table!')
             elif len(idx_GRBcleanpsf) > 1:
                 print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
@@ -435,9 +442,9 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
                 dist_ar = []
                 idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
                 for i in idx_GRBcleanpsflist:
-                    grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                    grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
                     mag_ar.append(grb_mag)
-                    grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][
+                    grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][
                         idx_GRBcleanpsflist.index(i)]
                     mag_err_ar.append(grb_magerr)
                     grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
@@ -454,12 +461,12 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
                 grbdata = Table()
                 grbdata['RA (deg)'] = np.array(ra_ar)
                 grbdata['DEC (deg)'] = np.array(dec_ar)
-                grbdata['%sMag' % filter] = np.array(mag_ar)
-                grbdata['%sMag_Err' % filter] = np.array(mag_err_ar)
+                grbdata['%sMag' % band] = np.array(mag_ar)
+                grbdata['%sMag_Err' % band] = np.array(mag_err_ar)
                 grbdata['Radius (arcsec)'] = np.array(rad_ar)
                 grbdata['SNR'] = np.array(snr_ar)
                 grbdata['Distance (arcsec)'] = np.array(dist_ar)
-                grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (filter, survey, key), overwrite=True)
+                grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
                 print('Generated GRB data table!')
             else:
                 print(
@@ -469,8 +476,8 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
         if len(idx_GRBcleanpsf) == 1:
             print('GRB source at inputted coords %s and %s found!' % (ra,dec))
 
-            grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][0]
-            grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][0]
+            grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
+            grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
 
             grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
             grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
@@ -481,18 +488,18 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
 
             print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
             grb_ra, grb_dec, grb_rad, grb_snr))
-            print('%s magnitude of GRB is %.2f +/- %.2f' % (filter, grb_mag, grb_magerr))
+            print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
             grbdata = Table()
             grbdata['RA (deg)'] = np.array([grb_ra])
             grbdata['DEC (deg)'] = np.array([grb_dec])
-            grbdata['%sMag' % filter] = np.array([grb_mag])
-            grbdata['%sMag_Err' % filter] = np.array([grb_magerr])
+            grbdata['%sMag' % band] = np.array([grb_mag])
+            grbdata['%sMag_Err' % band] = np.array([grb_magerr])
             grbdata['Radius (arcsec)'] = np.array([grb_rad])
             grbdata['SNR'] = np.array([grb_snr])
             grbdata['Distance (arcsec)'] = np.array([grb_dist])
 
-            grbdata.write('GRB_%s_Data_%s.ecsv' % (filter, survey), overwrite=True)
+            grbdata.write('GRB_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             print('Generated GRB data table!')
         elif len(idx_GRBcleanpsf) > 1:
             print('Multiple sources detected in search radius, refer to .ecsv file for source info!')
@@ -505,9 +512,9 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
             dist_ar = []
             idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
             for i in idx_GRBcleanpsflist:
-                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
                 mag_ar.append(grb_mag)
-                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % filter][idx_GRBcleanpsflist.index(i)]
+                grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
                 mag_err_ar.append(grb_magerr)
                 grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
                 ra_ar.append(grb_ra)
@@ -523,18 +530,20 @@ def GRB(ra,dec,imageName,survey,filter,thresh,coordlist=None):
             grbdata = Table()
             grbdata['RA (deg)'] = np.array(ra_ar)
             grbdata['DEC (deg)'] = np.array(dec_ar)
-            grbdata['%sMag' % filter] = np.array(mag_ar)
-            grbdata['%sMag_Err' % filter] = np.array(mag_err_ar)
+            grbdata['%sMag' % band] = np.array(mag_ar)
+            grbdata['%sMag_Err' % band] = np.array(mag_err_ar)
             grbdata['Radius (arcsec)'] = np.array(rad_ar)
             grbdata['SNR'] = np.array(snr_ar)
             grbdata['Distance (arcsec)'] = np.array(dist_ar)
-            grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (filter, survey), overwrite=True)
+            grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             print('Generated GRB data table!')
         else:
             print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra,dec))
 
 #%% optional plots
-def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, good_cat_stars, idx_psfmass, idx_psfimage):
+
+
+def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_cat_stars, idx_psfmass, idx_psfimage):
     #appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
@@ -544,7 +553,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
 
     # mag comparison plot
     plt.figure(1,figsize=(8, 8))
-    plt.plot(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage],good_cat_stars['%s' % magcol][idx_psfmass],
+    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],good_cat_stars['%s' % magcol][idx_psfmass],
              'r.', markersize=14, markeredgecolor='black',)
     plt.xlim(10, 22)
     plt.ylim(10, 22)
@@ -556,7 +565,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
     print('Saved mag comparison plot to dir!')
 
     #residual fits
-    x = cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage]
+    x = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]
     y = good_cat_stars['%s' % magcol][idx_psfmass]
     x_const = sm.add_constant(x)
     model = sm.OLS(y, x).fit()
@@ -576,7 +585,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
 
     #residual plot - y int forced to zero
     plt.figure(2, figsize=(8, 6))
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage], model.resid, color='red')
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], model.resid, color='red')
     plt.ylim(-1.5, 1.5)
     plt.xlim(10,21)
     plt.title('PRIME vs %s Residuals' % survey)
@@ -596,7 +605,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
 
     #res plot, y int included
     plt.figure(3, figsize=(8, 6))
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % filter][idx_psfimage], model2.resid, color='red')
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], model2.resid, color='red')
     plt.ylim(-1.5, 1.5)
     plt.xlim(10,21)
     plt.title('PRIME vs %s Residuals' % survey)
@@ -615,8 +624,8 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
 
     # Limiting Mag Plot
     # binning
-    all_mags_all = PSFsources[PSFsources['%sMAG_PSF' % filter] < 25]
-    all_mags = all_mags_all['%sMAG_PSF' % filter]
+    all_mags_all = PSFsources[PSFsources['%sMAG_PSF' % band] < 25]
+    all_mags = all_mags_all['%sMAG_PSF' % band]
 
     bin_vals = np.array(np.arange(12, 25.5, 0.1))
     idxs = np.digitize(all_mags, bins=bin_vals)
@@ -667,12 +676,14 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, filter, goo
     # plt.legend(['Our Field','Osaka Field'],loc='upper right')
     plt.title('PRIME Limiting Mag Plot')
     plt.ylabel('Number of Sources')
-    plt.xlabel('%s Magnitude' % filter)
+    plt.xlabel('%s Magnitude' % band)
     plt.legend(['Half Max = %s' % round(halfmax,1),'Limiting Mag = %s' % round(limmag,1)],fontsize=15)
     plt.savefig('%s_C%s_lim_mag_plot_%s.png' % (survey, chip, num), dpi=300)
     print('Saved lim mag plot to dir!')
 
 #%% optional removal of intermediate files
+
+
 def removal(directory):
     fnames = ['.cat','.psf']
     for f in os.listdir(directory):
@@ -687,60 +698,49 @@ def removal(directory):
 
 
 def photometry(
-        directory, name, band, survey=defaults['survey'], crop=defaults['crop'], plots=True, plots_only=False,
-        remove=True, grb=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
+        directory, name, band, survey=defaults['survey'], crop=defaults['crop'], no_plots=False, plots_only=False,
+        keep=False, grb=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
         grb_radius=defaults['thresh']
-):  # TODO: replaces args with arguments
-    if args.plots_only:
+):
+    if plots_only:
         psfcatalogName = []
-        for f in os.listdir(args.dir):
+        for f in os.listdir(directory):
             if f.endswith('.psf.cat'):
                 psfcatalogName.append(f)
         psfcatalogName = ' '.join(psfcatalogName)
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
+        data, header, w, raImage, decImage, width, height = img(directory, name, crop)
+        Q = query(raImage, decImage, band, width, height, survey)
+        good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, crop)
         cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
-                                             args.name, args.filter, args.survey)
-        photometry_plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass,
+                                             name, band, survey)
+        photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
                          idx_psfimage)
-    elif args.exp_query_only:
-        psfcatalogName = []
-        for f in os.listdir(args.dir):
-            if f.endswith('.psf.cat'):
-                psfcatalogName.append(f)
-        psfcatalogName = ' '.join(psfcatalogName)
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
-        queryexport(good_cat_stars, args.name, args.survey)
-    elif args.grb_only:
-        os.chdir(args.dir)
-        if args.coordlist:
-            GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh, args.coordlist)
+    elif grb_only:
+        os.chdir(directory)
+        if grb_coordlist:
+            GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
         else:
-            GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh)
+            GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
     else:
-        data, header, w, raImage, decImage, width, height = img(args.dir, args.name, args.crop)
-        Q = query(raImage, decImage, args.filter, width, height, args.survey)
-        catalogName = sex1(args.name)
+        data, header, w, raImage, decImage, width, height = img(directory, name, crop)
+        Q = query(raImage, decImage, band, width, height, survey)
+        catalogName = sex1(name)
         psfex(catalogName)
-        psfcatalogName = sex2(args.name)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, args.crop)
-        if args.exp_query:
-            queryexport(good_cat_stars, args.name, args.survey)
+        psfcatalogName = sex2(name)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, crop)
         cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
-                                             args.name, args.filter, args.survey)
-        if args.grb:
-            if args.coordlist:
-                GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh, args.coordlist)
+                                             name, band, survey)
+        if grb:
+            if grb_coordlist:
+                GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
             else:
-                GRB(args.RA, args.DEC, args.name, args.survey, args.filter, args.thresh)
-        if args.plots:
-            photometry_plots(cleanPSFSources, PSFsources, args.name, args.survey, args.filter, good_cat_stars, idx_psfmass,
+                GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+        if not no_plots:
+            photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
                              idx_psfimage)
-        if args.remove:
-            removal(args.dir)
+        if not keep:
+            removal(directory)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -750,44 +750,46 @@ def main():
                                                                 'along with photometry')
     parser.add_argument('-exp_query_only', action='store_true',
                         help='optional flag, use if photom is run already to only generate query results')
-    parser.add_argument('-plots', action='store_true',
-                        help='optional flag, exports mag comparison plot betw. PRIME and survey, '
-                             'along with residual plot w/ statistics')  # TODO: change to noplots
+    parser.add_argument('-no_plots', action='store_true',
+                        help='optional flag, stops creation of mag comparison plot betw. PRIME and survey, '
+                             'along with residual plot w/ statistics, lim mag plot')
     parser.add_argument('-plots_only', action='store_true',
                         help='optional flag, use if photom is run already to only generate plots quicker')
-    parser.add_argument('-remove', action='store_true',
-                        help='optional flag, use if you want to remove intermediate products after getting photom, i.e. the ".cat" and ".psf" files')  # TODO: change to keep
+    parser.add_argument('-keep', action='store_true',
+                        help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
+                             ' i.e. the ".cat" and ".psf" files')
     parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
                                                           'specific coords, such as w/ a GRB')
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog')
     parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
     parser.add_argument('-name', type=str, help='[str], image name')
-    parser.add_argument('-filter', type=str, help='[str], filter, ex. "J"')
+    parser.add_argument('-band', type=str, help='[str], band, ex. "J"')
     parser.add_argument('-survey', type=str,
                         help='[str], survey to query, choose from VHS (best / reliable for J), 2MASS (reliable for H)'
                              ', VIKING, Skymapper (reliable for Z), SDSS, and UKIDSS, default = 2MASS',
                         default=defaults["survey"])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
                         default=defaults["crop"])
-    parser.add_argument('-RA', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',
+    parser.add_argument('-grb_ra', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',
                         default=defaults["RA"])
-    parser.add_argument('-DEC', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',
+    parser.add_argument('-grb_dec', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',
                         default=defaults["DEC"])
-    parser.add_argument('-coordlist', type=str, nargs='+',
+    parser.add_argument('-grb_coordlist', type=str, nargs='+',
                         help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
-                             'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA & -DEC BUT'
-                             ' INCLUDE -THRESH*', default=None)
-    parser.add_argument('-thresh', type=float,
+                             'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA '
+                             '& -DEC BUT INCLUDE -THRESH*', default=None)
+    parser.add_argument('-grb_radius', type=float,
                         help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
                              ' AND -COORDLIST*',
                         default=defaults["thresh"])
     args = parser.parse_args()
-    photometry(args.dir, )  # TODO: fill in arguments
-
-
+    
+    photometry(args.dir, args.name, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
+               args.grb, args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 #%%
+
 
 if __name__ == "__main__":
     main()
