@@ -12,7 +12,7 @@ Same start point as _master.py_, make sure you've cd'd into _/photomitrus_.  Run
 
 will present helpful text on what each argument is, though the amount of them can be daunting.  The formatting is as follows:
 
-> photometry.py [-h] [-exp_query] [-plots] [-grb] [-dir DIR] [-name NAME] [-filter FILTER] [-survey SURVEY] [-crop CROP] [-RA RA] [-DEC DEC] [-thresh THRESH]
+> photometry.py [-h] [-exp_query] [-remove] [-plots] [-grb] [-dir DIR] [-name NAME] [-filter FILTER] [-survey SURVEY] [-crop CROP] [-RA RA] [-DEC DEC] [-thresh THRESH]
 
 Let us again start with the required positional arguments:
 
@@ -26,15 +26,24 @@ Let us again start with the required positional arguments:
 
 - _-filter_ is a single character string which denotes the filter of the co-added final image.  This should be clear from the filename of the image.  For instance, 'Open-J' is J band, so we would put 'J' for this argument.
 
-- _-survey_ is a string which denotes which survey _photometry.py_ will be using for calibration.  Currently, there are 2 surveys supported: 2MASS and the VISTA Hemisphere Survey (VHS).  VHS is a deeper survey and generally a better pick for photometry, but it is limited in area to targets in the southern hemisphere, so keep this in mind or you may get an error.  In addition, while VHS has nearly all S. hemi. coverage in J (and Ks, but PRIME doesn't have that filter), its coverage in H, Y, and Z is far less.  The link below shows coverage maps for VISTA surveys in each filter.  2MASS is all-sky, so it should be fine anywhere in J and H.  To utilize 2MASS, put '2MASS', to utilize VISTA, put 'VHS'.
+- _-survey_ is a string which denotes which survey _photometry.py_ will be using for calibration.  Currently, there are 6 surveys supported: 2MASS, VISTA Hemisphere Survey (VHS), VIKING, Skymapper, SDSS, and UKIDSS.  VHS is a deeper survey and generally a better pick for photometry, but it is limited in area to targets in the southern hemisphere, so keep this in mind or you may get an error.  In addition, while VHS has nearly all S. hemi. coverage in J (and Ks, but PRIME doesn't have that filter), its coverage in H, Y, and Z is far less.  2MASS is all-sky, so it should be fine anywhere in J and H (though it is shallow).
 
-    http://casu.ast.cam.ac.uk/vistasp/overview/ 
+    To supplement the gaps in both coverage and filters from VHS, we have the other surveys.  VIKING covers some gaps in VHS in both J and H.  Skymapper has Z band coverage in nearly all of the Southern Hemisphere, though is shallower than the equivalent VHS limiting mag in J.  SDSS is much deeper in Z, but covers less area.  Finally, UKIDSS provides Y band coverage, but only in certain areas.  
+
+    Currently, you have to manually specify one of these surveys.  In the future, I plan to create a more automatic query system.  The links below show coverage maps for VISTA and other surveys in each filter.  To utilize 2MASS, put '2MASS', to utilize VISTA, put 'VHS', for the others, put the exact names I mentioned earlier.
+
+    - http://casu.ast.cam.ac.uk/vistasp/overview/
+    - https://skymapper.anu.edu.au/data-release/
+    - https://www.sdss4.org/science/data-release-publications
+    - http://www.ukidss.org/surveys/surveys.html
 
 - _-crop_ in an integer which denotes how far in pixels from the edge of the stacked image the script should crop out sources.  This is used to combat the empty edges present in stacked images, along with bad edge artifacts which would result in many false positive sources.  The default is 300 pixels.
 
 ### Optional Arguments
 
 The previous were all required arguments, now we will discuss the optional arguments.
+
+-_-remove_ is an optional flag that will remove intermediate catalogs that have no use after photometry.
 
 - _-exp_query_ is an optional flag that will make _photometry.py_ export an .ecsv file of the survey query results.  This file will contain that survey's information about any sources that were found, excluding the cropped edges.  This can be useful when comparing PRIME's calculated magnitudes to 2MASS or VHS, beyond the scope of what the script already does.
 
@@ -44,10 +53,15 @@ The previous were all required arguments, now we will discuss the optional argum
     - _-RA_: GRB RA
     - _-DEC_: GRB Dec
     - _-thresh_: Search diameter in arcsec, default = 4"
+ 
+- _-coordlist_ is an optional flag to be used with _-grb_.  If a user has many areas they want to search for sources in, instead of running photometry several times with the _-grb_ flag, they can use this field.  Input RA and DEC of each area with a comma between them, and put spaces between each pair of coordinates.  If sources are found in any of the search areas, they will be output to seperate .ecsvs.  For instance the usage for 2 search areas is below.  
+    *NOTE* When using this flag, you must still specify _-thresh_.  Currently, only 1 thresh is supported for all search areas.   
+
+-coordlist 123,-45 321,-54
 
 Now that all of that is out of the way, here is a sample command using all the arguments:
 
-    python ./photometry/photometry.py -plots -grb -dir /../../J_Band/stack/ -name coadd.Open-J.00654321-00123456.C1.fits -filter J -survey 2MASS -crop 400 -RA 221.248375 -DEC -60.697972 -thresh 2.0
+    python ./photometry/photometry.py -remove -plots -grb -dir /../../J_Band/stack/ -name coadd.Open-J.00654321-00123456.C1.fits -filter J -survey 2MASS -crop 400 -RA 221.248375 -DEC -60.697972 -thresh 2.0
 
 ## How Photometry.py Works
 
@@ -74,7 +88,7 @@ There are several other catalogues that are outputted, including the initial sex
 > COADD.fits.psf,
 > COADD.psf.cat
 
-As we don't really utilize these catalogues once the photometry is done, so I could have an option to delete these after the fact.  But for now, they stay.
+As we don't really utilize these catalogues once the photometry is done, the _-remove_ flag takes these out.
 
 In addition, the optional args can output more products.  In the case for _-exp_query_, the outputted query catalogue will be (where C# is the chip number):
 
@@ -87,4 +101,10 @@ For _-plots_, the outputted mag comparison and residual plots will be PNGS with 
 
 Finally, for _-grb_, the .ecsv with the found source's (or sources') information will be named:
 
-> GRB-_filter_-Data.ecsv or GRB_Multisource-_filter_-Data.ecsv
+> GRB-_filter_-Data-_survey_.ecsv or GRB_Multisource-_filter_-Data-_survey_.ecsv
+
+If you use _-coordlist_ for multiple search areas, the .ecsvs will be output for each area with a found source.  
+
+> GRB-_filter_-Data-_survey_-loc_#.ecsv or GRB_Multisource-_filter_-Data-_survey_-loc_#.ecsv
+
+Where the loc_# is the number corresponding to the pair of coordinates you inputted.  For instance, loc_2 would correspond to the second pair you put in the command.
