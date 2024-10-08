@@ -40,59 +40,113 @@ def datadownload(parentdir,target,filter,date,chip=None):
 #%%
 
 
-def refineprocess(parentdir,chip,filter):
-    if chip == 1 or chip == 2:
-        try:
-            command = ('python ./master.py -FF -angle -refine -parent %s '
-                       '-chip %i -filter %s -sigma 4') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
-    elif chip == 3 or chip == 4:
-        try:
-            command = ('python ./master.py -FF -angle -refine -parent %s '
-                       '-chip %i -filter %s -sigma 6') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+def refineprocess(parentdir,chip,filter,rot_val=None):
+    if rot_val:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -refine -parent %s '
+                           '-chip %i -filter %s -sigma 4 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -refine -parent %s '
+                           '-chip %i -filter %s -sigma 6 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+    else:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -refine -parent %s '
+                           '-chip %i -filter %s -sigma 4') % (parentdir, chip, filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -refine -parent %s '
+                           '-chip %i -filter %s -sigma 6') % (parentdir, chip, filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
 
-def shiftprocess(parentdir,chip,filter):
-    if chip == 1 or chip == 2:
-        try:
-            command = ('python ./master.py -FF -angle -shift -parent %s '
-                       '-chip %i -filter %s -sigma 4') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
-    elif chip == 3 or chip == 4:
-        try:
-            command = ('python ./master.py -FF -angle -shift -parent %s '
-                       '-chip %i -filter %s -sigma 6') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+def shiftprocess(parentdir,chip,filter,rot_val=None):
+    if rot_val:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -shift -parent %s '
+                           '-chip %i -filter %s -sigma 4 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -shift -parent %s '
+                           '-chip %i -filter %s -sigma 6 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+    else:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -shift -parent %s '
+                           '-chip %i -filter %s -sigma 4') % (parentdir,chip,filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -shift -parent %s '
+                           '-chip %i -filter %s -sigma 6') % (parentdir,chip,filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
 
-def baseprocess(parentdir,chip,filter):
-    if chip == 1 or chip == 2:
-        try:
-            command = ('python ./master.py -FF -angle -parent %s '
-                       '-chip %i -filter %s -sigma 4') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
-    elif chip == 3 or chip == 4:
-        try:
-            command = ('python ./master.py -FF -angle -parent %s '
-                       '-chip %i -filter %s -sigma 6') % (parentdir,chip,filter)
-            print('Executing command: %s' % command)
-            rval = subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+def baseprocess(parentdir,chip,filter,rot_val=None):
+    if rot_val:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -parent %s '
+                           '-chip %i -filter %s -sigma 4 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -parent %s '
+                           '-chip %i -filter %s -sigma 6 -rot_val %s') % (parentdir,chip,filter,rot_val)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+    else:
+        if chip == 1 or chip == 2:
+            try:
+                command = ('python ./master.py -FF -angle -parent %s '
+                           '-chip %i -filter %s -sigma 4') % (parentdir, chip, filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
+        elif chip == 3 or chip == 4:
+            try:
+                command = ('python ./master.py -FF -angle -parent %s '
+                           '-chip %i -filter %s -sigma 6') % (parentdir, chip, filter)
+                print('Executing command: %s' % command)
+                rval = subprocess.run(command.split(), check=True)
+            except subprocess.CalledProcessError as err:
+                print('Could not run with exit error %s' % err)
 
 #%%
 
@@ -140,6 +194,9 @@ if __name__ == "__main__":
     parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
     parser.add_argument('-filter', type=str, help='[str] filter, ex. "J"')
     parser.add_argument('-chip', type=int, help='[int] Optional, use to process only 1 specific chip',default=None)
+    parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
+                                                     ' if you had a non-default rotation angle in your obs'
+                                                     ' (default = 48 deg or 172800")', default=None)
     args = parser.parse_args()
 
     if args.no_download:
@@ -169,10 +226,10 @@ if __name__ == "__main__":
 
         for f in chips:
             if args.astromnet:
-                refineprocess(args.parent,f,args.filter)
+                refineprocess(args.parent,f,args.filter,args.rot_val)
             elif args.shift:
-                shiftprocess(args.parent,f,args.filter)
+                shiftprocess(args.parent,f,args.filter,args.rot_val)
             else:
-                baseprocess(args.parent,f,args.filter)
+                baseprocess(args.parent,f,args.filter,args.rot_val)
             #for f in checkchips:
            #     checkprocess(args.parent,f,args.filter)

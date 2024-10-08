@@ -28,6 +28,8 @@ from astropy.utils.exceptions import AstropyWarning
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 tel_angle_corr = -48
+# rot_val = 48       # default is 48, change if the rot of the telescope is not default (172800) for your obs
+# rot val is default at 48, if you want to use a custom val, use the -rot_val flag (run this script w/ the -h flag to see how it works)
 
 offset_dict = {
     '2': {
@@ -115,8 +117,7 @@ def get_files(directory):
     return fits_files
 
 
-def update_ra_dec(fits_file):
-    rot_val = 48
+def update_ra_dec(fits_file, rot_val):
     print(fits_file)
     with fits.open(fits_file, 'update') as f:
         header = f[0].header
@@ -218,19 +219,19 @@ def update_ra_dec(fits_file):
         # place found CRPIX values here
            # c1=(0,-44)              #Swift_1246989   #c3 and c4 values are not available
            # c2=(-21,-19)
-def update_ra_dec_directory(directory):
+def update_ra_dec_directory(directory, rot_val):
     fits_files = [os.path.join(directory, f) for f in get_files(directory)]
     for fits_file in fits_files:
-        update_ra_dec(fits_file)
+        update_ra_dec(fits_file, rot_val)
 
-def update_ra_dec_move_directory(input,output):
+def update_ra_dec_move_directory(input, output, rot_val):
     for f in sorted(os.listdir(input)):
         if f.endswith('.ramp.fits'):
             origpath = os.path.join(input,f)
             fnewname = f.replace('.ramp.fits', '.ramp.new')
             newpath = os.path.join(output,fnewname)
             shutil.copyfile(origpath, newpath)
-            update_ra_dec(newpath)
+            update_ra_dec(newpath, rot_val)
             print('%s updated, renamed, and moved!' % fnewname)
 
 
@@ -257,11 +258,15 @@ if __name__ == "__main__":
                                                  'want to generate astrometry w/o changing names or path')
     parser.add_argument('-output', type=str, help='[str] output path for images w/ astrometry (ramp.new), to '
                                                   'be used in pipeline',default=None)
+    parser.add_argument('-rot_val', type=float, help='[float] Use if you want to input a custom rotation value '
+                                                     '(the default is 48 deg)', default=48)
+
     args = parser.parse_args()
+
     if os.path.isdir(args.input):
         if args.output:
-            update_ra_dec_move_directory(args.input,args.output)
+            update_ra_dec_move_directory(args.input, args.output, args.rot_val)
         if not args.output:
-            update_ra_dec_directory(args.input)
+            update_ra_dec_directory(args.input, args.rot_val)
     elif os.path.isfile(args.input):
-        update_ra_dec(args.input)
+        update_ra_dec(args.input, args.rot_val)

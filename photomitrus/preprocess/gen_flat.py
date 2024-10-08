@@ -64,6 +64,8 @@ def flatlists(path, chip):
     else:
         print('No flats found... ')
 
+    flat_filter = log_filter[0]
+
     if log_start_flats:
         if not log_end_flats:
             start_images_names_1 = log_start_flats[:int(len(log_start_flats)/2)]
@@ -87,7 +89,7 @@ def flatlists(path, chip):
             end_images_names_2 = log_end_flats[int(len(log_end_flats) / 2):]
             #flag = 'both'
 
-    return start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2
+    return start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter
 
 #%% getting data for all groups and stacking along 3rd dim
 def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,end_images_names_1=None,end_images_names_2=None):
@@ -167,6 +169,9 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
     if not isExist:
         os.mkdir('mflats')
 
+    save_name_start = None
+    save_name_end = None
+
     if start_images_names_1:
         header_start = fits.getheader(start_images_names_1[-1])
         filter1_start = header_start.get('FILTER1', 'unknown')
@@ -188,6 +193,8 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
         print(output_fname_end + ' created!')
 
         fits.HDUList(fits.PrimaryHDU(header=header_end, data=end_median_norm)).writeto(output_fname_end, overwrite=True)
+
+    return save_name_start, save_name_end
 #%%
 
 if __name__ == "__main__":
@@ -197,8 +204,8 @@ if __name__ == "__main__":
     parser.add_argument('-chip', type=int, help='[int], number of detector')
     args = parser.parse_args()
 
-    start_images_names_1, start_images_names_2,end_images_names_1, end_images_names_2 = flatlists(args.dir,args.chip)
-    flatprocessing(args.dir,start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2)
+    start_images_names_1, start_images_names_2,end_images_names_1, end_images_names_2, flat_filter = flatlists(args.dir,args.chip)
+    save_name_start, save_name_end = flatprocessing(args.dir,start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2)
 
 
 

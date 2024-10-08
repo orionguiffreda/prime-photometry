@@ -50,7 +50,7 @@ def astromdirhard(outpath,dir,rad,ds):
             dec = hdr['DEC-D']
             com = ["solve-field ", '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg'
                 ,' --scale-units arcsecperpix', ' --scale-low 0.45',' --scale-high 0.55',' --ra ' + str(ra),' --dec ' + str(dec),' --radius '+str(rad),' --cpulimit 60',' -U none',
-                   ' --axy list.axy',' -E 20',' --odds-to-solve 1e8',' -S none',' -M none', ' -R none', ' -B none', ' -O',' -p',' -z '+str(ds), ' -D ' + outpath, ' ' + dir + f] #can change downsample w/ z, or change what outputs here
+                   ' --axy list.axy',' -S none',' -M none', ' -R none', ' -B none', ' -O',' -p',' -z '+str(ds), ' -D ' + outpath, ' ' + dir + f] #can change downsample w/ z, or change what outputs here
             s0 = ''
             com = s0.join(com)
             out = subprocess.Popen([com], shell=True)   #include stdout and stderr to suppress astrom.net output

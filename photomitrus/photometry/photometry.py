@@ -11,6 +11,7 @@ from astropy.coordinates import SkyCoord
 from astropy.wcs import WCS
 from astropy.wcs import utils
 from astropy.stats import sigma_clipped_stats
+from astropy.stats import sigma_clip
 from astropy.io import fits
 from astropy.io import ascii
 import os
@@ -284,22 +285,53 @@ def queryexport(good_cat_stars, imageName,survey):
     num = imageName[-16:-8]
     table.write('%s_C%s_query_%s.ecsv' % (survey,chip,num),overwrite=True)
     print('%s_C%s_query_%s.ecsv written!' % (survey,chip,num))
-#good_cat_stars,cleanPSFSources,idx_psfmass,idx_psfimage = tables(Q,psfcatalogName)
+
+#%%
+
+def ab_convert(mag, filter):
+    # jy zero points
+    # TODO add more survey-specific zps once query is overhauled (ex. VISTA, etc)
+    # from 2MASS
+    zp_dict = {'zp_J': 1594, 'zp_H': 1024}
+    pick_zp = 'zp_' + filter
+
+    for k, v in zp_dict.items():
+        if k == pick_zp:
+            zp = v
+
+    flx = zp * 10 ** (-mag / 2.5)
+    ab_mag = -2.5 * np.log10(flx / 3631)
+    ab_mag = round(ab_mag, 3)
+    return ab_mag
+
 #%%
 #derive zero pt / put in swarped header
 def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,imageName,filter,survey):
     colnames = good_cat_stars.colnames
     magcolname = colnames[2]
+    magerrcolname = colnames[3]
+
+    psfweights = 1 / (good_cat_stars[magerrcolname][idx_psfmass]**2)
+
     psfoffsets = ma.array(good_cat_stars[magcolname][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
     psfoffsets = psfoffsets.data
 
-    #Compute sigma clipped statistics
-    zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
-    #print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
+    # 3 sigma clip
+    psf_clipped = sigma_clip(psfoffsets)
+    psfoffsets = psfoffsets[~psf_clipped.mask]
+    psfweights = psfweights[~psf_clipped.mask]
 
-    print('zp = %.4f' % zero_psfmed)
+    # Compute statistics
+    zero_psfmean = np.average(psfoffsets, weights=psfweights)
+    zero_psfvar = np.average((psfoffsets - zero_psfmean) ** 2, weights=psfweights)
+    zero_psfstd = np.sqrt(zero_psfvar)
+
+    # zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
+    # print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
+
+    print('zp = %.4f, zp err = %.4f' % (zero_psfmean, zero_psfstd))
     #catalog for just clean sources (no flags)
-    psfmag_clean = zero_psfmed + cleanPSFSources['MAG_POINTSOURCE']
+    psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
     psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
     psfmagcol_clean = Column(psfmag_clean, name = '%sMAG_PSF' % filter,unit='mag')
@@ -309,7 +341,7 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     cleanPSFSources.remove_column('VIGNET')
 
     #catalog for all detected sources
-    psfmag = zero_psfmed + PSFSources['MAG_POINTSOURCE']
+    psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
     psfmagcol = Column(psfmag, name = '%sMAG_PSF' % filter,unit='mag')

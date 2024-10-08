@@ -329,8 +329,8 @@ def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data
 
 
 def segmentshift(segments, acc_range, length, directory, imageName, stdev, segstd, segtrue):
-    final_xshifts_arr = []
-    final_yshifts_arr = []
+    final_xshifts_arr_orig = []
+    final_yshifts_arr_orig = []
     for seg in segments:
         table1 = segments[seg][0]
         table2 = segments[seg][1]
@@ -339,9 +339,11 @@ def segmentshift(segments, acc_range, length, directory, imageName, stdev, segst
 
         print(f'Calculating median shifts for Section {seg}')
         xfinal_shift, yfinal_shift = xyshift(pairs, segments[seg][2], segments[seg][3], directory, header, data, imageName, stdev, segments=segtrue)
-        final_xshifts_arr.append(xfinal_shift)
-        final_yshifts_arr.append(yfinal_shift)
+        final_xshifts_arr_orig.append(xfinal_shift)
+        final_yshifts_arr_orig.append(yfinal_shift)
 
+    final_xshifts_arr = final_xshifts_arr_orig.copy()
+    final_yshifts_arr = final_yshifts_arr_orig.copy()
     print('\npruning outliers >= %.2f stdev from median for each segments shifts...' % segstd)
     x_stdev = np.std(final_xshifts_arr)
     x_med = np.median(final_xshifts_arr)
@@ -365,9 +367,20 @@ def segmentshift(segments, acc_range, length, directory, imageName, stdev, segst
             y_finalshift_prune.append(final_yshifts_arr[i])
 
     if not x_finalshift_prune:
-        print('All segments disagree w/in %.2f! Is there an issue with the image?' % segstd)
-        xfinal_shift = 0
-        yfinal_shift = 0
+        nonzero_idx = [idx for idx, val in enumerate(final_xshifts_arr_orig) if val != 0]
+        if len(nonzero_idx) == 1:
+            check = input('Only 1 segment had a solution, do you want to go along with it? (Input Y or N): ')
+            if check == 'Y':
+                idx = nonzero_idx[0]
+                xfinal_shift = final_xshifts_arr_orig[idx]
+                yfinal_shift = final_yshifts_arr_orig[idx]
+            else:
+                xfinal_shift = 0
+                yfinal_shift = 0
+        else:
+            print('All segments disagree w/in %.2f stdevs! Is there an issue with the image?' % segstd)
+            xfinal_shift = 0
+            yfinal_shift = 0
     else:
         xy_shifts = np.column_stack([x_finalshift_prune,y_finalshift_prune])
 
@@ -474,7 +487,7 @@ def removal(directory):
         print('No files found to remove')
 #%%
 
-defaults = dict(range=3,length=100,num=10,stdev=1,segstd=2)
+defaults = dict(range=3,length=100,num=15,stdev=1,segstd=2)
 
 #%%
 if __name__ == "__main__":
@@ -498,7 +511,7 @@ if __name__ == "__main__":
     parser.add_argument('-length', type=float, help='[float] optional, value over which dists will not be '
                                                    'considered (pix), default = 100', default=defaults['length'])
     parser.add_argument('-num', type=int, help='[int] optional, # of sources, sorted by mag, to consider in '
-                                                   'dist. calculation (dont make too large!), default = 10', default=defaults['num'])
+                                                   'dist. calculation (dont make too large!), default = 15', default=defaults['num'])
     parser.add_argument('-stdev', type=float, help='[float] # of stdevs away from median to prune eucl. dists '
                                                    'default = 1', default=defaults['stdev'])
     parser.add_argument('-segstd', type=float, help='[float] # of stdevs away from median to prune final shifts '
@@ -514,7 +527,7 @@ if __name__ == "__main__":
 
     if args.segment:
         crop = 1250
-        boxsize = 12
+        boxsize = 15
         n_segs = 4
     else:
         crop = 1600

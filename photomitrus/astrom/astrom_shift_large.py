@@ -23,11 +23,20 @@ def split_shift(subpath, num, filter):
         except subprocess.CalledProcessError as err:
             print('Could not run with exit error %s' % err)
 
+def double_run(subpath, filter):
+    os.chdir(gen_pipeline_file_name())
+    try:
+        command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
+        print('Executing command: %s' % command)
+        rval = subprocess.run(command.split(), check=True)
+    except subprocess.CalledProcessError as err:
+        print('Could not run with exit error %s' % err)
 
 #%%
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='For observations with many files, splits up the observation file list'
+    parser = argparse.ArgumentParser(description='For observations with many files, either gives option to run astrom_shift '
+                                                 'again, or splits up the observation file list'
                                                  ' into sublists of specified length, runs astrom_shift on sublists')
     parser.add_argument('-dir', type=str, help='[str] path where input files are stored (should run on proc. image, '
                                                'so likely should be /C#_sub/)')

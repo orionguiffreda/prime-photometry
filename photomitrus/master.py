@@ -54,16 +54,24 @@ def initastrom(astrompath, parentdir, chip=None):
             print('Could not run with exit error %s'%err)
 
 #%% angle astrometry
-def astrom_angle(astrompath,parentdir, chip):
+def astrom_angle(astrompath, parentdir, chip, rot_val=None):
     os.chdir(gen_pipeline_file_name())
     ramppath = parentdir + 'C%i/' % (chip)
     print('running initial astrometry on ramp imgs...')
-    try:
-        command = 'python ./preprocess/astromangle_new.py -input %s -output %s' % (ramppath, astrompath)
-        print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s'%err)
+    if rot_val:
+        try:
+            command = 'python ./preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath, astrompath, rot_val)
+            print('Executing command: %s' % command)
+            rval = subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as err:
+            print('Could not run with exit error %s'%err)
+    else:
+        try:
+            command = 'python ./preprocess/astromangle_new.py -input %s -output %s' % (ramppath, astrompath)
+            print('Executing command: %s' % command)
+            rval = subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as err:
+            print('Could not run with exit error %s' % err)
 
 #%% flat fielding
 def flatfield(astrompath,FFpath,filter,chip):
@@ -135,13 +143,23 @@ def shift(subpath, filter):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
-    imgname = all_fits[0]
-    try:
-        command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
-        print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s' % err)
+    if len(all_fits) >= 100:
+        imgname = all_fits[0]
+        try:
+            # change back t0 large once fully tested
+            command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
+            print('Executing command: %s' % command)
+            rval = subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as err:
+            print('Could not run with exit error %s' % err)
+    else:
+        imgname = all_fits[0]
+        try:
+            command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -filter %s' % (subpath, imgname, filter)
+            print('Executing command: %s' % command)
+            rval = subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as err:
+            print('Could not run with exit error %s' % err)
 
 #%% better astrometry
 def astrometry(subpath,sex=None):
@@ -216,6 +234,9 @@ if __name__ == "__main__":
     parser.add_argument('-chip', type=int, help='[int], number of detector')
     parser.add_argument('-filter', type=str, help='*NOT NECESSARY UNLESS USING -FF* [str], filter of images, ex. "J"',default=None)
     parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4', default=defaults["sigma"])
+    parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
+                                                     ' if you had a non-default rotation angle in your obs'
+                                                     ' (default = 48 deg or 172800")', default=None)
     args = parser.parse_args()
 
     if not args.qual_check_only:
@@ -276,7 +297,7 @@ if __name__ == "__main__":
                 astromdir, skydir, subdir, stackdir = makedirectories(args.parent, args.chip)
                 FFdir = makedirectoriesFF(args.parent, args.chip)
                 if args.angle:
-                    astrom_angle(astromdir, args.parent, args.chip)
+                    astrom_angle(astromdir, args.parent, args.chip, args.rot_val)
                 else:
                     initastrom(astromdir, args.parent, args.chip)
                 flatfield(astromdir, FFdir, args.filter, args.chip)
