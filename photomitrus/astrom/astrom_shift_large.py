@@ -1,7 +1,7 @@
 import subprocess
 import os
 import argparse
-from settings import gen_pipeline_file_name
+from photomitrus.settings import gen_pipeline_file_name
 
 #%%
 

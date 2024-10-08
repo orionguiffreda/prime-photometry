@@ -8,7 +8,7 @@ import numpy as np
 from astropy.io import fits
 import sys
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from settings import flist
+from photomitrus.settings import flist
 #%%
 # common settings
 cameras = range(2, 3)

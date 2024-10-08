@@ -7,7 +7,7 @@ import argparse
 import sys
 from astropy.io import fits
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from settings import flist
+from photomitrus.settings import flist
 import os
 
 def astrom(outpath,inlist):

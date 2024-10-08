@@ -4,10 +4,10 @@ import subprocess
 import argparse
 import fnmatch
 #sys.path.insert(0,'/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
-from settings import makedirs
-from settings import makedirsFF
-from settings import gen_pipeline_file_name
-from settings import gen_mflat_file_name
+from photomitrus.settings import makedirs
+from photomitrus.settings import makedirsFF
+from photomitrus.settings import gen_pipeline_file_name
+from photomitrus.settings import gen_mflat_file_name
 
 
 #%% directory creation

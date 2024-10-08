@@ -11,8 +11,8 @@ from astropy.io import fits
 import numpy as np
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from settings import gen_config_file_name
-from settings import gen_mask_file_name
+from photomitrus.settings import gen_config_file_name
+from photomitrus.settings import gen_mask_file_name
 
 #%%
 def badpixmask(parent, subpath, chip):

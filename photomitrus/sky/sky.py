@@ -5,7 +5,7 @@ import os
 from astropy.io import fits
 import subprocess
 import argparse
-from settings import gen_config_file_name
+from photomitrus.settings import gen_config_file_name
 import numpy as np
 #%%
 def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):

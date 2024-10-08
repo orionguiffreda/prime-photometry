@@ -23,7 +23,7 @@ import subprocess
 from scipy import stats
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from settings import gen_config_file_name
+from photomitrus.settings import gen_config_file_name
 #%%
 # Read LDAC tables
 def get_table_from_ldac(filename, frame=1):

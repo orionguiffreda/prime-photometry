@@ -10,7 +10,7 @@ import sys
 from astropy.io import fits
 
 sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from settings import gen_config_file_name
+from photomitrus.settings import gen_config_file_name
 
 #%%
 def sex(imgdir):

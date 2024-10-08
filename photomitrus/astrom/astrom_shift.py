@@ -11,7 +11,7 @@ import numpy as np
 from astropy.table import Column
 import math
 
-from settings import gen_config_file_name
+from photomitrus.settings import gen_config_file_name
 
 #%% image info
 def imaging(directory,imageName):
