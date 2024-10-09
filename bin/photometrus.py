@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/env python
 import sys
 from photomitrus.photometry import photometry
 

@@ -90,11 +90,11 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, (width), (height)))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_bands={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
-            #print(Q[0])
+            # print(Q[0])
             print('Queried source total = ', len(Q[0]))
         except:
             print('I cannnot reach the Vizier database. Is the internet working?')
@@ -104,7 +104,7 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_bands={"%sap3" % band: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -120,7 +120,7 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_bands={"%sap3" % band: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%sap3' % band, 'e_%sap3' % band], column_filters={"%sap3" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -138,7 +138,7 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % band.lower(), 'e_%sPSF' % band.lower()], column_bands={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAICRS','DEICRS','%sPSF' % band.lower(), 'e_%sPSF' % band.lower()], column_filters={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -156,7 +156,7 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % band.lower(), 'e_%spmag' % band.lower()], column_bands={"%spmag" % band.lower(): ">12"
+            v = Vizier(columns=['RA_ICRS','DE_ICRS','%spmag' % band.lower(), 'e_%spmag' % band.lower()], column_filters={"%spmag" % band.lower(): ">12"
                                                                                                                             ,"clean": "=1"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
@@ -175,7 +175,7 @@ def query(raImage, decImage, band, width, height, survey):
         catNum, raImage, decImage, width, height))
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_bands={"%smag" % band: ">12"}, row_limit=-1)
+            v = Vizier(columns=['RAJ2000','DEJ2000','%smag' % band, 'e_%smag' % band], column_filters={"%smag" % band: ">12"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -698,10 +698,16 @@ def removal(directory):
 
 
 def photometry(
-        directory, name, band, survey=defaults['survey'], crop=defaults['crop'], no_plots=False, plots_only=False,
+        full_filename, band, survey=defaults['survey'], crop=defaults['crop'], no_plots=False, plots_only=False,
         keep=False, grb=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
         grb_radius=defaults['thresh']
 ):
+    directory = os.path.dirname(full_filename)
+    if directory == '':
+        directory = '.'
+    directory = directory + '/'
+    name = os.path.basename(full_filename)
+
     if plots_only:
         psfcatalogName = []
         for f in os.listdir(directory):
@@ -762,8 +768,8 @@ def main():
                                                           'specific coords, such as w/ a GRB')
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog')
-    parser.add_argument('-dir', type=str, help='[str], directory of stacked image')
-    parser.add_argument('-name', type=str, help='[str], image name')
+    parser.add_argument('-filename', type=str, help='[str], full file path of stacked image, can also place just'
+                                                    'filename and it will default to current directory')
     parser.add_argument('-band', type=str, help='[str], band, ex. "J"')
     parser.add_argument('-survey', type=str,
                         help='[str], survey to query, choose from VHS (best / reliable for J), 2MASS (reliable for H)'
@@ -785,7 +791,7 @@ def main():
                         default=defaults["thresh"])
     args = parser.parse_args()
     
-    photometry(args.dir, args.name, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
+    photometry(args.filename, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
                args.grb, args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 #%%
