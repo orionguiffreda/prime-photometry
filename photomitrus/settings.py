@@ -12,17 +12,27 @@ import fnmatch
 #base_dir = os.path.dirname(os.path.abspath('__file__'))
 
 #export PYTHONPATH=.       if fctn below isnt working from command line, cd to photomitrus and use command
+
+
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
     return os.path.join(base_dir, 'configs', filename)
+
 
 def gen_mask_file_name(filename):
     base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
     return os.path.join(base_dir, 'weightmaps', filename)
 
+
 def gen_pipeline_file_name():
     base_dir = os.path.dirname(os.path.realpath(__file__))
     return base_dir
+
+
+def gen_master_name():
+    base_dir = os.path.dirname(__file__)
+    return os.path.join(base_dir, 'master.py')
+
 
 def gen_mflat_file_name(filter,chip):
     base_dir = os.path.dirname(os.path.realpath(__file__))

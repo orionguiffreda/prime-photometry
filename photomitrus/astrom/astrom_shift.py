@@ -31,14 +31,14 @@ def imaging(directory,imageName):
 #data,header,w,raImage,decImage = imaging('/mnt/d/PRIME_photometry_test_files/astrom_shift/','01504054C1.sky.flat.fits')
 
 #%% catalog query
-def cat_query(raImage, decImage, filter, boxsize):
-    if filter == 'Z':
+def cat_query(raImage, decImage, band, boxsize):
+    if band == 'Z':
         catNum = 'II/379/smssdr4'  # changing to skymapper
         print('\nQuerying Vizier %s around RA %.4f, Dec %.4f, w/ box size %.2f' % (
             catNum, raImage, decImage, boxsize))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['*'], column_filters={"%sPSF" % filter.lower(): ">12", "Nd": ">6"}, row_limit=-1)
+            v = Vizier(columns=['*'], column_filters={"%sPSF" % band.lower(): ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
                                catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -53,7 +53,7 @@ def cat_query(raImage, decImage, filter, boxsize):
             catNum, raImage, decImage, boxsize))
         try:
             # You can set the filters for the individual columns (magnitude range, number of detections) inside the Vizier query
-            v = Vizier(columns=['*'], column_filters={"%smag" % filter: ">12", "Nd": ">6"}, row_limit=-1)
+            v = Vizier(columns=['*'], column_filters={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(boxsize) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
             # print(Q[0])
@@ -101,13 +101,13 @@ def sex2(imageName):
     return catname
 
 #%% creating & prepping tables for dist calc
-def make_tables(directory, data, w, catname, Q, filter, crop):
+def make_tables(directory, data, w, catname, Q, band, crop):
     print('Creating sorted catalog & prime tables...')
     sexcat = Table.read(directory+catname, hdu=2)
 
     max_x = data.shape[0]
     max_y = data.shape[1]
-    if filter == 'Z':
+    if band == 'Z':
         mass_imCoords = w.all_world2pix(Q[0]['RAICRS'], Q[0]['DEICRS'], 1)
     else:
         mass_imCoords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
@@ -120,11 +120,11 @@ def make_tables(directory, data, w, catname, Q, filter, crop):
 
     inner_primesources.sort('MAG_AUTO')
 
-    if filter == 'Z':
-        inner_catsources.sort('%sPSF' % filter.lower())
+    if band == 'Z':
+        inner_catsources.sort('%sPSF' % band.lower())
         cat_xy = w.all_world2pix(inner_catsources['RAICRS'], inner_catsources['DEICRS'], 1)
     else:
-        inner_catsources.sort('%smag' % filter)
+        inner_catsources.sort('%smag' % band)
         cat_xy = w.all_world2pix(inner_catsources['RAJ2000'],inner_catsources['DEJ2000'],1)
 
     xs = Column(cat_xy[0], name='X_IMAGE',unit='pix')
@@ -134,7 +134,7 @@ def make_tables(directory, data, w, catname, Q, filter, crop):
     return inner_primesources,inner_catsources
 
 
-def split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, filter):
+def split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, band):
     # Calculate the number of segments along one dimension
     img_size = data.shape[0]
     segs = int(np.sqrt(n_segs))
@@ -168,10 +168,10 @@ def split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, f
                 ]
 
             segment_primedata.sort('MAG_AUTO')
-            if filter == 'Z':
-                segment_catdata.sort('%sPSF' % filter.lower())
+            if band == 'Z':
+                segment_catdata.sort('%sPSF' % band.lower())
             else:
-                segment_catdata.sort('%smag' % filter)
+                segment_catdata.sort('%smag' % band)
 
             first_primes_x = np.array(segment_primedata['X_IMAGE'][:num])
             first_primes_y = np.array(segment_primedata['Y_IMAGE'][:num])
@@ -505,7 +505,7 @@ if __name__ == "__main__":
                                                'so likely should be /C#_sub/)')
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
                                                      'i.e. *.sky.flat.fits)')
-    parser.add_argument('-filter', type=str, help='[str] filter used, ex. "J"')
+    parser.add_argument('-band', type=str, help='[str] filter used, ex. "J"')
     parser.add_argument('-range', type=float, help='[float] optional, range for eucl. dists to be considered '
                                                    'in agreement (pix), default = 3', default=defaults['range'])
     parser.add_argument('-length', type=float, help='[float] optional, value over which dists will not be '
@@ -520,10 +520,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    if args.filter == 'Y':
+    if args.band == 'Y':
         filter_used = 'J'
     else:
-        filter_used = args.filter
+        filter_used = args.band
 
     if args.segment:
         crop = 1250
@@ -540,7 +540,7 @@ if __name__ == "__main__":
     catname = sex2(args.imagename)
     inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, filter_used, crop)
     if args.segment:
-       segments = split_coordinates(n_segs, data, inner_primesources , inner_catsources, args.num, args.filter)
+       segments = split_coordinates(n_segs, data, inner_primesources , inner_catsources, args.num, args.band)
        xfinal_shift, yfinal_shift = segmentshift(segments, args.range, args.length, args.dir, args.imagename, args.stdev, args.segstd, args.segment)
     else:
         first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, args.num)

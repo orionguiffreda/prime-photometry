@@ -16,8 +16,11 @@ from astropy.utils.exceptions import AstropyWarning
 import sys
 from datetime import datetime as dt
 import matplotlib.pyplot as plt
+import warnings
 
-sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+
+# sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
 #from settings import filter
 #from settings import flist
 

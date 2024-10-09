@@ -5,6 +5,9 @@ Flat fields images
 from astropy.io import fits
 import os
 import argparse
+import warnings
+
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 #%%
 
 def flatfield(science_data, output_data_dir, flat):

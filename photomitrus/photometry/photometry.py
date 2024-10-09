@@ -789,7 +789,7 @@ def main():
                         help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
                              ' AND -COORDLIST*',
                         default=defaults["thresh"])
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     
     photometry(args.filename, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
                args.grb, args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
