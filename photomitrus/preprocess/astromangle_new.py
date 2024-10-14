@@ -249,9 +249,21 @@ def old_main():
     print("C1: " + str(coord_C1.to_string("hmsdms")))
     print("C3: " + str(coord_C3.to_string("hmsdms")))
     print("C4: " + str(coord_C4.to_string("hmsdms")))
+
+
+def astrom_angle(input_dir, output_dir, rot_val=48):
+    if os.path.isdir(input_dir):
+        if output_dir:
+            update_ra_dec_move_directory(input_dir, output_dir, rot_val)
+        if not output_dir:
+            update_ra_dec_directory(input_dir, rot_val)
+    elif os.path.isfile(input_dir):
+        update_ra_dec(input_dir, rot_val)
+
 #%%
 
-if __name__ == "__main__":
+
+def main():
     parser = argparse.ArgumentParser(description='alternative to astrometry.net, generates initial astrometry on imgs'
                                                  ' using telescope pointing and corner positions - new')
     parser.add_argument('-input', type=str, help='[str] input path or single file for ramp images, put only this field if you '
@@ -261,12 +273,10 @@ if __name__ == "__main__":
     parser.add_argument('-rot_val', type=float, help='[float] Use if you want to input a custom rotation value '
                                                      '(the default is 48 deg)', default=48)
 
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
-    if os.path.isdir(args.input):
-        if args.output:
-            update_ra_dec_move_directory(args.input, args.output, args.rot_val)
-        if not args.output:
-            update_ra_dec_directory(args.input, args.rot_val)
-    elif os.path.isfile(args.input):
-        update_ra_dec(args.input, args.rot_val)
+    astrom_angle(args.input, args.output, args.rot_val)
+
+
+if __name__ == "__main__":
+    main()

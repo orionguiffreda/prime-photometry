@@ -10,11 +10,13 @@ import sys
 from astropy.io import fits
 import numpy as np
 
-sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
+# sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
 from photomitrus.settings import gen_mask_file_name
 
 #%%
+
+
 def badpixmask(parent, subpath, chip):
     otherdir = parent+'temp/'
     exists = os.path.exists(otherdir)
@@ -73,6 +75,7 @@ def swarp(imgdir, finout):
     out.wait()
     print('Co-added image created, all done!')
 
+
 def swarp_increm(imgdir, finout,im_num):
     batch_size = im_num
     files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
@@ -112,6 +115,7 @@ def swarp_increm(imgdir, finout,im_num):
         out = subprocess.Popen([com], shell=True)
         out.wait()
         print('Co-added image created, all done!')
+
 
 def swarp_alt(imgdir, imout):
     image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
@@ -169,7 +173,8 @@ def swarp_alt(imgdir, imout):
     out2.wait()
     print('2nd set co-added image created, all done!')
 
-def astromfin(dir,chip):
+
+def astromfin(directory,chip):
     print('Re-running astrometry on swarped image!')
     import fnmatch
     instack = sorted(os.listdir(dir))
@@ -179,36 +184,51 @@ def astromfin(dir,chip):
             stackimg.append(f)
     for f in stackimg:
         pre = os.path.splitext(f)[0]
-        com = ["solve-field ", '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg'
-            ,' --scale-units arcsecperpix', ' --scale-low 0.45',' --scale-high 0.55',' -U none', ' --axy none', ' -S none', ' -M none', ' -R none', ' -B none', ' -O',
-            ' -p', ' -z 4', ' -D ' + dir, ' ' + dir + f] #can change downsample w/ z, or change what outputs here
-        s0 = ''
-        com = s0.join(com)
-        out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)   #include stdout and stderr to suppress astrom.net output
-        out.wait()
-        #renaming
-        if os.path.isfile(dir+pre+'.wcs'):
-            os.remove(dir+f)
-            os.rename(dir+pre+'.new',dir+f)
+        try:
+            command = ('solve-field '
+                       '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
+                       '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
+                       '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
+                          directory, directory + f)
+            print('Executing command: %s' % command)
+            subprocess.run(command.split(), check=True)
+        except subprocess.CalledProcessError as err:
+            print('Could not run with exit error %s' % err)
+        # renaming
+        if os.path.isfile(directory+pre+'.wcs'):
+            os.remove(directory+f)
+            os.rename(directory+pre+'.new',directory+f)
             print('final image generated, original stack discarded!')
         else:
             print('New astrometry on stacked image failed, defaulting to original...')
 
 
 #%%
-"""imgdir='/mnt/d/PRIME_photometry_test_files/GRBastrom/'
-image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.ramp.new')]
-image_fnames.sort()
-header = fits.getheader(image_fnames[-1])
-filter1 = header.get('FILTER1', 'unknown')
-filter2 = header.get('FILTER2', 'unknown')
-save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-19:-11], image_fnames[-1][-19:-11], image_fnames[0][-10])
-print(save_name)"""
 
-#%%
-if __name__ == "__main__":
+
+def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False):
+    # if args.mask:
+        # otherdir = badpixmask(args.parent,args.sub,args.chip)
+        # print('removing temp dir...')
+        # shutil.rmtree(otherdir)
+    if no_astrom:
+        swarp(subpath, stackpath)
+    elif astrom_only:
+        astromfin(stackpath,chip)
+    elif increm:
+        swarp_increm(subpath,stackpath,num)
+        astromfin(stackpath,chip)
+    elif alt:
+        swarp_alt(subpath,stackpath)
+        astromfin(stackpath,chip)
+    else:
+        swarp(subpath,stackpath)
+        astromfin(stackpath,chip)
+
+
+def main():
     parser = argparse.ArgumentParser(description='Runs swarp to stack imgs, then reruns astrometry for improved wcs *NOTE* if using -mask flag, do not keyboard interrupt')
-    #parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
+    # parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
     parser.add_argument('-no_astrom', action='store_true', help='optional flag, use if you just want the swarped image, not the image with improved astrometry')
     parser.add_argument('-astrom_only', action='store_true',
                         help='optional flag, use if you already have the swarped image, but want improved astrometry')
@@ -221,22 +241,10 @@ if __name__ == "__main__":
     parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by')
     #parser.add_argument('-parent', type=str, help='*USE ONLY W/ -MASK FLAG* [str] Parent directory where all img folders are stored', default=None)
     parser.add_argument('-chip', type=int, help='*USE ONLY W/O -no_astrom FLAG* [int] Detector chip number', default=None)
-    args = parser.parse_args()
-    #if args.mask:
-        #otherdir = badpixmask(args.parent,args.sub,args.chip)
-        #print('removing temp dir...')
-        #shutil.rmtree(otherdir)
-    if args.no_astrom:
-        swarp(args.sub, args.stack)
-    elif args.astrom_only:
-        astromfin(args.stack,args.chip)
-    elif args.increm:
-        swarp_increm(args.sub,args.stack,args.num)
-        astromfin(args.stack,args.chip)
-    elif args.alt:
-        swarp_alt(args.sub,args.stack)
-        astromfin(args.stack,args.chip)
-    else:
-        swarp(args.sub,args.stack)
-        astromfin(args.stack,args.chip)
+    args, unknown = parser.parse_known_args()
 
+    stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt)
+
+
+if __name__ == "__main__":
+    main()

@@ -9,21 +9,30 @@ from photomitrus.settings import makedirs
 from photomitrus.settings import makedirsFF
 from photomitrus.settings import gen_pipeline_file_name
 from photomitrus.settings import gen_mflat_file_name
+from photomitrus.preprocess import astromangle_new
+from photomitrus.preprocess import gen_astrometry
+from photomitrus.preprocess import flatfield
+from photomitrus.sky import gen_sky
+from photomitrus.sky import sky
+from photomitrus.astrom import astrom_shift
+from photomitrus.astrom import astrometry
+from photomitrus.stack import stack
 
 
-#%% directory creation
-def makedirectories(parentdir,chip):
+# %% directory creation
+def makedirectories(parentdir, chip):
     print('generating directories for astrom, sub, sky, and stacked imgs...')
-    astromdir, skydir, subdir, stackdir = makedirs(parentdir,chip)
+    astromdir, skydir, subdir, stackdir = makedirs(parentdir, chip)
     return astromdir, skydir, subdir, stackdir
 
 
-def makedirectoriesFF(parentdir,chip):
+def makedirectoriesFF(parentdir, chip):
     print('generating FF directory')
-    FFdir = makedirsFF(parentdir,chip)
+    FFdir = makedirsFF(parentdir, chip)
     return FFdir
 
-#%% mflat creation
+
+# %% mflat creation
 """
 def mflat(flatdir, chip):
     print('generating master flats...')
@@ -34,7 +43,9 @@ def mflat(flatdir, chip):
     except subprocess.CalledProcessError as err:
         print('Could not run with exit error %s'%err)
 """
-#%% initial astrometry
+
+
+# %% initial astrometry
 
 
 def initastrom(astrompath, parentdir, chip=None):
@@ -42,58 +53,56 @@ def initastrom(astrompath, parentdir, chip=None):
     if chip:
         ramppath = parentdir + 'C%i/' % (chip)
         print('running initial astrometry on ramp imgs...')
-        try:
-            command = 'python ./preprocess/gen_astrometry.py -hard -output %s -input %s -rad 1 -ds 3' % (astrompath, ramppath)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s'%err)
+
+        print('\nEquivalent argparse cmd: python /preprocess/gen_astrometry.py -output %s -input %s' % (
+        astrompath, ramppath))
+
+        gen_astrometry.gen_astrom(output=astrompath, input=ramppath)
     if not chip:
         print('running astrometry.net on subbed imgs...')
-        try:
-            command = 'python ./preprocess/gen_astrometry.py -hard -output %s -input %s -rad 1 -ds 3' % (astrompath, astrompath)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s'%err)
 
-#%% angle astrometry
+        print('\nEquivalent argparse cmd: python /preprocess/gen_astrometry.py -output %s -input %s' % (
+        astrompath, astrompath))
+
+        gen_astrometry.gen_astrom(output=astrompath, input=astrompath)
+
+
+# %% angle astrometry
 
 
 def astrom_angle(astrompath, parentdir, chip, rot_val=None):
     os.chdir(gen_pipeline_file_name())
     ramppath = parentdir + 'C%i/' % (chip)
     print('running initial astrometry on ramp imgs...')
-    if rot_val:
-        try:
-            command = 'python ./preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath, astrompath, rot_val)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s'%err)
+
+    if not rot_val:
+        placeholder = 48
     else:
-        try:
-            command = 'python ./preprocess/astromangle_new.py -input %s -output %s' % (ramppath, astrompath)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+        placeholder = rot_val
 
-#%% flat fielding
+    print(
+        '\nEquivalent argparse cmd: python /preprocess/astromangle_new.py -input %s -output %s rot_val %s' % (ramppath,
+                                                                                                              astrompath,
+                                                                                                              placeholder))
+
+    astromangle_new.astrom_angle(input_dir=ramppath, output_dir=astrompath, rot_val=rot_val)
 
 
-def flatfield(astrompath,FFpath,band,chip):
+# %% flat fielding
+
+
+def flatfielding(astrompath, FFpath, band, chip):
     os.chdir(gen_pipeline_file_name())
     print('using master flat to flat field ramp imgs..')
-    flatpath = gen_mflat_file_name(band,chip)
-    try:
-        command = 'python ./preprocess/flatfield.py -in_path %s -out_path %s -flat_path %s' % (astrompath,FFpath,flatpath)
-        print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s'%err)
+    flatpath = gen_mflat_file_name(band, chip)
 
-#%% sky gen
+    print('\nEquivalent argparse cmd: python /preprocess/flatfield.py -in_path %s -out_path %s'
+          ' -flat_path %s' % (astrompath, FFpath, flatpath))
+
+    flatfield.flat_field_cmd(in_path=astrompath, out_path=FFpath, flat_path=flatpath)
+
+
+# %% sky gen
 
 
 def sky(astrompath, skypath, sigma):
@@ -101,21 +110,17 @@ def sky(astrompath, skypath, sigma):
     print('generating sky...')
     FFstring = '_FF'
     if FFstring in astrompath:
-        try:
-            command = 'python ./sky/gen_sky.py -flat -in_path %s -sky_path %s -sigma %i' % (astrompath, skypath, sigma)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+        no_flat = False
     else:
-        try:
-            command = 'python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %i' % (astrompath, skypath, sigma)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+        no_flat = True
 
-#%% sky sub
+    print('\nEquivalent argparse cmd: python /sky/gen_sky.py -in_path %s -sky_path %s -sigma %s '
+          ' -no_flat %s' % (astrompath, skypath, sigma, no_flat))
+
+    gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
+
+
+# %% sky sub
 
 
 def skysub(astrompath, subpath, skypath, chip):
@@ -127,32 +132,27 @@ def skysub(astrompath, subpath, skypath, chip):
     print('cropping and subtracting sky...')
     FFstring = '_FF'
     if FFstring in astrompath:
-        try:
-            command = 'python ./sky/sky.py -flat -in_path %s -out_path %s -sky_path %s%s' % (astrompath, subpath, skypath, skyfile)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+        no_flat = False
     else:
-        try:
-            command = 'python ./sky/sky.py -in_path %s -out_path %s -sky_path %s%s' % (astrompath, subpath, skypath, skyfile)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
-#%%sex sky sub
+        no_flat = True
+
+    print('\nEquivalent argparse cmd: python /sky/sky.py -in_path %s -out_path %s -sky_path %s -no_flat %s' %
+          (astrompath, subpath, skypath, no_flat))
+
+    sky.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skypath, no_flat=no_flat)
+
+# %%sex sky sub
 
 
-def sexskysub(astrompath,subpath):
+def sexskysub(astrompath, subpath):
+    # currently w/o ff?
     os.chdir(gen_pipeline_file_name())
-    try:
-        command = 'python ./sky/sky.py -sex -in_path %s -out_path %s' % (astrompath, subpath)
-        print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s' % err)
 
-#%% astrometry shift
+    print('Using sextractor sky sub...')
+    sky.sky_sub(in_path=astrompath, out_path=subpath, sex=True)
+
+
+# %% astrometry shift
 
 
 def shift(subpath, band):
@@ -161,60 +161,55 @@ def shift(subpath, band):
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
     if len(all_fits) >= 100:
         imgname = all_fits[0]
-        try:
-            # change back to large once fully tested
-            command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -band %s' % (subpath, imgname, band)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
+
+        print('\nEquivalent argparse cmd: python /astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+              (subpath, imgname, band))
+
+        astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
     else:
         imgname = all_fits[0]
-        try:
-            command = 'python ./astrom/astrom_shift.py -remove -segment -pipeline -dir %s -imagename %s -band %s' % (subpath, imgname, band)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
 
-#%% better astrometry
+        print('\nEquivalent argparse cmd: python /astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+              (subpath, imgname, band))
+
+        astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
 
 
-def astrometry(subpath,sex=None):
+# %% better astrometry
+
+
+def astromatic_astrometry(subpath, sex=None):
     os.chdir(gen_pipeline_file_name())
     print('using SXTRCTR and SCAMP to generate better astrometry...')
-   # if sex:
-   #     try:
+    # if sex:
+    #     try:
     #        command = 'python ./astrom/astrometry.py -scamp -path %s' % (subpath)
     #        print('Executing command: %s' % command)
     #        rval = subprocess.run(command.split(), check=True)
     #    except subprocess.CalledProcessError as err:
     #        print('Could not run with exit error %s' % err)
-    #else:
-    try:
-        command = 'python ./astrom/astrometry.py -all -path %s' % (subpath)
-        print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s' % err)
+    # else:
 
-#%% stacking
+    print('\nEquivalent argparse cmd: python /astrom/astrometry.py -path %s' % subpath)
+
+    astrometry.astrometry(path=subpath)
+
+# %% stacking
 
 
-def stack(subpath, stackpath,chip):
+def stacking(subpath, stackpath, chip):
     os.chdir(gen_pipeline_file_name())
     print('stacking all images using SWARP...')
-    try:
-        command = 'python ./stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip)
-        print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s' % err)
 
-#%% packing compression
+    print('\nEquivalent argparse cmd: python /stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
+
+    stack.stack(subpath=subpath, stackpath=stackpath, chip=chip)
 
 
-def fpack(stackpath,chip):
+# %% packing compression
+
+
+def fpack(stackpath, chip):
     os.chdir(gen_pipeline_file_name())
     print('compressing stacked images with fpack...')
     instack = sorted(os.listdir(stackpath))
@@ -224,13 +219,14 @@ def fpack(stackpath,chip):
             stackimg.append(f)
     for f in stackimg:
         try:
-            command = 'fpack -D -Y %s%s' % (stackpath,f)
+            command = 'fpack -D -Y %s%s' % (stackpath, f)
             subprocess.run(command.split(), check=True)
         except subprocess.CalledProcessError as err:
             print('Could not run with exit error %s' % err)
     print('Stack compressed!')
 
-#%% astromnet refining
+
+# %% astromnet refining
 
 
 def astromnet_refine(subdir):
@@ -249,17 +245,17 @@ def astromnet_refine(subdir):
             os.remove(subdir + f)
         print('%i files refined! removed old fits files' % len(newlist))
 
-#%%
+
+# %%
 
 
 defaults = dict(sigma=4)
 
 
 def master(
-        parentdir, chip, band, sigma, rot_val=None, no_ff=False, no_shift=False, sex=False, compress=False,
+        parentdir, chip, band, sigma=4, rot_val=None, no_ff=False, no_shift=False, sex=False, compress=False,
         net_refine=False
 ):
-
     if no_ff:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
         astrom_angle(astromdir, parentdir, chip, rot_val)
@@ -268,13 +264,13 @@ def master(
             sexskysub(astromdir, subdir)
         else:
             skysub(astromdir, subdir, skydir, chip)
-        astrometry(subdir)
-        stack(subdir, stackdir, chip)
+        astromatic_astrometry(subdir)
+        stacking(subdir, stackdir, chip)
     else:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
         FFdir = makedirectoriesFF(parentdir, chip)
         astrom_angle(astromdir, parentdir, chip, rot_val)
-        flatfield(astromdir, FFdir, band, chip)
+        flatfielding(astromdir, FFdir, band, chip)
         if sex:
             pass
         else:
@@ -290,31 +286,38 @@ def master(
                 shift(subdir, band)
             else:
                 pass
-        astrometry(subdir)
-        stack(subdir, stackdir, chip)
+        astromatic_astrometry(subdir)
+        stacking(subdir, stackdir, chip)
         if compress:
             fpack(stackdir, chip)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
-    parser.add_argument('-parent', type=str, help='[str], parent directory of outputs, should include folders of the chips ramp data')
+    parser = argparse.ArgumentParser(
+        description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
+    parser.add_argument('-parent', type=str,
+                        help='[str], parent directory of outputs, should include folders of the chips ramp data')
     parser.add_argument('-chip', type=int, help='[int], number of detector')
-    parser.add_argument('-band', type=str, help='*NOT NECESSARY UNLESS USING -FF* [str], band of images, ex. "J"',default=None)
-    parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4', default=defaults["sigma"])
+    parser.add_argument('-band', type=str, help='*NOT NECESSARY UNLESS USING -FF* [str], band of images, ex. "J"',
+                        default=None)
+    parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4',
+                        default=defaults["sigma"])
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
                                                      ' (default = 48 deg or 172800")', default=None)
     parser.add_argument('-no_FF', action='store_true', help='optional flag, does not use flat fielding in pipeline')
-    parser.add_argument('-sex', action='store_true', help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
-    parser.add_argument('-compress', action='store_true',help='optional flag, use fpack to compress stacked images')
-    parser.add_argument('-no_shift', action='store_true', help='optional flag, STOPS use of astrometric shifting script')
+    parser.add_argument('-sex', action='store_true',
+                        help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
+    parser.add_argument('-compress', action='store_true', help='optional flag, use fpack to compress stacked images')
+    parser.add_argument('-no_shift', action='store_true',
+                        help='optional flag, STOPS use of astrometric shifting script')
     # parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
     # parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
     # parser.add_argument('-astrom_start', action='store_true', help='optional flag, starts pipeline at sxtrctr / scamp step')
     # parser.add_argument('-stack_start', action='store_true',help='optional flag, starts pipeline at swarp step')
-    parser.add_argument('-net_refine', action='store_true', help='optional flag, used to automatically refine astrometry using '
-                                                             'astrometry.net')
+    parser.add_argument('-net_refine', action='store_true',
+                        help='optional flag, used to automatically refine astrometry using '
+                             'astrometry.net')
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.rot_val, args.no_FF, args.no_shift, args.sex,

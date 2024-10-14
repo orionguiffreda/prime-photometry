@@ -20,18 +20,17 @@ import warnings
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# sys.path.insert(0,'/Users/orion/Desktop/PRIME/prime-photometry/photomitrus')
-#from settings import filter
-#from settings import flist
-
-#a,b,c,d = filter('H')
+# TODO pipeline test
 #%%
+
+
 def sigma_clipped(image, sigma, sky=0):
     if sigma is None:
         return image
     masked_array = sigma_clip(image-sky, sigma, maxiters=5)
     image[masked_array.mask] = np.nan
     return image
+
 
 def median_filter_masking(image, size=50):
     nan_percent = 100 * np.count_nonzero(np.isnan(image)) / (image.shape[0] * image.shape[1])
@@ -41,6 +40,7 @@ def median_filter_masking(image, size=50):
     nan_percent = 100 * np.count_nonzero(np.isnan(image)) / (image.shape[0] * image.shape[1])
     print('end_nan_percentage: {}'.format(nan_percent))
     return image
+
 
 def mean_filter_masking(image, size=30):
     footprint = disk(size)
@@ -60,6 +60,7 @@ def mean_filter_masking(image, size=30):
     nan_percent = 100 * np.count_nonzero(np.isnan(image)) / (image.shape[0] * image.shape[1])
     print('end_nan_percentage: {}'.format(nan_percent))
     return image
+
 
 def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None,nan_thresh=3):
     warnings.simplefilter('ignore', category=AstropyWarning)
@@ -100,6 +101,7 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
     print('filling remaining nan with median value: {}'.format(median))
     sky[np.isnan(sky)] = median
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+
 
 def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None,nan_thresh = 0):
     warnings.simplefilter('ignore', category=AstropyWarning)
@@ -142,6 +144,7 @@ def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=N
     sky[np.isnan(sky)] = median
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
+
 def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None):
     warnings.simplefilter('ignore', category=AstropyWarning)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if
@@ -177,25 +180,27 @@ def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_s
     sky = mean_filter_masking(sky)  # filling in the all nan slices
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
+
+def sky_gen(in_path, sky_path, sigma, no_flat=False):
+    if no_flat:
+        gen_sky_image(science_data_directory=in_path,output_directory=sky_path, sky_group_size=None,sigma=sigma)
+    else:
+        gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None, sigma=sigma)
+
 #%%
-#NEED TO ADD DIFF DETECTOR SETTINGS, ONLY HAVE FILTER SETTINGS
-if __name__ == "__main__":
+
+
+def main():
     parser = argparse.ArgumentParser(description='Generates sky for given filter and dataset')
-    parser.add_argument('-flat',  action='store_true', help='if using flat fielding, as in pipeline (with .flat.fits files), use this optional flag')
-    #parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
+    parser.add_argument('-no_flat',  action='store_true', help='if you had NOT flat-fielded, use this')
+    # parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
     parser.add_argument('-sky_path', type=str, help='[str] output sky path')
     parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping',default=None)
-    args = parser.parse_args()
-    #nint,nframes,sky_size,start_index = filter(args.filter[0])
-    if args.flat:
-        gen_flat_sky_image(science_data_directory=args.in_path, output_directory=args.sky_path, sky_group_size=None,
-                      sigma=args.sigma)
-    else:
-        gen_sky_image(science_data_directory=args.in_path,output_directory=args.sky_path, sky_group_size=None,sigma=args.sigma)
+    args, unknown = parser.parse_known_args()
 
-    #%%
+    sky_gen(args.in_path, args.sky_path, args.sigma, args.no_flat)
 
-"""    gen_prev_sky_image(science_data_directory='/Users/orion/Desktop/PRIME/GRB/H_band/H_astrom_flat/',output_directory='/Users/orion/Desktop/PRIME/GRB/H_band/H_sky/',
-                       previous_sky='/Users/orion/Desktop/PRIME/GRB/H_band/H_sky/sky.2.5-3.fits', sigma=2.5)
-"""
+
+if __name__ == "__main__":
+    main()

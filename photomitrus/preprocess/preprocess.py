@@ -76,7 +76,7 @@ def gen_CDS_image(camera, ramp_start_index, integrations, frames_per_ramp, dark_
         fits.HDUList(hdulist).writeto(saved_name,overwrite=True)
 """
 #%% flat fielding
-def flatfield(directory,outdir,flat):
+"""def flatfield(directory,outdir,flat):
     flatdata = fits.getdata(flat)
     flat = flatdata[4:4 + 4088, 4:4 + 4088]         #remove when new flats come
     for filename in sorted(directory):
@@ -88,7 +88,7 @@ def flatfield(directory,outdir,flat):
                 flatfield = data / flat
             fits.writeto(outdir+f,flatfield,hdr,overwrite=True)
             print(directory+f+' flat fielded!')
-
+"""
 #%%
 def crop(dir,out):
     os.chdir(dir)

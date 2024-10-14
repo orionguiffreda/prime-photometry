@@ -9,10 +9,12 @@ import subprocess
 import sys
 from astropy.io import fits
 
-sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
+# sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
 
 #%%
+
+
 def sex(imgdir):
     os.chdir(str(imgdir))
     sx = gen_config_file_name('sex.config')
@@ -27,6 +29,7 @@ def sex(imgdir):
             out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             out.wait()
             print(pre + ext + ' sextracted!')
+
 
 def sexback(imgdir):
     os.chdir(str(imgdir))
@@ -44,6 +47,7 @@ def sexback(imgdir):
             out.wait()
             print(pre + '.back.fits back subbed!')
 
+
 def scamp(imgdir):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
@@ -54,23 +58,32 @@ def scamp(imgdir):
     com = ' '.join(com)
     out = subprocess.Popen([com], shell=True)
     out.wait()
-    #print(pre + ext + ' scamped!')
+    # print(pre + ext + ' scamped!')
 
 
 #%%
-if __name__ == "__main__":
+
+
+def astrometry(path, run_sex=False, run_scamp=False):
+    if run_sex:
+        sex(path)
+    elif run_scamp:
+        scamp(path)
+    else:
+        sex(path)
+        scamp(path)
+
+
+def main():
     parser = argparse.ArgumentParser(description='runs sextractor and scamp on input imgs; generates LDAC .cat and .head files')
     parser.add_argument('-sex', action='store_true', help='if you want to run JUST sextractor')
     parser.add_argument('-scamp', action='store_true', help='if you want to run JUST scamp')
-    parser.add_argument('-all', action='store_true', help='if you want to run both')
     parser.add_argument('-path', type=str, help='[str] Images path (currently just dumps .cat '
                                                                        '& .head files in same path)')
-    args = parser.parse_args()
-    if args.sex:
-        sex(args.path)
-    if args.scamp:
-        scamp(args.path)
-    if args.all:
-        #sexback(args.path)
-        sex(args.path)
-        scamp(args.path)
+    args, unknown = parser.parse_known_args()
+
+    astrometry(args.path, args.sex, args.scamp)
+
+
+if __name__ == "__main__":
+    main()

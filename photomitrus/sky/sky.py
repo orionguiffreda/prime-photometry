@@ -7,7 +7,10 @@ import subprocess
 import argparse
 from photomitrus.settings import gen_config_file_name
 import numpy as np
+
 #%%
+
+
 def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
     if not os.path.isdir(output_data_dir):
         os.makedirs(output_data_dir)
@@ -32,18 +35,20 @@ def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
     print('Completed!')
 
 #%%
+
+
 def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
     if not os.path.isdir(output_data_dir):
         os.makedirs(output_data_dir)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('flat.fits')]
     image_fnames.sort()
     sky = fits.getdata(sky)
-    cropsky = sky #[4:4092, 4:4092]  #remove if crop issue ever fixed
+    cropsky = sky
     for f in image_fnames:
         with fits.open(f) as hdul:
             image = hdul[0].data
             header = hdul[0].header
-            cropimage = image #[4:4092, 4:4092]  #remove if crop issue ever fixed
+            cropimage = image
             CRPIX1 = (header['CRPIX1'])  # changing ref pixels to work w/ cropped imgs
             CRPIX2 = (header['CRPIX2'])
             header.set('CRPIX1', value=CRPIX1 - 4)
@@ -56,6 +61,8 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
     print('Sky sub on FF imgs completed!')
 
 #%%
+
+
 def sexback(imgdir,outdir):
     os.chdir(str(imgdir))
     sx = gen_config_file_name('sexback.config')
@@ -73,23 +80,31 @@ def sexback(imgdir,outdir):
             out.wait()
             print(output_fname + ' back subbed!')
     print('sxtrctr back sub complete!')
+
 #%%
 
-"""subtract_sky_and_normalize('/Users/orion/Desktop/PRIME/GRB/H_band/H_astrom_flat/', '/Users/orion/Desktop/PRIME/GRB/H_band/H_backs/',
-                           '/Users/orion/Desktop/PRIME/GRB/H_band/H_sky/sky.2.5-4.fits')"""
-#%%
-if __name__ == "__main__":
+
+def sky_sub(in_path, out_path, sky_path, no_flat=False, sex=False):
+    if no_flat:
+        subtract_sky_and_normalize(in_path,out_path,sky_path)
+    elif sex:
+        sexback(in_path, out_path)
+    else:
+        sky_flat_and_normalize(in_path, out_path, sky_path)
+
+
+def main():
     parser = argparse.ArgumentParser(description='Crops and subtracts sky from files in dir, can also divide out flat')
-    parser.add_argument('-flat', action='store_true', help='put optional arg if included flat fielding previously')
+    parser.add_argument('-no_flat', action='store_true', help='put optional arg if you DIDNT flat field previously')
     parser.add_argument('-sex', action='store_true', help='optional arg to use sxtrctr background sub instead, '
                                                           'outputs .cats and sky subbed imgs')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
     parser.add_argument('-out_path', type=str, help='[str] output sky sub image path')
     parser.add_argument('-sky_path', type=str, help='[str] input sky image path (for sky sub')
-    args = parser.parse_args()
-    if args.flat:
-        sky_flat_and_normalize(args.in_path,args.out_path,args.sky_path)
-    elif args.sex:
-        sexback(args.in_path, args.out_path)
-    else:
-        subtract_sky_and_normalize(args.in_path,args.out_path,args.sky_path)
+    args, unknown = parser.parse_known_args()
+
+    sky_sub(args.in_path, args.out_path, args.sky_path, args.no_flat, args.sex)
+
+
+if __name__ == "__main__":
+    main()

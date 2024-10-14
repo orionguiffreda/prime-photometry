@@ -14,6 +14,8 @@ import math
 from photomitrus.settings import gen_config_file_name
 
 #%% image info
+
+
 def imaging(directory,imageName):
     os.chdir(directory)
     f = fits.open(imageName)
@@ -28,9 +30,10 @@ def imaging(directory,imageName):
 
     return data,header,w,raImage,decImage
 
-#data,header,w,raImage,decImage = imaging('/mnt/d/PRIME_photometry_test_files/astrom_shift/','01504054C1.sky.flat.fits')
 
 #%% catalog query
+
+
 def cat_query(raImage, decImage, band, boxsize):
     if band == 'Z':
         catNum = 'II/379/smssdr4'  # changing to skymapper
@@ -62,7 +65,9 @@ def cat_query(raImage, decImage, band, boxsize):
             print('I cannnot reach the Vizier database. Is the internet working?')
         return Q
 
-#%% sextraction
+#%% sextraction / psfex
+
+
 def sex1(imageName):
     print('Running sextractor for psf...')
     configFile = gen_config_file_name('sex.config')
@@ -76,6 +81,7 @@ def sex1(imageName):
         print('Could not run sextractor with exit error %s'%err)
     return catalogName
 
+
 def psfex(catalogName):
     print('Getting psf...')
     psfConfigFile = gen_config_file_name('default.psfex')
@@ -85,6 +91,7 @@ def psfex(catalogName):
         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run psfex with exit error %s'%err)
+
 
 def sex2(imageName):
     print('Sextracting sources...')
@@ -101,6 +108,8 @@ def sex2(imageName):
     return catname
 
 #%% creating & prepping tables for dist calc
+
+
 def make_tables(directory, data, w, catname, Q, band, crop):
     print('Creating sorted catalog & prime tables...')
     sexcat = Table.read(directory+catname, hdu=2)
@@ -199,6 +208,8 @@ def prep_tables(inner_primesources,inner_catsources,num):
     return first_primecoords,first_catcoords
 
 #%% distance calc
+
+
 def calculate_distance(p1, p2):
     return np.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
@@ -222,7 +233,7 @@ def find_agreeing_distances(table1, table2, acc_range, length):
                 distances[distance] = []
             distances[distance].append((i, j))
 
-    # Find distances that agree within 5 pixels
+    # Find distances that agree w/in certain range, under certain length, etc.
     agreeing_pairs = []
     sorted_distances = sorted(distances.keys())
 
@@ -248,6 +259,8 @@ def find_agreeing_distances(table1, table2, acc_range, length):
 
 
 #%% final shift calc and header update
+
+
 def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data, imageName, stdev, segments=None):
     indices_prime = [pair[0] for pair in pairs]
     indices_cat = [pair[1] for pair in pairs]
@@ -471,6 +484,8 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             os.rename(shiftpath,newpath)
 
 #%% intermediate file removal
+
+
 def removal(directory):
     fnames = ['.shift.cat','.psf']
     try:
@@ -487,17 +502,66 @@ def removal(directory):
         print('No files found to remove')
 #%%
 
+
 defaults = dict(range=3,length=100,num=15,stdev=1,segstd=2)
 
 #%%
-if __name__ == "__main__":
+
+
+def shift(
+        directory, imagename, band, acc_range=3, length=100, num=15, stdev=1, segstd=2, arr=None ,no_pipe=False,
+        no_remove=False, no_segment=False, split=False
+):
+    if band == 'Y':
+        filter_used = 'J'
+    else:
+        filter_used = band
+
+    if no_segment:
+        crop = 1600
+        boxsize = 9
+    else:
+        crop = 1250
+        boxsize = 15
+        n_segs = 4
+
+    data, header, w, raImage, decImage = imaging(directory, imagename)
+    Q = cat_query(raImage, decImage, filter_used, boxsize)
+    catalogName = sex1(imagename)
+    psfex(catalogName)
+    catname = sex2(imagename)
+    inner_primesources, inner_catsources = make_tables(directory, data, w, catname, Q, filter_used, crop)
+    if no_segment:
+        first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
+        agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, acc_range, length)
+        xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, directory, header,
+                                             data, imagename, stdev)
+    else:
+        segments = split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, band)
+        xfinal_shift, yfinal_shift = segmentshift(segments, acc_range, length, directory, imagename,
+                                                  stdev, segstd, segtrue=True)
+    if no_remove:
+        pass
+    else:
+        removal(directory)
+    if no_pipe:
+        pass
+    else:
+        if split:
+            change_all_files(xfinal_shift, yfinal_shift, directory, arr)
+        else:
+            change_all_files(xfinal_shift, yfinal_shift, directory)
+
+
+def main():
     parser = argparse.ArgumentParser(description='Corrects for translation in initial astrometry '
                                                  '(so astrom.net doesnt need to be used)')
-    parser.add_argument('-pipeline', action='store_true', help='For use in the pipeline, runs on all fits imgs'
-                                                               'in the given directory')
-    parser.add_argument('-remove', action='store_true', help='removes intermediate catalogs')
-    parser.add_argument('-segment', action='store_true', help='splits matching area into 4 segments for increased '
-                                                              'astrometric accuracy')
+    parser.add_argument('-no_pipe', action='store_true', help='Run NOT for pipeline use, applies solution '
+                                                              'only to given file')
+    parser.add_argument('-no_remove', action='store_true', help='does NOT remove intermediate catalogs')
+    parser.add_argument('-no_segment', action='store_true', help='does NOT split matching area into 4 '
+                                                                 'segments for increased astrometric accuracy, instead '
+                                                                 'runs on smaller matching area w/ no segments')
     parser.add_argument('-split', action='store_true', help='for large observations, splits up file list by specified'
                                                             ' # of files & runs multiple times *SHOULD '
                                                             'ONLY BE USED IN PIPELINE w/ astrom_shift_large.py')
@@ -517,41 +581,11 @@ if __name__ == "__main__":
     parser.add_argument('-segstd', type=float, help='[float] # of stdevs away from median to prune final shifts '
                                                     '(for use with the -segment flag), default = 2', default=defaults['segstd'])
     parser.add_argument('-arr', type=str, nargs='+', help='*FOR USE W/ -SPLIT IN PIPELINE*, list of files to be run on', default=None)
+    args, unknown = parser.parse_known_args()
 
-    args = parser.parse_args()
+    shift(args.dir, args.imagename, args.band, args.range, args.length, args.num, args.stdev, args.segstd, args.arr,
+          args.no_pipe, args.no_remove, args.no_segment, args.split)
 
-    if args.band == 'Y':
-        filter_used = 'J'
-    else:
-        filter_used = args.band
 
-    if args.segment:
-        crop = 1250
-        boxsize = 15
-        n_segs = 4
-    else:
-        crop = 1600
-        boxsize = 9
-
-    data, header, w, raImage, decImage = imaging(args.dir, args.imagename)
-    Q = cat_query(raImage, decImage, filter_used, boxsize)
-    catalogName = sex1(args.imagename)
-    psfex(catalogName)
-    catname = sex2(args.imagename)
-    inner_primesources, inner_catsources = make_tables(args.dir, data, w, catname, Q, filter_used, crop)
-    if args.segment:
-       segments = split_coordinates(n_segs, data, inner_primesources , inner_catsources, args.num, args.band)
-       xfinal_shift, yfinal_shift = segmentshift(segments, args.range, args.length, args.dir, args.imagename, args.stdev, args.segstd, args.segment)
-    else:
-        first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, args.num)
-        agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, args.range, args.length)
-        xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, args.dir, header, data,
-                                             args.imagename, args.stdev)
-    if args.remove:
-        removal(args.dir)
-    if args.pipeline:
-        if args.split:
-            change_all_files(xfinal_shift, yfinal_shift, args.dir, args.arr)
-        else:
-            change_all_files(xfinal_shift, yfinal_shift, args.dir)
-
+if __name__ == "__main__":
+    main()

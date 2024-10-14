@@ -8,7 +8,9 @@ import argparse
 import warnings
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+# TODO quick test of this on PC01 due to flat folder location
 #%%
+
 
 def flatfield(science_data, output_data_dir, flat):
     if not os.path.isdir(output_data_dir):
@@ -41,12 +43,20 @@ def flatfield(science_data, output_data_dir, flat):
         fits.HDUList(fits.PrimaryHDU(header=header, data=ff_image)).writeto(output_fname, overwrite=True)
 
 
+def flat_field_cmd(in_path, out_path, flat_path):
+    flatfield(in_path, out_path, flat_path)
+
+
 #%%
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Flatfields image data')
     parser.add_argument('-in_path', type=str, help='[str] input img path or individual file (usually astrom ramp images)')
     parser.add_argument('-out_path', type=str, help='[str] output flat fielded imgs path')
     parser.add_argument('-flat_path', type=str, help='[str] flat img path')
     args = parser.parse_args()
 
-    flatfield(args.in_path,args.out_path,args.flat_path)
+    flatfield(args.in_path, args.out_path, args.flat_path)
+
+
+if __name__ == "__main__":
+    main()
