@@ -1,6 +1,6 @@
 # PRIME Photometry Pipeline - Multi_master Instruction & Basic Usage
 
-This .py file extends the functionality of _master.py_ to all 4 detector chips, along with including the data downloading step.  Essentially, through 1 command, one is able to download and process an entire observation in a specific band, producing stacked images for each chip.
+This .py file extends the functionality of _photometrus stack_, or _master.py_, to all 4 detector chips, along with including the data downloading step.  Essentially, through 1 command, one is able to download and process an entire observation in a specific band, producing stacked images for each chip.
 
 ## Using Multi_master.py
 
@@ -12,11 +12,13 @@ Simply navigate to your date and search for your field and filter.
 
 You can run this file and see the arguments through the format:
 
-    python ./multi_master.py -h
+    photometrus pipeline -h
+
+Using the default command 'photometrus' with the keywrod 'pipeline' allows utilization of _multi_master.py_.
 
 Here is the format:
 
-> python ./multi_master.py [-h] [-parallel] [-no_download] [-shift] [-astromnet] [-parent PARENT] [-target TARGET] [-date DATE] [-filter FILTER] [-chip CHIP]
+> photometrus [-h] [-parent PARENT] [-target TARGET] [-date DATE] [-band BAND] [-chip CHIP] [-rot_val ROT_VAL] [-parallel] [-no_download] [-astromnet]
 
 The necessary positional arguments include _-parent_, _-target_, _-date_, and _-filter_.  We will go over these now.
 - _-parent_ is is a string that is the pathname to the parent directory where you want your ramp file folders, along with the folders for the stacked images and intermediate images, to be stored.
@@ -25,28 +27,28 @@ The necessary positional arguments include _-parent_, _-target_, _-date_, and _-
 
 - _-date_ is a string that denotes the date the observation was taken.  This tells the downloader which log file to look at.  The format of this argument is: _yyyymmdd_
 
-- _-filter_ is a 1 character string that denotes the filter of the observation you want to download.  'J' or 'H' is currently supported.  In the log, this corresponds to the FILTER2 field.
+- _-band_ is a 1 character string that denotes the filter of the observation you want to download.  In the log, this corresponds to the FILTER2 field (in the case of Z band, it is FILTER1).
 
-Optional arguments include _-parallel_, _-no_download_, _-shift_, _-astromnet_, & _-chip_.
+Optional arguments include _-parallel_, _-no_download_, _-astromnet_, & _-chip_.
+- _-chip_ is an optional argument.  If you want to only download and process a single chip or a couple chips' observations, you can specify them here.  The format is comma separated, like _-chip 1,2,3,4_
+
+- _-rot_val_ denotes the rotation offset of the telescope during the observation.  Currently, PRIME images possess an error that prevents the pipeline from correctly reading the telescope's rotation value.  To counteract this, we have this optional arg.  The default for this arg is 48 (degrees), as that is the default telescope rotation offset.  However, if you're processing an observation, be sure to check the _ROToffset_ column in your observation request .csv.  The default should be 172800 (arcsec).  If it is something different, you must convert the value from arcsec to deg and then input that value here.
+
 - _-parallel_ is an optional argument for running the processing of chips in parallel.  This is currently in development and should not be used.
 
 - _-no_download_ is an optional argument to run _multi_master.py_ if you already have the data downloaded.
 
-- _-shift_ is an optional argument for the astrometry improvement step, utilizing _-shift_ arg for _master.py_ (examine the documentation for that or _astrom_shift.py_ for more info).  This is a quick way to solve for the inaccuracy in the initial astrometry step on _master.py_.
+- _-astromnet_ is an optional argument for the astrometry improvement step, utilizing astrometry.net through _gen_astrometry.py_ in _master.py_ (examine the documentation for either script for more info).  This is much less consistent and slower, but more accurate when it works.
 
-- _-astromnet_ is an optional argument for the astrometry improvement step, utilizing astrometry.net through _gen_astrometry.py_ in _master.py_ (examine the documentation for either script for more info).  This is less consistent and slower, but more accurate when it works.
+Now that we've gone over the arguments associated with this script, we'll go over a sample command.  Say we have observed a target in field1111 in J band only, on 06/06/2024.  To download and process that target's data, this is how this script would be used in a normal scenario.  
 
-- _-chip_ is an optional argument.  If you want to only download and process a single chip's observations, you can specify the chip here.
-
-Now that we've gone over the arguments associated with this script, we'll go over a sample command.  Say we have observed a target in field1111 in J band only, on 06/06/2024.  We first create a parent directory '/field1111/'.  To download and process that target's data, this is how this script would be used in a normal scenario.  
-
-    python ./multi_master.py -shift -parent ../../field1111/ -target field1111 date 20240606 -filter J
+    photometrus pipeline -parent ../../field1111/ -target field1111 date 20240606 -band J
 
 ## How Multi_master.py Works
 
-- To begin, _getdata.py_ is utilized to download a specified observation's data for all 4 chips to the parent directory, along with the accompanying log file.
+- To begin, the _-parent_ directory is generated (or specified if the directory already exists).
+- _getdata.py_ is then utilized to download a specified observation's data for all 4 chips (or specific chips) to the parent directory, along with the accompanying log file.
 - Once the data is downloaded, _master.py_ is run on each chip individually, or a single chip if specified.  Refer to the documentation on _master.py_ to see the inner workings of that processing.
-- Once the final stacked image is created, _multi_master.py_ is currently set up to automatically correct for any weak astrometry on the edges of the image through running astrometry.net on the stacked image.  This regenerates the stacked image with new astrometry, along with creating a .wcs file for each stack.
 
 ## Data Products
 
