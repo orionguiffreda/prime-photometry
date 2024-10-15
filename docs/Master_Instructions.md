@@ -39,7 +39,7 @@ Optional arguments are important and part of the default usage of the pipeline i
 
 - _-sex_ utilizes sextractor for background subtraction instead of this pipeline's method.  This is outdated and inferior and should not be used.
 
-- - _-compress_ optionally compresses the final stacked image using fpack.  This can save storage space, especially if you're trying to upload final images to google drive or somewhere else. Keep in mind however this is lossy compression for floats.
+- _-compress_ optionally compresses the final stacked image using fpack.  This can save storage space, especially if you're trying to upload final images to google drive or somewhere else. Keep in mind however this is lossy compression for floats.
 
 - _-net_refine_ applies astrometry.net instead of my own _astrom_shift_ algorithm.  When it works, it works very well! But unfortunately it is greatly inconsistent across chips and observations, so it is not currently in default use.
 
