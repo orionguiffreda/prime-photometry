@@ -177,7 +177,7 @@ def swarp_alt(imgdir, imout):
 def astromfin(directory,chip):
     print('Re-running astrometry on swarped image!')
     import fnmatch
-    instack = sorted(os.listdir(dir))
+    instack = sorted(os.listdir(directory))
     stackimg = []
     for f in instack:
         if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip):
@@ -187,11 +187,10 @@ def astromfin(directory,chip):
         try:
             command = ('solve-field '
                        '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
-                       '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
+                       '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 -U none --axy none '
                        '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
                           directory, directory + f)
-            print('Executing command: %s' % command)
-            subprocess.run(command.split(), check=True)
+            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run with exit error %s' % err)
         # renaming

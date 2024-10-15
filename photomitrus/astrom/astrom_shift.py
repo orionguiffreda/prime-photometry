@@ -341,7 +341,7 @@ def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data
 #%%
 
 
-def segmentshift(segments, acc_range, length, directory, imageName, stdev, segstd, segtrue):
+def segmentshift(segments, acc_range, length, directory, header, data, imageName, stdev, segstd, segtrue):
     final_xshifts_arr_orig = []
     final_yshifts_arr_orig = []
     for seg in segments:
@@ -538,7 +538,7 @@ def shift(
                                              data, imagename, stdev)
     else:
         segments = split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, band)
-        xfinal_shift, yfinal_shift = segmentshift(segments, acc_range, length, directory, imagename,
+        xfinal_shift, yfinal_shift = segmentshift(segments, acc_range, length, directory, header, data, imagename,
                                                   stdev, segstd, segtrue=True)
     if no_remove:
         pass

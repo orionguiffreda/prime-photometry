@@ -13,7 +13,7 @@ from photomitrus.preprocess import astromangle_new
 from photomitrus.preprocess import gen_astrometry
 from photomitrus.preprocess import flatfield
 from photomitrus.sky import gen_sky
-from photomitrus.sky import sky
+from photomitrus.sky import sky_sub
 from photomitrus.astrom import astrom_shift
 from photomitrus.astrom import astrometry
 from photomitrus.stack import stack
@@ -81,7 +81,7 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=None):
         placeholder = rot_val
 
     print(
-        '\nEquivalent argparse cmd: python /preprocess/astromangle_new.py -input %s -output %s rot_val %s' % (ramppath,
+        '\nEquivalent argparse cmd: python /preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath,
                                                                                                               astrompath,
                                                                                                               placeholder))
 
@@ -114,8 +114,7 @@ def sky(astrompath, skypath, sigma):
     else:
         no_flat = True
 
-    print('\nEquivalent argparse cmd: python /sky/gen_sky.py -in_path %s -sky_path %s -sigma %s '
-          ' -no_flat %s' % (astrompath, skypath, sigma, no_flat))
+    print('\nEquivalent argparse cmd: python /sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
     gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
 
@@ -129,6 +128,7 @@ def skysub(astrompath, subpath, skypath, chip):
     for file in os.listdir(skypath):
         if fnmatch.fnmatch(file, '*.C{}.*'.format(chip)):
             skyfile = file
+            skyfilepath = os.path.join(skypath, skyfile)
     print('cropping and subtracting sky...')
     FFstring = '_FF'
     if FFstring in astrompath:
@@ -136,10 +136,10 @@ def skysub(astrompath, subpath, skypath, chip):
     else:
         no_flat = True
 
-    print('\nEquivalent argparse cmd: python /sky/sky.py -in_path %s -out_path %s -sky_path %s -no_flat %s' %
-          (astrompath, subpath, skypath, no_flat))
+    print('\nEquivalent argparse cmd: python /sky/sky_sub.py -in_path %s -out_path %s -sky_path %s' %
+          (astrompath, subpath, skyfilepath))
 
-    sky.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skypath, no_flat=no_flat)
+    sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
 
 # %%sex sky sub
 
