@@ -12,7 +12,7 @@ Once the pipeline is installed, make sure to add the _/photomitrus_ directory to
 
 This master command 'photometrus' calls master.py to process a specific chip's dataset, given the data is downloaded first.  To fully download the data and process the chip in 1 step, explore the wiki for multi_master.py.  After this commanbd, master.py should run with no errors and present text that details the format of the command line arguments.  Currently, the usage is as follows:
 
-> python ./master.py [-parent PARENT] [-chip CHIP] [-band BAND] [-sigma SIGMA] [-rot_val ROT_VAL] [-no_FF] [-sex] [-compress] [-net_refine]
+> photometrus [-h] [-parent PARENT] [-chip CHIP] [-band BAND] [-sigma SIGMA] [-rot_val ROT_VAL] [-no_FF] [-sex] [-compress] [-net_refine]
 
 We will learn what all these arguments mean, starting with the positional arguments.  
 - _-parent_ is a string that is the pathname to the directory where your pre-processed ramp FITS files are stored.  If the data was downloaded using _getdata.py_ then a good directory structure should look similar to this:
