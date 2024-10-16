@@ -49,7 +49,7 @@ The previous were all required arguments, now we will discuss the optional argum
 - _-grb_coordlist_ is an optional flag to be used with _-grb_.  If a user has many areas they want to search for sources in, instead of running photometry several times with the _-grb_ flag, they can use this field.  Input RA and DEC of each area with a comma between them, and put spaces between each pair of coordinates.  If sources are found in any of the search areas, they will be output to seperate .ecsvs.  For instance the usage for 2 search areas is below.  
     *NOTE* When using this flag, you must still specify _-grb_radius_.  Currently, only 1 thresh is supported for all search areas.   
 
--coordlist 123,-45 321,-54
+    -coordlist 123,-45 321,-54
 
 - _-grb_only_ is an optional flag to be used if you want to run the grb functionality again.
 
@@ -61,7 +61,7 @@ The previous were all required arguments, now we will discuss the optional argum
 
 - _-plots_only_ is an optional flag that you can use if photometry has already been generated once.  This will quickly generate the plots only.
 
--_-keep is an optional flag that will **keep** intermediate catalogs that have no use after photometry.  The default behavior is to remove these, as these are only used to generate the photometry and never again.
+- _-keep_ is an optional flag that will **keep** intermediate catalogs that have no use after photometry.  The default behavior is to remove these, as these are only used to generate the photometry and never again.
 
 Now that all of that is out of the way, here is a sample command using all the arguments:
 
@@ -77,7 +77,7 @@ Now that all of that is out of the way, here is a sample command using all the a
 - Each crossmatched source then has their sextractor calculated mags subtracted from the catalog source mags.  These offsets are used to calculate the zero point.  This is done by calculating the median and standard deviation of the offset data, excluding sources > 3&#963; from the median.
 - For each source, the zero point is then added to the sextractor mags to generate the final filter mag.  The error in this mag is calculated by combining the sextractor mag error and offset data stdev in quadrature.  These mags are then written to columns and added as an addition to the sextractor columns, before being written to a new .ecsv file.  (The _VIGNET_ column is removed from the sextractor catalogue before this writing)
     - After this point, your photometry is done! If you've included _-grb_, then after this file is written, it is read back in and an attempt at a crossmatch is made using your inputted RA, Dec, and thresh.  If it finds a source within these parameters, it will give source information and write it to an .ecsv file.  If not, then it'll let you know.
-    - If you included _-plots_, then it will also read in the final sextractor .ecsv and the cropped survey query in order to generate the mag comparison and residual plots.
+- Unless you included _-no_plots_, then it will also read in the final sextractor .ecsv and the cropped survey query in order to generate the mag comparison, residual plots, and lim mag plots.
  
 ## Data Products
 
