@@ -768,7 +768,7 @@ def main():
                                                           'specific coords, such as w/ a GRB')
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog')
-    parser.add_argument('-filename', type=str, help='[str], full file path of stacked image, can also place just'
+    parser.add_argument('-filepath', type=str, help='[str], full file path of stacked image, can also place just'
                                                     'filename and it will default to current directory')
     parser.add_argument('-band', type=str, help='[str], band, ex. "J"')
     parser.add_argument('-survey', type=str,
@@ -791,7 +791,7 @@ def main():
                         default=defaults["thresh"])
     args, unknown = parser.parse_known_args()
     
-    photometry(args.filename, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
+    photometry(args.filepath, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
                args.grb, args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 #%%
