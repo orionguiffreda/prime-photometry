@@ -699,7 +699,7 @@ def removal(directory):
 
 def photometry(
         full_filename, band, survey=defaults['survey'], crop=defaults['crop'], no_plots=False, plots_only=False,
-        keep=False, grb=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
+        keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
         grb_radius=defaults['thresh']
 ):
     directory = os.path.dirname(full_filename)
@@ -736,11 +736,10 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName, crop)
         cleanPSFSources, PSFsources = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
                                              name, band, survey)
-        if grb:
-            if grb_coordlist:
-                GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
-            else:
-                GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+        if grb_ra:
+            GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+        elif grb_coordlist:
+            GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
         if not no_plots:
             photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
                              idx_psfimage)
@@ -764,8 +763,6 @@ def main():
     parser.add_argument('-keep', action='store_true',
                         help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
                              ' i.e. the ".cat" and ".psf" files')
-    parser.add_argument('-grb', action='store_true', help='optional flag, use to print and export data about source at '
-                                                          'specific coords, such as w/ a GRB')
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog')
     parser.add_argument('-filepath', type=str, help='[str], full file path of stacked image, can also place just'
@@ -777,22 +774,21 @@ def main():
                         default=defaults["survey"])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
                         default=defaults["crop"])
-    parser.add_argument('-grb_ra', type=float, help='[float], RA for GRB source *USE ONLY WITH GRB FLAG*',
+    parser.add_argument('-grb_ra', type=float, help='[float], RA for GRB source',
                         default=defaults["RA"])
-    parser.add_argument('-grb_dec', type=float, help='[float], DEC for GRB source *USE ONLY WITH GRB FLAG*',
+    parser.add_argument('-grb_dec', type=float, help='[float], DEC for GRB source',
                         default=defaults["DEC"])
     parser.add_argument('-grb_coordlist', type=str, nargs='+',
                         help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
-                             'with the format: -coordlist 123,45 -123,-45 etc..  *USE ONLY WITH GRB FLAG, DONT USE -RA '
-                             '& -DEC BUT INCLUDE -THRESH*', default=None)
+                             'with the format: -coordlist 123,45 -123,-45 etc..  *DONT USE -RA '
+                             '& -DEC BUT INCLUDE -grb_radius*', default=None)
     parser.add_argument('-grb_radius', type=float,
-                        help='[float], # of arcsec diameter to search for GRB, default = 4.0" *USE ONLY WITH GRB FLAG'
-                             ' AND -COORDLIST*',
+                        help='[float], # of arcsec diameter to search for GRB, default = 4.0"',
                         default=defaults["thresh"])
     args, unknown = parser.parse_known_args()
     
     photometry(args.filepath, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
-               args.grb, args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
+               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 #%%
 

@@ -3,6 +3,14 @@ import sys
 from photomitrus.photometry import photometry
 from photomitrus import multi_master
 from photomitrus import master
+from photomitrus.preprocess import astromangle_new
+from photomitrus.preprocess import gen_astrometry
+from photomitrus.astrom import astrom_shift
+from photomitrus.astrom import astrometry
+from photomitrus.preprocess import flatfield
+from photomitrus.preprocess import gen_flat
+from photomitrus.sky import gen_sky
+from photomitrus.sky import sky_sub
 
 if sys.argv[1] == 'photometry':
     photometry.main()
@@ -11,3 +19,36 @@ elif sys.argv[1] == 'pipeline':
 elif sys.argv[1] == 'stack':
     master.main()
 
+elif sys.argv[1] == 'astrom':
+    if sys.argv[2] == '-h':
+        print(
+            'Astrometry script options:\n'
+            '   angle - astromangle_new.py (initial rough astrometry)\n'
+            '   shift - astrom_shift.py (astrometric translation correction)\n'
+            '   astromatic - astrometry.py (astromatic suite programs: sextractor & scamp)\n'
+            '   net - gen_astrometry.py (astrometry.net)\n'
+        )
+    elif sys.argv[2] == 'angle':
+        astromangle_new.main()
+    elif sys.argv[2] == 'shift':
+        astrom_shift.main()
+    elif sys.argv[2] == 'astromatic':
+        astrometry.main()
+    elif sys.argv[2] == 'net':
+        gen_astrometry.main()
+
+elif sys.argv[1] == 'process':
+    if sys.argv[2] == '-h':
+        print(
+            'Processing script options:\n'
+            '   genflat - gen_flat.py (flat generation)\n'
+            '   flatfield - flatfield.py (cropping & flat fielding of imgs)\n'
+            '   gensky - gen_sky.py (sky image generation)\n'
+            '   skysub - sky_sub.py (sky subtraction of imgs)\n'
+        )
+    elif sys.argv[2] == 'flatfield':
+        flatfield.main()
+    elif sys.argv[2] == 'gensky':
+        gen_sky.main()
+    elif sys.argv[2] == 'skysub':
+        sky_sub.main()
