@@ -46,6 +46,8 @@ elif sys.argv[1] == 'process':
             '   gensky - gen_sky.py (sky image generation)\n'
             '   skysub - sky_sub.py (sky subtraction of imgs)\n'
         )
+    elif sys.argv[2] == 'genflat':
+        gen_flat.main()
     elif sys.argv[2] == 'flatfield':
         flatfield.main()
     elif sys.argv[2] == 'gensky':

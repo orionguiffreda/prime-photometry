@@ -9,12 +9,7 @@ import argparse
 from pathlib import Path
 
 #%% getting lists of flats for beginning and end of night
-"""
-chip = 1
-direct = '/mnt/d/PRIME_photometry_test_files/flat_testing/twilight_flats/'
-directory = direct + 'C%i/' % chip
-log = pd.read_csv('/mnt/d/PRIME_photometry_test_files/flat_testing/twilight_flats/ramp_fit_log_2024-01-14.clean.dat', delimiter=' ')
-"""
+
 
 def flatlists(path, chip):
     import fnmatch
@@ -92,6 +87,8 @@ def flatlists(path, chip):
     return start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter
 
 #%% getting data for all groups and stacking along 3rd dim
+
+
 def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,end_images_names_1=None,end_images_names_2=None):
     print('getting data for groups of flats and stacking...')
 
@@ -197,15 +194,26 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
     return save_name_start, save_name_end
 #%%
 
-if __name__ == "__main__":
+
+def flatgen(directory, chip):
+    start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter = flatlists(
+        directory, chip)
+    save_name_start, save_name_end = flatprocessing(directory, start_images_names_1, start_images_names_2,
+                                                    end_images_names_1, end_images_names_2)
+
+
+def main():
     parser = argparse.ArgumentParser(description='Generates 2 master flats (1 from start of night & 1 from end) from given twilight flat data')
     parser.add_argument('-dir', type=str, help='[str], directory where folder of flats and appropriate log is stored')
     #parser.add_argument('-log', type=str, help='[str], path to appropriate log file')
     parser.add_argument('-chip', type=int, help='[int], number of detector')
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
-    start_images_names_1, start_images_names_2,end_images_names_1, end_images_names_2, flat_filter = flatlists(args.dir,args.chip)
-    save_name_start, save_name_end = flatprocessing(args.dir,start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2)
+    flatgen(args.dir, args.chip)
+
+
+if __name__ == "__main__":
+    main()
 
 
 
