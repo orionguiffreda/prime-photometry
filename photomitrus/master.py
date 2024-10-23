@@ -70,7 +70,7 @@ def initastrom(astrompath, parentdir, chip=None):
 # %% angle astrometry
 
 
-def astrom_angle(astrompath, parentdir, chip, rot_val=None):
+def astrom_angle(astrompath, parentdir, chip, rot_val=48):
     os.chdir(gen_pipeline_file_name())
     ramppath = parentdir + 'C%i/' % (chip)
     print('running initial astrometry on ramp imgs...')

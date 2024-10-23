@@ -16,7 +16,7 @@ def flatlists(path, chip):
     for file in os.listdir(path):
         if fnmatch.fnmatch(file, '*.clean.dat'):
             logname = file
-            print('taken log = ',logname)
+            print('\ntaken log = ',logname)
     log = pd.read_csv(path+logname, delimiter=' ', on_bad_lines='warn')
     direct = path
     directory = direct + 'C%i/' % chip

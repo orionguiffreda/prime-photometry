@@ -34,20 +34,19 @@ def gen_master_name():
     return os.path.join(base_dir, 'master.py')
 
 
-def gen_mflat_file_name(filter,chip):
+def gen_mflat_file_name(band, chip):
     base_dir = os.path.dirname(os.path.realpath(__file__))
-    for f in sorted(os.listdir(base_dir+'/mflats/')):
-        if filter == 'Z':
-            if fnmatch.fnmatch(f, '*.%s-Open.C%s.fits' % (filter, chip)):
-                filename = f
-        else:
-            if fnmatch.fnmatch(f,'*.Open-%s.C%s.fits' % (filter,chip)):
-                filename = f
+    mflat_list = [f for f in sorted(os.listdir(base_dir + '/mflats/'))
+                  if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f]
+
+    # get latest mflat
+    mflat_list = sorted(mflat_list, reverse=True)
+    filename = mflat_list[0]
     return os.path.join(base_dir, 'mflats', filename)
 
 #%%
-#os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
-#test = gen_mflat_file_name('J',1)
+os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
+test = gen_mflat_file_name('J',1)
 
 #%%
 import pandas as pd

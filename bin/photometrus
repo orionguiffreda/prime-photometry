@@ -9,6 +9,7 @@ from photomitrus.astrom import astrom_shift
 from photomitrus.astrom import astrometry
 from photomitrus.preprocess import flatfield
 from photomitrus.preprocess import gen_flat
+from photomitrus.preprocess import auto_flat
 from photomitrus.sky import gen_sky
 from photomitrus.sky import sky_sub
 
@@ -42,10 +43,13 @@ elif sys.argv[1] == 'process':
         print(
             'Processing script options:\n'
             '   genflat - gen_flat.py (flat generation)\n'
+            '   autoflat - auto_flat.py (gens mflats for whole obs)\n'
             '   flatfield - flatfield.py (cropping & flat fielding of imgs)\n'
             '   gensky - gen_sky.py (sky image generation)\n'
             '   skysub - sky_sub.py (sky subtraction of imgs)\n'
         )
+    elif sys.argv[2] == 'autoflat':
+        auto_flat.main()
     elif sys.argv[2] == 'genflat':
         gen_flat.main()
     elif sys.argv[2] == 'flatfield':

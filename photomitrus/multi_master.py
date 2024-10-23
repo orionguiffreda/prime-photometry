@@ -32,7 +32,7 @@ def datadownload(parentdir, target, band, date, chip):
 #%%
 
 
-def refineprocess(parentdir, chip, band, rot_val=None):
+def refineprocess(parentdir, chip, band, rot_val=48):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -42,7 +42,7 @@ def refineprocess(parentdir, chip, band, rot_val=None):
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, net_refine=True)
 
 
-def shiftprocess(parentdir, chip, band, rot_val=None):
+def shiftprocess(parentdir, chip, band, rot_val=48):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -52,7 +52,7 @@ def shiftprocess(parentdir, chip, band, rot_val=None):
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val)
 
 
-def baseprocess(parentdir, chip, band, rot_val=None):
+def baseprocess(parentdir, chip, band, rot_val=48):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -103,7 +103,7 @@ def checkprocessparallel(parentdir,chips,band):
 
 
 def multi_master(
-        parentdir, target, date, band, chip, rot_val=None, no_shift=False, astromnet=False, parallel=False,
+        parentdir, target, date, band, chip, rot_val=48, no_shift=False, astromnet=False, parallel=False,
         no_download=False
 ):
 
