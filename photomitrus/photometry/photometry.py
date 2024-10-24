@@ -320,7 +320,12 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
     magcolname = colnames[2]
     magerrcolname = colnames[3]
 
-    psfweights = 1 / (good_cat_stars[magerrcolname][idx_psfmass]**2)
+    caterr = good_cat_stars[magerrcolname][idx_psfmass]
+    primeerr = cleanPSFSources['MAGERR_POINTSOURCE'][idx_psfimage]
+
+    comberr = np.sqrt(caterr**2 + primeerr**2)
+
+    psfweights = 1 / (comberr**2)
 
     psfoffsets = ma.array(good_cat_stars[magcolname][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
     psfoffsets = psfoffsets.data
@@ -351,6 +356,11 @@ def zeropt(good_cat_stars,cleanPSFSources,PSFSources,idx_psfmass,idx_psfimage,im
 
     #catalog for all detected sources
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
+
+    caterr_all = good_cat_stars[magerrcolname]
+    primeerr_all = cleanPSFSources['MAGERR_POINTSOURCE']
+
+    # np.sqrt(caterr_all**2 + primeerr_all**2)
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
 
     psfmagcol = Column(psfmag, name = '%sMAG_PSF' % band,unit='mag')
