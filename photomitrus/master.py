@@ -54,14 +54,14 @@ def initastrom(astrompath, parentdir, chip=None):
         ramppath = parentdir + 'C%i/' % (chip)
         print('running initial astrometry on ramp imgs...')
 
-        print('\nEquivalent argparse cmd: python /preprocess/gen_astrometry.py -output %s -input %s' % (
+        print('\nEquivalent argparse cmd: python ./preprocess/gen_astrometry.py -output %s -input %s' % (
         astrompath, ramppath))
 
         gen_astrometry.gen_astrom(output=astrompath, input=ramppath)
     if not chip:
         print('running astrometry.net on subbed imgs...')
 
-        print('\nEquivalent argparse cmd: python /preprocess/gen_astrometry.py -output %s -input %s' % (
+        print('\nEquivalent argparse cmd: python ./preprocess/gen_astrometry.py -output %s -input %s' % (
         astrompath, astrompath))
 
         gen_astrometry.gen_astrom(output=astrompath, input=astrompath)
@@ -81,7 +81,7 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
         placeholder = rot_val
 
     print(
-        '\nEquivalent argparse cmd: python /preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath,
+        '\nEquivalent argparse cmd: python ./preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath,
                                                                                                               astrompath,
                                                                                                               placeholder))
 
@@ -96,7 +96,7 @@ def flatfielding(astrompath, FFpath, band, chip):
     print('using master flat to flat field ramp imgs..')
     flatpath = gen_mflat_file_name(band, chip)
 
-    print('\nEquivalent argparse cmd: python /preprocess/flatfield.py -in_path %s -out_path %s'
+    print('\nEquivalent argparse cmd: python ./preprocess/flatfield.py -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
 
     flatfield.flat_field_cmd(in_path=astrompath, out_path=FFpath, flat_path=flatpath)
@@ -114,7 +114,7 @@ def sky(astrompath, skypath, sigma):
     else:
         no_flat = True
 
-    print('\nEquivalent argparse cmd: python /sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
+    print('\nEquivalent argparse cmd: python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
     gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
 
@@ -136,7 +136,7 @@ def skysub(astrompath, subpath, skypath, chip):
     else:
         no_flat = True
 
-    print('\nEquivalent argparse cmd: python /sky/sky_sub.py -in_path %s -out_path %s -sky_path %s' %
+    print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -in_path %s -out_path %s -sky_path %s' %
           (astrompath, subpath, skyfilepath))
 
     sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
@@ -162,14 +162,14 @@ def shift(subpath, band):
     if len(all_fits) >= 100:
         imgname = all_fits[0]
 
-        print('\nEquivalent argparse cmd: python /astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+        print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
               (subpath, imgname, band))
 
         astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
     else:
         imgname = all_fits[0]
 
-        print('\nEquivalent argparse cmd: python /astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+        print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
               (subpath, imgname, band))
 
         astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
@@ -190,7 +190,7 @@ def astromatic_astrometry(subpath, sex=None):
     #        print('Could not run with exit error %s' % err)
     # else:
 
-    print('\nEquivalent argparse cmd: python /astrom/astrometry.py -path %s' % subpath)
+    print('\nEquivalent argparse cmd: python ./astrom/astrometry.py -path %s' % subpath)
 
     astrometry.astrometry(path=subpath)
 
@@ -201,7 +201,7 @@ def stacking(subpath, stackpath, chip):
     os.chdir(gen_pipeline_file_name())
     print('stacking all images using SWARP...')
 
-    print('\nEquivalent argparse cmd: python /stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
+    print('\nEquivalent argparse cmd: python ./stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
 
     stack.stack(subpath=subpath, stackpath=stackpath, chip=chip)
 

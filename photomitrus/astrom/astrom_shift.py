@@ -564,7 +564,7 @@ def main():
                                                                  'runs on smaller matching area w/ no segments')
     parser.add_argument('-split', action='store_true', help='for large observations, splits up file list by specified'
                                                             ' # of files & runs multiple times *SHOULD '
-                                                            'ONLY BE USED IN PIPELINE w/ astrom_shift_large.py')
+                                                            'ONLY BE USED w/ astrom_shift_large.py')
     parser.add_argument('-dir', type=str, help='[str] path where input file is stored (should run on proc. image, '
                                                'so likely should be /C#_sub/)')
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
@@ -580,7 +580,7 @@ def main():
                                                    'default = 1', default=defaults['stdev'])
     parser.add_argument('-segstd', type=float, help='[float] # of stdevs away from median to prune final shifts '
                                                     '(for use with the -segment flag), default = 2', default=defaults['segstd'])
-    parser.add_argument('-arr', type=str, nargs='+', help='*FOR USE W/ -SPLIT IN PIPELINE*, list of files to be run on', default=None)
+    parser.add_argument('-arr', type=str, nargs='+', help='*FOR USE W/ -SPLIT*, list of files to be run on', default=None)
     args, unknown = parser.parse_known_args()
 
     shift(args.dir, args.imagename, args.band, args.range, args.length, args.num, args.stdev, args.segstd, args.arr,
