@@ -621,7 +621,17 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     # res_err = np.std(model.resid)
     rsquare2 = model2.rsquared
     rss2 = model2.ssr
-    res2_err = np.std(model2.resid)
+
+    avg2 = np.average(model2.resid, weights=psfweights_noclip)
+    var2 = np.average((model2.resid - avg2)**2, weights=psfweights_noclip)
+    res2_err = np.sqrt(var2)
+    # res2_err = np.std(model2.resid)
+
+    # t = Table()
+    # t['Residuals'] = model2.resid
+    # t['Jmags'] = x
+    # t['Weights'] = psfweights_noclip
+    # t.write('residual.ecsv', overwrite=True)
 
     # residual plot - y int forced to zero
     """
