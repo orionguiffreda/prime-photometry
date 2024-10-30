@@ -400,7 +400,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
 
-    return cleanPSFSources, PSFSources, psfweights_noclip
+    return cleanPSFSources, PSFSources, psfweights_noclip, psf_clipped
 
 
 # %% optional GRB-specific photom
@@ -583,13 +583,16 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
 
 
 def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_cat_stars, idx_psfmass, idx_psfimage,
-                     psfweights_noclip):
+                     psfweights_noclip, psf_clipped):
     # appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
 
     chip = imageName[-6]
-    num = imageName[-16:-8]
+    if len(imageName) <= 16:
+        num = 'img'
+    else:
+        num = imageName[-16:-8]
 
     # mag comparison plot
     plt.figure(1, figsize=(8, 8))
@@ -627,11 +630,27 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     res2_err = np.sqrt(var2)
     # res2_err = np.std(model2.resid)
 
+    # residual fit - 3 sigma clip
+    x_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
+    y_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    x_const_sig = sm.add_constant(x_sig)
+    model_sig = sm.WLS(y_sig, x_const_sig, weights=psfweights_noclip[~psf_clipped.mask]).fit()
+    m_sig = model_sig.params[1]
+    m_sigerr = model_sig.bse[1]
+    b_sig = model_sig.params[0]
+    b_sigerr = model_sig.bse[0]
+    rsquare_sig = model_sig.rsquared
+    rss_sig = model_sig.ssr
+
+    avgsig = np.average(model_sig.resid, weights=psfweights_noclip[~psf_clipped.mask])
+    varsig = np.average((model_sig.resid - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask])
+    ressig_err = np.sqrt(varsig)
+
     # t = Table()
-    # t['Residuals'] = model2.resid
-    # t['Jmags'] = x
-    # t['Weights'] = psfweights_noclip
-    # t.write('residual.ecsv', overwrite=True)
+    # t['Residuals'] = model_sig.resid
+    # t['Jmags'] = x_sig
+    # t['Weights'] = psfweights_noclip[~psf_clipped.mask]
+    # t.write('residual_3sig.ecsv', overwrite=True)
 
     # residual plot - y int forced to zero
     """
@@ -657,23 +676,47 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
 
     # res plot, y int included
     plt.figure(3, figsize=(8, 6))
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], model2.resid, color='red')
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
     plt.ylim(-1.5, 1.5)
     plt.xlim(10, 21)
     plt.title('PRIME vs %s Residuals' % survey)
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
-    plt.axhline(y=res2_err, color='tab:orange', linestyle='--', linewidth=1)
-    plt.axhline(y=res2_err * 2, color='green', linestyle='--', linewidth=1)
-    plt.axhline(y=-res2_err, color='tab:orange', linestyle='--', linewidth=1)
-    plt.axhline(y=-res2_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.axhline(y=ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % res2_err, r'2 $\sigma$ = %.3f' % (2 * res2_err)], loc='lower left')
-    info2 = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m2, m2err)) + (
-                '\nintercept = %.3f +/- %.3f' % (b2, b2err)) + ('\nR$^{2}$ = %.3f' % rsquare2) + ('\nRSS = %d' % rss2)
+    plt.legend([r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    info2 = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
+                '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -1.25, info2, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
     plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
-    print('Saved y-int residual plot to dir!')
+
+    # res plot y int, histogram
+    bin_num_int = round(len(idx_psfimage) / 50)
+
+    plt.figure(8, figsize=(10, 6))
+    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], y=model_sig.resid,
+               bins=[bin_num_int, bin_num_int], range=[[10, 21],[-1, 1]], cmap='gist_heat_r')
+    plt.colorbar(label='Density')
+    plt.ylim(-1, 1)
+    plt.xlim(10, 21)
+    plt.title('PRIME vs %s Residuals w/ 3 Sigma Clip- Density Histogram' % survey)
+    plt.ylabel('Residuals')
+    plt.xlabel('%s Mags' % band)
+    plt.axhline(y=ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
+    plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    infohist = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
+                '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
+    plt.text(15, -0.9, infohist, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
+    plt.savefig('%s_C%s_residual_plot_int_hist_%s.png' % (survey, chip, num), dpi=300)
+
+    print('Saved y-int residual plots to dir!')
 
     # WLS fit line over data plot
     def predict_y_for(x):
@@ -694,7 +737,67 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
     plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
-    print('Saved WLS fit plot to dir!')
+
+    # WLS hist density plot
+    bin_num = round(len(idx_psfimage) / 20)
+
+    plt.figure(5, figsize=(10, 8))
+    plt.xlim(10, 22)
+    plt.ylim(10, 22)
+    plt.title('PRIME vs %s w/ Weighted Fit - Density Histogram' % survey)
+    plt.grid()
+    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
+    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
+               bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
+    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]), c='r')
+    plt.colorbar(label='Density')
+    box = dict(facecolor='white')
+    plt.text(11, 18, txt, fontsize=12, bbox=box)
+    plt.savefig('%s_C%s_WLS_fit_hist_plot_%s.png' % (survey, chip, num), dpi=300)
+
+    print('Saved WLS fit plots to dir!')
+
+    # WLS fit for 3 sig clip of data
+
+    sigtxt = ('slope = %.4f' % m_sig + '\nslope err = %.4f' % m_sigerr + '\nint = %.4f' % b_sig +
+              '\nint err = %.4f' % b_sigerr)
+
+    plt.figure(6, figsize=(8, 8))
+    plt.xlim(10, 22)
+    plt.ylim(10, 22)
+    plt.title('PRIME vs %s w/ Weighted Fit - 3 Sigma Clip' % survey)
+    plt.grid()
+    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
+    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+                good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask])
+    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='r')
+    box = dict(facecolor='white')
+    plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
+    plt.savefig('%s_C%s_WLS_fit_3sig_plot%s.png' % (survey, chip, num), dpi=300)
+
+    # WLS 3 sig hist density plot
+    plt.figure(7, figsize=(10, 8))
+    plt.xlim(10, 22)
+    plt.ylim(10, 22)
+    plt.title('PRIME vs %s w/ Weighted Fit - 3 Sigma Clip - Density Histogram' % survey)
+    plt.grid()
+    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
+    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+               y=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+               bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
+    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='r')
+    plt.colorbar(label='Density')
+    box = dict(facecolor='white')
+    plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
+    plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot%s.png' % (survey, chip, num), dpi=300)
+
+    print('Saved WLS 3 sig fit plots to dir!')
 
     # Limiting Mag Plot
     # binning
@@ -793,10 +896,10 @@ def photometry(
         Q = query(raImage, decImage, band, width, height, survey)
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop)
-        cleanPSFSources, PSFsources, psfweights_noclip = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
+        cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
                                              name, band, survey)
         photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
-                         idx_psfimage, psfweights_noclip)
+                         idx_psfimage, psfweights_noclip, psf_clipped)
     elif grb_only:
         os.chdir(directory)
         if grb_coordlist:
@@ -811,7 +914,7 @@ def photometry(
         psfcatalogName = sex2(name)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop)
-        cleanPSFSources, PSFsources, psfweights_noclip = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
+        cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
                                              name, band, survey)
         if grb_ra:
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
@@ -819,7 +922,7 @@ def photometry(
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
         if not no_plots:
             photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
-                             idx_psfimage, psfweights_noclip)
+                             idx_psfimage, psfweights_noclip, psf_clipped)
         if not keep:
             removal(directory)
 
