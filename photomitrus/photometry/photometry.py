@@ -677,9 +677,9 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     # res plot, y int included
     plt.figure(3, figsize=(8, 6))
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
-    plt.ylim(-1.5, 1.5)
+    plt.ylim(-1, 1)
     plt.xlim(10, 21)
-    plt.title('PRIME vs %s Residuals' % survey)
+    plt.title('PRIME vs %s Residuals - 3 Sigma Clip' % survey)
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
     plt.axhline(y=ressig_err, color='tab:orange', linestyle='--', linewidth=1)
@@ -687,10 +687,10 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
     plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend([r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    plt.legend(['Residuals',r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
     info2 = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
-    plt.text(15, -1.25, info2, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
+    plt.text(15, -0.9, info2, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
     plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
 
     # res plot y int, histogram
@@ -710,7 +710,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
     plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend(['Residuals', r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    plt.legend([r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
     infohist = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, infohist, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
