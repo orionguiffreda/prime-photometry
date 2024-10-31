@@ -96,7 +96,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
-                       column_filters={"%smag" % band: ">12", "Nd": ">6"}, row_limit=-1)
+                       column_filters={"%smag" % band: ">12.5", "Nd": ">6"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -111,7 +111,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
-                       column_filters={"%sap3" % band: ">12"}, row_limit=-1)
+                       column_filters={"%sap3" % band: ">12.5"}, row_limit=-1)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
             # query vizier around (ra, dec) with a radius of boxsize
@@ -128,7 +128,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
-                       column_filters={"%sap3" % band: ">12"}, row_limit=-1)
+                       column_filters={"%sap3" % band: ">12.5"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -147,7 +147,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
-                       column_filters={"%sPSF" % band.lower(): ">12"}, row_limit=-1)
+                       column_filters={"%sPSF" % band.lower(): ">12.5"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
@@ -166,7 +166,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
-                       column_filters={"%spmag" % band.lower(): ">12"
+                       column_filters={"%spmag" % band.lower(): ">12.5"
                            , "clean": "=1"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
@@ -186,7 +186,7 @@ def query(raImage, decImage, band, width, height, survey):
         try:
             # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
             v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
-                       column_filters={"%smag" % band: ">12"}, row_limit=-1)
+                       column_filters={"%smag" % band: ">12.5"}, row_limit=-1)
             print(v)
             Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                height=str(height) + 'm', catalog=catNum, cache=False)
