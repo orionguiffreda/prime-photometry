@@ -682,9 +682,9 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.title('PRIME vs %s Residuals - 3 Sigma Clip' % survey)
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
-    plt.axhline(y=ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
     plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
     plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend(['Residuals',r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
@@ -705,9 +705,9 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.title('PRIME vs %s Residuals w/ 3 Sigma Clip- Density Histogram' % survey)
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
-    plt.axhline(y=ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
     plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err, color='tab:orange', linestyle='--', linewidth=1)
+    plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
     plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend([r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
@@ -751,7 +751,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]), c='r')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
@@ -791,7 +791,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
                y=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='r')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
