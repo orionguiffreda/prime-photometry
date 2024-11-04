@@ -20,7 +20,6 @@ import warnings
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-# TODO pipeline test
 #%%
 
 
@@ -101,6 +100,7 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
     print('filling remaining nan with median value: {}'.format(median))
     sky[np.isnan(sky)] = median
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+    return save_name
 
 
 def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None,nan_thresh = 0):
@@ -143,6 +143,7 @@ def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=N
     print('filling remaining nan with median value: {}'.format(median))
     sky[np.isnan(sky)] = median
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+    return save_name
 
 
 def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None):
@@ -181,11 +182,26 @@ def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_s
     fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
 
 
+def checkplot(output_directory, save_name):
+    skypath = os.path.join(output_directory, save_name)
+    skyimg = fits.getdata(skypath)
+    flat_sky = skyimg.flatten()
+
+    plt.figure(figsize=(10, 8))
+    plt.hist(flat_sky, bins = 100, density=True, edgecolor='black')
+    plt.xlabel('Pixel Value')
+    plt.ylabel('Normalized Frequency')
+    plt.title('Sky Image Histogram')
+    plt.savefig('%s_check_plot.png' % save_name, dpi= 300)
+
+
 def sky_gen(in_path, sky_path, sigma, no_flat=False):
     if no_flat:
         gen_sky_image(science_data_directory=in_path,output_directory=sky_path, sky_group_size=None,sigma=sigma)
     else:
-        gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None, sigma=sigma)
+        save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
+                                       sigma=sigma)
+        checkplot(output_directory=sky_path, save_name=save_name)
 
 #%%
 

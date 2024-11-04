@@ -28,7 +28,7 @@ sys.path.insert(0, 'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
 
 # %%
-defaults = dict(crop=300, survey='2MASS', RA=None, DEC=None, thresh=4.0)
+defaults = dict(crop=300, survey='2MASS', RA=None, DEC=None, thresh=4.0, sigma=3)
 
 
 # Read LDAC tables
@@ -340,7 +340,7 @@ def ab_convert(mag, band):
 # derive zero pt / put in swarped header
 
 
-def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey):
+def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma):
     colnames = good_cat_stars.colnames
     magcolname = colnames[2]
     magerrcolname = colnames[3]
@@ -356,9 +356,10 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     psfoffsets = psfoffsets.data
 
     # 3 sigma clip
-    psf_clipped = sigma_clip(psfoffsets)
+    psf_clipped = sigma_clip(psfoffsets, sigma=sigma)
     psfoffsets = psfoffsets[~psf_clipped.mask]
-    psfweights = psfweights_noclip[~psf_clipped.mask]
+    psfweights = np.array(psfweights_noclip[~psf_clipped.mask])
+    print('Zero point source offsets clipped by %s sigma, total clipped offset # = %s' % (sigma, len(psfoffsets)))
 
     # Compute statistics
     # zero_psfmean = np.average(psfoffsets, weights=psfweights)
@@ -583,7 +584,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
 
 
 def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_cat_stars, idx_psfmass, idx_psfimage,
-                     psfweights_noclip, psf_clipped):
+                     psfweights_noclip, psf_clipped, sigma):
     # appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
@@ -646,11 +647,11 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     varsig = np.average((model_sig.resid - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask])
     ressig_err = np.sqrt(varsig)
 
-    # t = Table()
-    # t['Residuals'] = model_sig.resid
-    # t['Jmags'] = x_sig
-    # t['Weights'] = psfweights_noclip[~psf_clipped.mask]
-    # t.write('residual_3sig.ecsv', overwrite=True)
+    t = Table()
+    t['Residuals'] = model_sig.resid
+    t['mags'] = x_sig
+    t['Weights'] = psfweights_noclip[~psf_clipped.mask]
+    t.write('residual_3sig.ecsv', overwrite=True)
 
     # residual plot - y int forced to zero
     """
@@ -679,7 +680,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
-    plt.title('PRIME vs %s Residuals - 3 Sigma Clip' % survey)
+    plt.title('PRIME vs %s Residuals - %s Sigma Clip' % (survey, sigma))
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
     plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
@@ -694,7 +695,12 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
 
     # res plot y int, histogram
-    bin_num_int = round(len(idx_psfimage) / 50)
+    if len(idx_psfimage) >= 5000:
+        bin_num_int = round(len(idx_psfimage) / 75)
+    elif 1000 <= len(idx_psfimage) <= 5000:
+        bin_num_int = round(len(idx_psfimage) / 50)
+    elif len(idx_psfimage) <= 1000:
+        bin_num_int = 50
 
     plt.figure(8, figsize=(10, 6))
     plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], y=model_sig.resid,
@@ -702,7 +708,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.colorbar(label='Density')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
-    plt.title('PRIME vs %s Residuals w/ 3 Sigma Clip- Density Histogram' % survey)
+    plt.title('PRIME vs %s Residuals w/ %s Sigma Clip- Density Histogram' % (survey, sigma))
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
     plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
@@ -719,8 +725,8 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     print('Saved y-int residual plots to dir!')
 
     # WLS fit line over data plot
-    def predict_y_for(x):
-        return m2 * x + b2
+    def predict_y_for(x, m, b):
+        return m * x + b
 
     txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err)
 
@@ -733,13 +739,18 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass])
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]), c='r')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], m2, b2), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
     plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS hist density plot
-    bin_num = round(len(idx_psfimage) / 20)
+    if len(idx_psfimage) >= 5000:
+        bin_num = round(len(idx_psfimage) / 50)
+    elif 1000 <= len(idx_psfimage) <= 5000:
+        bin_num = round(len(idx_psfimage) / 20)
+    elif len(idx_psfimage) <= 1000:
+        bin_num = 100
 
     plt.figure(5, figsize=(10, 8))
     plt.xlim(10, 22)
@@ -751,7 +762,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]), c='b')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], m2, b2), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
@@ -767,23 +778,23 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.figure(6, figsize=(8, 8))
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit - 3 Sigma Clip' % survey)
+    plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip' % (survey, sigma))
     plt.grid()
     plt.xlabel('PRIME %s Mags' % band, fontsize=15)
     plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
                 good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask])
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='r')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], m_sig, b_sig), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
-    plt.savefig('%s_C%s_WLS_fit_3sig_plot%s.png' % (survey, chip, num), dpi=300)
+    plt.savefig('%s_C%s_WLS_fit_3sig_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS 3 sig hist density plot
     plt.figure(7, figsize=(10, 8))
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit - 3 Sigma Clip - Density Histogram' % survey)
+    plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
     plt.grid()
     plt.xlabel('PRIME %s Mags' % band, fontsize=15)
     plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
@@ -791,11 +802,11 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
                y=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]), c='b')
+             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], m_sig, b_sig), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
-    plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot%s.png' % (survey, chip, num), dpi=300)
+    plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot_%s.png' % (survey, chip, num), dpi=300)
 
     print('Saved WLS 3 sig fit plots to dir!')
 
@@ -876,7 +887,7 @@ def removal(directory):
 
 
 def photometry(
-        full_filename, band, survey=defaults['survey'], crop=defaults['crop'], no_plots=False, plots_only=False,
+        full_filename, band, survey=defaults['survey'], crop=defaults['crop'], sigma=defaults['sigma'], no_plots=False, plots_only=False,
         keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None,
         grb_radius=defaults['thresh']
 ):
@@ -897,9 +908,9 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
-                                             name, band, survey)
+                                             name, band, survey, sigma)
         photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
-                         idx_psfimage, psfweights_noclip, psf_clipped)
+                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
     elif grb_only:
         os.chdir(directory)
         if grb_coordlist:
@@ -915,14 +926,14 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
-                                             name, band, survey)
+                                             name, band, survey, sigma)
         if grb_ra:
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
         elif grb_coordlist:
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
         if not no_plots:
             photometry_plots(cleanPSFSources, PSFsources, name, survey, band, good_cat_stars, idx_psfmass,
-                             idx_psfimage, psfweights_noclip, psf_clipped)
+                             idx_psfimage, psfweights_noclip, psf_clipped, sigma)
         if not keep:
             removal(directory)
 
@@ -955,6 +966,9 @@ def main():
                         default=defaults["survey"])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
                         default=defaults["crop"])
+    parser.add_argument('-sigma', type=float, help='[float], # of sigma w/ which to sigma clip for '
+                                                  'zero point calculation, default = 3',
+                        default=defaults["sigma"])
     parser.add_argument('-grb_ra', type=float, help='[float], RA for GRB source',
                         default=defaults["RA"])
     parser.add_argument('-grb_dec', type=float, help='[float], DEC for GRB source',
@@ -968,11 +982,8 @@ def main():
                         default=defaults["thresh"])
     args, unknown = parser.parse_known_args()
 
-    photometry(args.filepath, args.band, args.survey, args.crop, args.no_plots, args.plots_only, args.keep,
+    photometry(args.filepath, args.band, args.survey, args.crop, args.sigma,args.no_plots, args.plots_only, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
-
-
-# %%
 
 
 if __name__ == "__main__":
