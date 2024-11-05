@@ -20,6 +20,11 @@ elif sys.argv[1] == 'pipeline':
 elif sys.argv[1] == 'stack':
     master.main()
 
+elif sys.argv[1] == '-h':
+    print('Options:\n'
+          '     astrom - to access all the astrometry scripts\n'
+          '     process - to access all the processing scripts\n')
+
 elif sys.argv[1] == 'astrom':
     if sys.argv[2] == '-h':
         print(
