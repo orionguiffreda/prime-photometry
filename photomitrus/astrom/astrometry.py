@@ -8,6 +8,7 @@ import argparse
 import subprocess
 import sys
 from astropy.io import fits
+import threading
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import gen_config_file_name
@@ -15,20 +16,31 @@ from photomitrus.settings import gen_config_file_name
 #%%
 
 
+def sextract(imgdir, f, sx, ap):
+    pre = os.path.splitext(f)[0]
+    ext = os.path.splitext(f)[1]
+    com = ["sex ", imgdir + pre + ext, ' -c ' + sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME ' + ap]
+    s0 = ''
+    com = s0.join(com)
+    out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    out.wait()
+    # print(pre + ext + ' sextracted!')
+
+
 def sex(imgdir):
     os.chdir(str(imgdir))
     sx = gen_config_file_name('sex.config')
     ap = gen_config_file_name('astrom.param')
+    threads = []
+    print('Sextracting all images in %s' % imgdir)
     for f in sorted(os.listdir(imgdir)):
         if f.endswith('.fits') or f.endswith('.new'):
-            pre = os.path.splitext(f)[0]
-            ext = os.path.splitext(f)[1]
-            com = ["sex ", imgdir + pre + ext, ' -c '+sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME '+ap]
-            s0 = ''
-            com = s0.join(com)
-            out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            out.wait()
-            print(pre + ext + ' sextracted!')
+            thread = threading.Thread(target=sextract, args=(imgdir, f, sx, ap), name=f)
+            thread.start()
+            threads.append(thread)
+    for thread in threads:
+        thread.join()
+    print('Sextraction of all images complete!')
 
 
 def sexback(imgdir):

@@ -183,6 +183,7 @@ def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_s
 
 
 def checkplot(output_directory, save_name):
+    print('Generating histogram check plot!\n')
     skypath = os.path.join(output_directory, save_name)
     skyimg = fits.getdata(skypath)
     flat_sky = skyimg.flatten()
@@ -192,7 +193,7 @@ def checkplot(output_directory, save_name):
     plt.xlabel('Pixel Value')
     plt.ylabel('Normalized Frequency')
     plt.title('Sky Image Histogram')
-    plt.savefig('%s_check_plot.png' % save_name, dpi= 300)
+    plt.savefig('%s%s.check_plot.png' % (output_directory, save_name), dpi=300)
 
 
 def sky_gen(in_path, sky_path, sigma, no_flat=False):
