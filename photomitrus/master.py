@@ -126,7 +126,7 @@ def skysub(astrompath, subpath, skypath, chip):
     os.chdir(gen_pipeline_file_name())
     import fnmatch
     for file in os.listdir(skypath):
-        if fnmatch.fnmatch(file, '*.C{}.*'.format(chip)):
+        if file.endswith('.C{}.fits'.format(chip)):
             skyfile = file
             skyfilepath = os.path.join(skypath, skyfile)
     print('cropping and subtracting sky...')

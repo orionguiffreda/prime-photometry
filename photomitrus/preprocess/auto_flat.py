@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import subprocess
-from settings import gen_pipeline_file_name
+from photomitrus.settings import gen_pipeline_file_name
 from photomitrus.preprocess import gen_flat
 import shutil
 import argparse

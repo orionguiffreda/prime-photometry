@@ -158,7 +158,7 @@ def main():
     parser.add_argument('-chip', type=int, help='[int] Optional, use to process only 1 specific chip',default=None)
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
-                                                     ' (default = 48 deg or 172800")', default=None)
+                                                     ' (default = 48 deg or 172800")', default=48)
     args, unknown = parser.parse_known_args()
 
     multi_master(args.parent, args.target, args.date, args.band, args.chip, args.rot_val, args.no_shift, args.astromnet,
