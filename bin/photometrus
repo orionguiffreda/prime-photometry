@@ -13,53 +13,65 @@ from photomitrus.preprocess import auto_flat
 from photomitrus.sky import gen_sky
 from photomitrus.sky import sky_sub
 
-if sys.argv[1] == 'photometry':
-    photometry.main()
-elif sys.argv[1] == 'pipeline':
-    multi_master.main()
-elif sys.argv[1] == 'stack':
-    master.main()
+if len(sys.argv) < 2:
+    print('Welcome to Photometrus, the PRIME processing and photometric pipeline!\n'
+          'Use "-h" to view options')
 
-elif sys.argv[1] == '-h':
-    print('Options:\n'
-          '     astrom - to access all the astrometry scripts\n'
-          '     process - to access all the processing scripts\n')
+elif len(sys.argv) >= 2:
+    if sys.argv[1] == 'photometry':
+        photometry.main()
+    elif sys.argv[1] == 'pipeline':
+        multi_master.main()
+    elif sys.argv[1] == 'stack':
+        master.main()
 
-elif sys.argv[1] == 'astrom':
-    if sys.argv[2] == '-h':
-        print(
-            'Astrometry script options:\n'
-            '   angle - astromangle_new.py (initial rough astrometry)\n'
-            '   shift - astrom_shift.py (astrometric translation correction)\n'
-            '   astromatic - astrometry.py (astromatic suite programs: sextractor & scamp)\n'
-            '   net - gen_astrometry.py (astrometry.net)\n'
-        )
-    elif sys.argv[2] == 'angle':
-        astromangle_new.main()
-    elif sys.argv[2] == 'shift':
-        astrom_shift.main()
-    elif sys.argv[2] == 'astromatic':
-        astrometry.main()
-    elif sys.argv[2] == 'net':
-        gen_astrometry.main()
+    elif sys.argv[1] == '-h':
+        print('Options:\n'
+              '     pipeline - to run the full pipeline (data download, processing, & stacking)]\n'
+              '     stack - to specifically use the processing & stacking (no direct download, but offers more'
+              ' processing options)\n'
+              '     photometry - to run photometry on a stacked image\n'
+              '     astrom - to access all the separate astrometry scripts\n'
+              '     process - to access all the separate processing & stack scripts\n')
 
-elif sys.argv[1] == 'process':
-    if sys.argv[2] == '-h':
-        print(
-            'Processing script options:\n'
-            '   genflat - gen_flat.py (flat generation)\n'
-            '   autoflat - auto_flat.py (gens mflats for whole obs)\n'
-            '   flatfield - flatfield.py (cropping & flat fielding of imgs)\n'
-            '   gensky - gen_sky.py (sky image generation)\n'
-            '   skysub - sky_sub.py (sky subtraction of imgs)\n'
-        )
-    elif sys.argv[2] == 'autoflat':
-        auto_flat.main()
-    elif sys.argv[2] == 'genflat':
-        gen_flat.main()
-    elif sys.argv[2] == 'flatfield':
-        flatfield.main()
-    elif sys.argv[2] == 'gensky':
-        gen_sky.main()
-    elif sys.argv[2] == 'skysub':
-        sky_sub.main()
+    elif sys.argv[1] == 'astrom':
+        if sys.argv[2] == '-h':
+            print(
+                'Astrometry script options:\n'
+                '   angle - astromangle_new.py (initial rough astrometry)\n'
+                '   shift - astrom_shift.py (astrometric translation correction)\n'
+                '   astromatic - astrometry.py (astromatic suite programs: sextractor & scamp)\n'
+                '   net - gen_astrometry.py (astrometry.net)\n'
+            )
+        elif sys.argv[2] == 'angle':
+            astromangle_new.main()
+        elif sys.argv[2] == 'shift':
+            astrom_shift.main()
+        elif sys.argv[2] == 'astromatic':
+            astrometry.main()
+        elif sys.argv[2] == 'net':
+            gen_astrometry.main()
+
+    elif sys.argv[1] == 'process':
+        if sys.argv[2] == '-h':
+            print(
+                'Processing script options:\n'
+                '   genflat - gen_flat.py (flat generation)\n'
+                '   autoflat - auto_flat.py (gens mflats for whole obs)\n'
+                '   flatfield - flatfield.py (cropping & flat fielding of imgs)\n'
+                '   gensky - gen_sky.py (sky image generation)\n'
+                '   skysub - sky_sub.py (sky subtraction of imgs)\n'
+            )
+        elif sys.argv[2] == 'autoflat':
+            auto_flat.main()
+        elif sys.argv[2] == 'genflat':
+            gen_flat.main()
+        elif sys.argv[2] == 'flatfield':
+            flatfield.main()
+        elif sys.argv[2] == 'gensky':
+            gen_sky.main()
+        elif sys.argv[2] == 'skysub':
+            sky_sub.main()
+
+    else:
+        print('Use only designated commands!, see "-h"')
