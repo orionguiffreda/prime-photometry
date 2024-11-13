@@ -13,6 +13,8 @@ import fnmatch
 
 #export PYTHONPATH=.       if fctn below isnt working from command line, cd to photomitrus and use command
 
+PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
+
 
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__) #os.path.abspath('__file__')
