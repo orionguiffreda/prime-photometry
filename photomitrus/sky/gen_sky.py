@@ -103,7 +103,7 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
     return save_name
 
 
-def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=None,sigma=None,nan_thresh = 0):
+def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=None, sigma=None, nan_thresh=0):
     warnings.simplefilter('ignore', category=AstropyWarning)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if
                     f.endswith('.ramp.new') or f.endswith('.flat.fits')]
@@ -142,7 +142,9 @@ def gen_flat_sky_image(science_data_directory,output_directory, sky_group_size=N
     median = np.nanmedian(sky)
     print('filling remaining nan with median value: {}'.format(median))
     sky[np.isnan(sky)] = median
-    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+    fits.HDUList(
+        [fits.PrimaryHDU(header=header, data=sky)]
+    ).writeto(os.path.join(output_directory, save_name), overwrite=True)
     return save_name
 
 
@@ -179,7 +181,8 @@ def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_s
         file_counter += sky_group_size
     sky = np.nanmedian(median_array, axis=0)  # generating median image
     sky = mean_filter_masking(sky)  # filling in the all nan slices
-    fits.HDUList([fits.PrimaryHDU(header=header, data=sky)]).writeto(output_directory+save_name, overwrite=True)
+    fits.HDUList(
+        [fits.PrimaryHDU(header=header, data=sky)]).writeto(os.path.join(output_directory, save_name), overwrite=True)
 
 
 def checkplot(output_directory, save_name):
@@ -189,16 +192,16 @@ def checkplot(output_directory, save_name):
     flat_sky = skyimg.flatten()
 
     plt.figure(figsize=(10, 8))
-    plt.hist(flat_sky, bins = 100, density=True, edgecolor='black')
+    plt.hist(flat_sky, bins=100, density=True, edgecolor='black')
     plt.xlabel('Pixel Value')
     plt.ylabel('Normalized Frequency')
     plt.title('Sky Image Histogram')
-    plt.savefig('%s%s.check_plot.png' % (output_directory, save_name), dpi=300)
+    plt.savefig('%s.check_plot.png' % skypath, dpi=300)
 
 
 def sky_gen(in_path, sky_path, sigma, no_flat=False):
     if no_flat:
-        gen_sky_image(science_data_directory=in_path,output_directory=sky_path, sky_group_size=None,sigma=sigma)
+        gen_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,sigma=sigma)
     else:
         save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
                                        sigma=sigma)

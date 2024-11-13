@@ -19,7 +19,7 @@ from photomitrus.settings import gen_config_file_name
 def sextract(imgdir, f, sx, ap):
     pre = os.path.splitext(f)[0]
     ext = os.path.splitext(f)[1]
-    com = ["sex ", imgdir + pre + ext, ' -c ' + sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME ' + ap]
+    com = ["sex ", os.path.join(imgdir, pre + ext), ' -c ' + sx, " -CATALOG_NAME " + pre + '.cat', ' -PARAMETERS_NAME ' + ap]
     s0 = ''
     com = s0.join(com)
     out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -64,7 +64,7 @@ def scamp(imgdir):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
     img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
-    img_list = [imgdir + f for f in img_list]
+    img_list = [os.path.join(imgdir, f) for f in img_list]
     img_list = ','.join(img_list)
     com = ["scamp ", img_list, '-c ' + sc]
     com = ' '.join(com)

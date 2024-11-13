@@ -18,7 +18,7 @@ from photomitrus.settings import gen_mask_file_name
 
 
 def badpixmask(parent, subpath, chip):
-    otherdir = parent+'temp/'
+    otherdir = os.path.join(parent, 'temp/')
     exists = os.path.exists(otherdir)
     if not exists:
         os.mkdir(otherdir)
@@ -31,14 +31,14 @@ def badpixmask(parent, subpath, chip):
     print('moving imgs to temp dir...')
     for i in sorted(os.listdir(imgdir)):
         if i.endswith('.sky.flat.fits'):
-            shutil.move(imgdir+i,otherdir+i)
+            shutil.move(os.path.join(imgdir, i), os.path.join(otherdir, i))
     print('Applying bad pixel mask...')
     for i in sorted(os.listdir(otherdir)):
-        img = fits.open(otherdir + i)
+        img = fits.open(os.path.join(otherdir, i))
         hdr = img[0].header
         data = img[0].data
         data[~badmask] = np.nan
-        fits.writeto(imgdir + i, data, hdr)
+        fits.writeto(os.path.join(imgdir, i), data, hdr)
     return otherdir
 
 
@@ -67,7 +67,7 @@ def swarp(imgdir, finout):
     #weight_name = 'coaddastrweight.fits'
 
     sw = gen_config_file_name('default.swarp')
-    com = ["swarp ", imgdir + '*.flat'+ext, ' -c '+sw
+    com = ["swarp ", os.path.join(imgdir, '*.flat'+ext), ' -c '+sw
            , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
     s0 = ''
     com = s0.join(com)
@@ -109,7 +109,7 @@ def swarp_increm(imgdir, finout,im_num):
         #weight_name = 'coaddastrweight.fits'
         image_list = (',').join(image_fnames)
         com = ["swarp ", image_list, ' -c '+sw
-               , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
+               , ' -IMAGEOUT_NAME '+save_name, ' -WEIGHTOUT_NAME '+weight_name]
         s0 = ''
         com = s0.join(com)
         out = subprocess.Popen([com], shell=True)
@@ -189,14 +189,14 @@ def astromfin(directory,chip):
                        '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 -U none --axy none '
                        '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
-                          directory, directory + f)
+                          directory, os.path.join(directory, f))
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run with exit error %s' % err)
         # renaming
-        if os.path.isfile(directory+pre+'.wcs'):
-            os.remove(directory+f)
-            os.rename(directory+pre+'.new',directory+f)
+        if os.path.isfile(os.path.join(directory, pre+'.wcs')):
+            os.remove(os.path.join(directory, f))
+            os.rename(os.path.join(directory, pre+'.new'), os.path.join(directory, f))
             print('final image generated, original stack discarded!')
         else:
             print('New astrometry on stacked image failed, defaulting to original...')
@@ -213,16 +213,16 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
     if no_astrom:
         swarp(subpath, stackpath)
     elif astrom_only:
-        astromfin(stackpath,chip)
+        astromfin(stackpath, chip)
     elif increm:
-        swarp_increm(subpath,stackpath,num)
-        astromfin(stackpath,chip)
+        swarp_increm(subpath, stackpath, num)
+        astromfin(stackpath, chip)
     elif alt:
-        swarp_alt(subpath,stackpath)
-        astromfin(stackpath,chip)
+        swarp_alt(subpath, stackpath)
+        astromfin(stackpath, chip)
     else:
-        swarp(subpath,stackpath)
-        astromfin(stackpath,chip)
+        swarp(subpath, stackpath)
+        astromfin(stackpath, chip)
 
 
 def main():

@@ -16,19 +16,19 @@ from photomitrus.settings import gen_config_file_name
 #%% image info
 
 
-def imaging(directory,imageName):
+def imaging(directory, imageName):
     os.chdir(directory)
-    f = fits.open(imageName)
-    data = f[0].data  #This is the image array
+    f = fits.open(os.path.join(directory, imageName))
+    data = f[0].data  # This is the image array
     header = f[0].header
 
-    #strong the image WCS into an object
+    # strong the image WCS into an object
     w = WCS(header)
 
-    #Get the RA and Dec of the center of the image
+    # Get the RA and Dec of the center of the image
     [raImage, decImage] = w.all_pix2world(data.shape[0] / 2, data.shape[1] / 2, 1)
 
-    return data,header,w,raImage,decImage
+    return data, header, w, raImage, decImage
 
 
 #%% catalog query
@@ -100,8 +100,9 @@ def sex2(imageName):
     paramName = gen_config_file_name('astromshift.param')
     catname = imageName + '.psf.shift.cat'
     try:
-        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catname, psfname ,paramName)
-        #print("Executing command: %s" % command)
+        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
+            imageName, configFile, catname, psfname, paramName)
+        # print("Executing command: %s" % command)
         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
@@ -112,7 +113,7 @@ def sex2(imageName):
 
 def make_tables(directory, data, w, catname, Q, band, crop):
     print('Creating sorted catalog & prime tables...')
-    sexcat = Table.read(directory+catname, hdu=2)
+    sexcat = Table.read(os.path.join(directory, catname), hdu=2)
 
     max_x = data.shape[0]
     max_y = data.shape[1]
@@ -134,13 +135,13 @@ def make_tables(directory, data, w, catname, Q, band, crop):
         cat_xy = w.all_world2pix(inner_catsources['RAICRS'], inner_catsources['DEICRS'], 1)
     else:
         inner_catsources.sort('%smag' % band)
-        cat_xy = w.all_world2pix(inner_catsources['RAJ2000'],inner_catsources['DEJ2000'],1)
+        cat_xy = w.all_world2pix(inner_catsources['RAJ2000'],inner_catsources['DEJ2000'], 1)
 
-    xs = Column(cat_xy[0], name='X_IMAGE',unit='pix')
+    xs = Column(cat_xy[0], name='X_IMAGE', unit='pix')
     ys = Column(cat_xy[1], name='Y_IMAGE', unit='pix')
     inner_catsources.add_column(xs)
     inner_catsources.add_column(ys)
-    return inner_primesources,inner_catsources
+    return inner_primesources, inner_catsources
 
 
 def split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, band):
@@ -271,7 +272,7 @@ def xyshift(pairs, inner_primesources, inner_catsources, directory, header, data
     #xy_shifts = []
     x_shiftarr = []
     y_shiftarr = []
-    for i,j in zip(filtered_prime,filtered_cat):
+    for i, j in zip(filtered_prime,filtered_cat):
         x_shift = i['X_IMAGE'] - j['X_IMAGE']
         y_shift = i['Y_IMAGE'] - j['Y_IMAGE']
         # xy_shift = tuple((x_shift,y_shift))
@@ -351,7 +352,8 @@ def segmentshift(segments, acc_range, length, directory, header, data, imageName
         pairs, distances = find_agreeing_distances(table1, table2, acc_range, length)
 
         print(f'Calculating median shifts for Section {seg}')
-        xfinal_shift, yfinal_shift = xyshift(pairs, segments[seg][2], segments[seg][3], directory, header, data, imageName, stdev, segments=segtrue)
+        xfinal_shift, yfinal_shift = xyshift(
+            pairs, segments[seg][2], segments[seg][3], directory, header, data, imageName, stdev, segments=segtrue)
         final_xshifts_arr_orig.append(xfinal_shift)
         final_yshifts_arr_orig.append(yfinal_shift)
 
@@ -453,9 +455,9 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             fits.writeto(newpath, data, header, overwrite=True)
 
         print('Moving old files to %sold/ directory and renaming shifted images...' % directory)
-        old_storage_dir = directory+'old/'
+        old_storage_dir = os.path.join(directory, 'old')
         if not os.path.exists(old_storage_dir):
-            os.mkdir(directory+'old/')
+            os.mkdir(old_storage_dir)
         else:
             pass
         if all_fits_arr:
@@ -470,9 +472,9 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.fits')]
 
         for f in all_fits_again:
-            currentpath = os.path.join(directory,f)
-            oldpath = os.path.join(old_storage_dir,f)
-            os.rename(currentpath,oldpath)
+            currentpath = os.path.join(directory, f)
+            oldpath = os.path.join(old_storage_dir, f)
+            os.rename(currentpath, oldpath)
 
         for f in all_fits_shift:
             shiftpath = os.path.join(directory, f)
@@ -480,19 +482,19 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             fits_end = os.path.splitext(f)[1]
             imagerename = imagerename[:-6]
             imagerename = imagerename + fits_end
-            newpath = os.path.join(directory,imagerename)
-            os.rename(shiftpath,newpath)
+            newpath = os.path.join(directory, imagerename)
+            os.rename(shiftpath, newpath)
 
 #%% intermediate file removal
 
 
 def removal(directory):
-    fnames = ['.shift.cat','.psf']
+    fnames = ['.shift.cat', '.psf']
     try:
         for f in os.listdir(directory):
             for name in fnames:
                 if f.endswith(name):
-                    path = os.path.join(directory+f)
+                    path = os.path.join(directory, f)
                     try:
                         os.remove(path)
                         #print(f"Removed file: {path}")
@@ -509,7 +511,7 @@ defaults = dict(range=3,length=100,num=15,stdev=1,segstd=2)
 
 
 def shift(
-        directory, imagename, band, acc_range=3, length=100, num=15, stdev=1, segstd=2, arr=None ,no_pipe=False,
+        directory, imagename, band, acc_range=3, length=100, num=15, stdev=1, segstd=2, arr=None, no_pipe=False,
         no_remove=False, no_segment=False, split=False
 ):
     if band == 'Y':

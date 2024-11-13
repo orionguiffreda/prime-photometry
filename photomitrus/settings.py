@@ -36,13 +36,14 @@ def gen_master_name():
 
 def gen_mflat_file_name(band, chip):
     base_dir = os.path.dirname(os.path.realpath(__file__))
-    mflat_list = [f for f in sorted(os.listdir(base_dir + '/mflats/'))
-                  if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f]
+    flat_dir = os.path.join(base_dir, 'mflats')
+    mflat_list = [
+        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f]
 
     # get latest mflat
     mflat_list = sorted(mflat_list, reverse=True)
     filename = mflat_list[0]
-    return os.path.join(base_dir, 'mflats', filename)
+    return os.path.join(flat_dir, filename)
 
 #%%
 os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
@@ -82,59 +83,69 @@ def flist(Object=object, Filter=filter, Chip=chip):
 # a = flist()
 #%% make directories
 from pathlib import Path
-def makedirs(dir,chip):
+def makedirs(dir, chip):
     os.chdir(dir)
-    a = 'C%i_astrom' % chip
-    sub = 'C%i_sub' % chip
-    skyexists = os.path.exists('sky')
-    if not skyexists:
-        os.mkdir('sky')
-        print(dir + 'sky')
-    if skyexists:
-        print(dir + 'sky already exists!')
-    stackexists = os.path.exists('stack')
-    if not stackexists:
-        os.mkdir('stack')
-        print(dir + 'stack')
-    if stackexists:
-        print(dir + 'stack already exists!')
-    aexists = os.path.exists(a)
-    if not aexists:
-        os.mkdir(a)
-        print(dir + a)
-    if aexists:
-        print(dir + a+' already exists!')
-    subexists = os.path.exists(sub)
-    if not subexists:
-        os.mkdir(sub)
-        print(dir + sub)
-    if subexists:
-        print(dir + sub+' already exists!')
-    dirnames = os.listdir('.')
-    astromlist = [i for i in dirnames if i.endswith(a)]
-    astrom = ' '.join(astromlist)
-    sublist = [i for i in dirnames if i.endswith(sub)]
-    sub = ' '.join(sublist)
-    skylist = [i for i in dirnames if i.endswith('sky')]
-    sky = ' '.join(skylist)
-    stacklist = [i for i in dirnames if i.endswith('stack')]
-    stack = ' '.join(stacklist)
-    return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
+    sky = os.path.join(dir, 'sky')
+    stack = os.path.join(dir, 'stack')
+    a = os.path.join(dir, 'C%i_astrom' % chip)
+    sub = os.path.join(dir, 'C%i_sub' % chip)
+    directories = (a, sky, sub, stack)
+    for directory in directories:
+        if os.path.exists(directory):
+            print(directory + ' already exists!')
+        else:
+            os.mkdir(directory)
+            print(directory)
+    # skyexists = os.path.exists('sky')
+    # if not skyexists:
+    #     os.mkdir(sky)
+    #     print(sky)
+    # if skyexists:
+    #     print(sky + ' already exists!')
+    # stackexists = os.path.exists(stack)
+    # if not stackexists:
+    #     os.mkdir(stack)
+    #     print(stack)
+    # if stackexists:
+    #     print(dir + 'stack already exists!')
+    # aexists = os.path.exists(a)
+    # if not aexists:
+    #     os.mkdir(a)
+    #     print(dir + a)
+    # if aexists:
+    #     print(dir + a+' already exists!')
+    # subexists = os.path.exists(sub)
+    # if not subexists:
+    #     os.mkdir(sub)
+    #     print(dir + sub)
+    # if subexists:
+    #     print(dir + sub+' already exists!')
+    # dirnames = os.listdir('.')
+    # astromlist = [i for i in dirnames if i.endswith(a)]
+    # astrom = ' '.join(astromlist)
+    # sublist = [i for i in dirnames if i.endswith(sub)]
+    # sub = ' '.join(sublist)
+    # skylist = [i for i in dirnames if i.endswith('sky')]
+    # sky = ' '.join(skylist)
+    # stacklist = [i for i in dirnames if i.endswith('stack')]
+    # stack = ' '.join(stacklist)
+    # return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
+    return directories
 
 #flat field directory creation
 def makedirsFF(dir,chip):
-    os.chdir(dir)
-    FF = 'C%i_FF' % chip
+    # os.chdir(dir)
+    FF = os.path.join(dir, 'C%i_FF' % chip)
     skyexists = os.path.exists(FF)
     if not skyexists:
         os.mkdir(FF)
-        print(dir + FF)
+        print(FF)
     if skyexists:
-        print(dir + FF +' already exists!')
-    dirnames = os.listdir('.')
-    FFdir = [i for i in dirnames if i.endswith(FF)]
-    FFname = ' '.join(FFdir)
-    return dir + FFname + '/'
+        print(FF +' already exists!')
+    # dirnames = os.listdir('.')
+    # FFdir = [i for i in dirnames if i.endswith(FF)]
+    # FFname = ' '.join(FFdir)
+    return FF
 
 
 #%%

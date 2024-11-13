@@ -122,9 +122,9 @@ def multi_master(
         datadownload(parentdir, target, band, date, chips_str)
 
     if chip:
-        chip_path = parentdir + 'C%s/' % chip
+        chip_path = os.path.join(parentdir, 'C%s/' % chip)
     else:
-        chip_path = parentdir + 'C1/'
+        chip_path = os.path.join(parentdir, 'C1/')
 
     if not os.listdir(chip_path):
         print('Error downloading! perhaps wrong date or target?')

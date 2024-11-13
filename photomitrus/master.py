@@ -51,7 +51,7 @@ def mflat(flatdir, chip):
 def initastrom(astrompath, parentdir, chip=None):
     os.chdir(gen_pipeline_file_name())
     if chip:
-        ramppath = parentdir + 'C%i/' % (chip)
+        ramppath = os.path.join(parentdir, 'C%i' % chip)
         print('running initial astrometry on ramp imgs...')
 
         print('\nEquivalent argparse cmd: python ./preprocess/gen_astrometry.py -output %s -input %s' % (
@@ -72,7 +72,7 @@ def initastrom(astrompath, parentdir, chip=None):
 
 def astrom_angle(astrompath, parentdir, chip, rot_val=48):
     os.chdir(gen_pipeline_file_name())
-    ramppath = parentdir + 'C%i/' % (chip)
+    ramppath = os.path.join(parentdir,  'C%i' % chip)
     print('running initial astrometry on ramp imgs...')
 
     if not rot_val:

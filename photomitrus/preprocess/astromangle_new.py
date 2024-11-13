@@ -31,7 +31,7 @@ tel_angle_corr = -48
 # rot_val = 48       # default is 48, change if the rot of the telescope is not default (172800) for your obs
 # rot val is default at 48, if you want to use a custom val, use the -rot_val flag (run this script w/ the -h flag to see how it works)
 
-offset_dict = {
+old_offset_dict = {
     '2': {
         'separation': 0.44850763816602646,
         'angle': tel_angle_corr + 45.66331831019727,
@@ -71,6 +71,46 @@ offset_dict = {
     'corner_x_y': [(0, 0), (0, 4096), (4096, 4096), (4096, 0)]
 }
 
+offset_dict = {
+    '2': {
+        'separation': 0.4451986307,
+        'angle': tel_angle_corr + 45.724158,
+        'rotation': 270.5067367 + tel_angle_corr,
+        'corners': {
+            'separation': (0.8403519878, 0.5960290427, 0.5995630121, 0.04468397972),
+            'angle': (45.87107071+tel_angle_corr, 87.86120641+tel_angle_corr, 3.861093571+tel_angle_corr, 42.88007849+tel_angle_corr),
+        }
+    },
+    '4': {
+        'separation': 0.4497407774,
+        'angle': tel_angle_corr + 135.6627119,
+        'rotation': 90.23421981 + tel_angle_corr,
+        'corners': {
+            'separation': (0.6024065862, 0.04907067704, 0.8444159657, 0.5998507373),
+            'angle': (177.2745836+tel_angle_corr, 137.5961511+tel_angle_corr, 135.5591+tel_angle_corr, 93.85977683+tel_angle_corr),
+        }
+    },
+    '3': {
+        'separation': 0.4449394229,
+        'angle': tel_angle_corr + 225.7149614,
+        'rotation': 91.34376357 + tel_angle_corr,
+        'corners': {
+            'separation': (0.8399889174, 0.5988297091, 0.5963264518, 0.0440527578),
+            'angle': (225.6201769+tel_angle_corr, 267.6405212+tel_angle_corr, 183.5987252+tel_angle_corr, 227.7646716+tel_angle_corr),
+        }
+    },
+    '1': {
+        'separation': 0.4461426856,
+        'angle': tel_angle_corr + 315.3838163,
+        'rotation': 270.6664969 + tel_angle_corr,
+        'corners': {
+            'separation': (0.5964405532, 0.0455312448, 0.8413781428, 0.6005353719),
+            'angle': (357.4983364+tel_angle_corr, 312.0363858+tel_angle_corr, 315.5684873+tel_angle_corr, 273.624211+tel_angle_corr),
+        }
+    },
+    'corner_x_y': [(0, 0), (0, 4088), (4088, 0), (4088, 4088)]
+}
+
 
 def calc_offset(ra, dec, angle, sep):
     radec = SkyCoord(ra, dec, frame="fk5", unit=(u.hourangle, u.deg))
@@ -103,7 +143,7 @@ def gen_wcs(ra, dec, rot, chip):
     # wcs.wcs.ctype = ["RA---AIR", "DEC--AIR"]
     corner_coords = calc_corners_detector(ra, dec, rot, chip)
     xy_array = np.asarray(offset_dict['corner_x_y']).transpose()
-    wcs = fit_wcs_from_points((xy_array[0], xy_array[1]), SkyCoord(corner_coords),projection='TAN')
+    wcs = fit_wcs_from_points((xy_array[0], xy_array[1]), SkyCoord(corner_coords), projection='TAN')
     return wcs
 
 
@@ -190,7 +230,7 @@ def update_ra_dec(fits_file, rot_val):
     fits.delval(fits_file, 'PC2_2')
 
     #CRPIX alteration
-    if tel_angle_corr == -48 and rot_val == 48:
+    if tel_angle_corr == -48 and rot_val == 48 and False:
         if "C3" in fits_file:
             print('CRPIX fine shift for C3 implemented!')
             cr1 = fits.getval(fits_file, 'CRPIX1')
@@ -227,7 +267,7 @@ def update_ra_dec_directory(directory, rot_val):
 def update_ra_dec_move_directory(input, output, rot_val):
     for f in sorted(os.listdir(input)):
         if f.endswith('.ramp.fits'):
-            origpath = os.path.join(input,f)
+            origpath = os.path.join(input, f)
             fnewname = f.replace('.ramp.fits', '.ramp.new')
             newpath = os.path.join(output,fnewname)
             shutil.copyfile(origpath, newpath)
