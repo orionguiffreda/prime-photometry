@@ -105,16 +105,20 @@ def flatfielding(astrompath, FFpath, band, chip):
 # %% sky gen
 
 
-def sky(astrompath, skypath, sigma):
+def sky(astrompath, skypath, sigma, chip):
     os.chdir(gen_pipeline_file_name())
-    print('generating sky...')
-    FFstring = '_FF'
-    if FFstring in astrompath:
-        no_flat = False
+    filelist = [f for f in os.listdir(skypath) if f.endswith('.C{}.fits'.format(chip))]
+    if filelist:
+        print('Previous sky %s found! Skipping sky gen..\n' % filelist[0])
     else:
-        no_flat = True
+        print('generating sky...')
+        FFstring = '_FF'
+        if FFstring in astrompath:
+            no_flat = False
+        else:
+            no_flat = True
 
-    print('\nEquivalent argparse cmd: python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
+        print('\nEquivalent argparse cmd: python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
     gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
 
@@ -124,7 +128,6 @@ def sky(astrompath, skypath, sigma):
 
 def skysub(astrompath, subpath, skypath, chip):
     os.chdir(gen_pipeline_file_name())
-    import fnmatch
     for file in os.listdir(skypath):
         if file.endswith('.C{}.fits'.format(chip)):
             skyfile = file
@@ -259,7 +262,7 @@ def master(
     if no_ff:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
         astrom_angle(astromdir, parentdir, chip, rot_val)
-        sky(astromdir, skydir, sigma)
+        sky(astromdir, skydir, sigma, chip)
         if sex:
             sexskysub(astromdir, subdir)
         else:
@@ -274,7 +277,7 @@ def master(
         if sex:
             pass
         else:
-            sky(FFdir, skydir, sigma)
+            sky(FFdir, skydir, sigma, chip)
         if sex:
             sexskysub(FFdir, subdir)
         else:

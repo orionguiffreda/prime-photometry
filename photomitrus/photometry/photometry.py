@@ -300,6 +300,7 @@ def tables(Q, data, w, psfcatalogName, crop):
     # Now cross match sources
     # Set the cross-match distance threshold to 0.6 arcsec, or just about one pixel
     photoDistThresh = 0.6
+    # photoDistThresh = 1.0
     idx_psfimage, idx_psfmass, d2d, d3d = massCatCoords.search_around_sky(psfsourceCatCoords,
                                                                           photoDistThresh * u.arcsec)
     # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
@@ -643,15 +644,29 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     rsquare_sig = model_sig.rsquared
     rss_sig = model_sig.ssr
 
-    avgsig = np.average(model_sig.resid, weights=psfweights_noclip[~psf_clipped.mask])
-    varsig = np.average((model_sig.resid - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask])
-    ressig_err = np.sqrt(varsig)
+    # residual fit 3 sig clip - errors
+    mags = range(10,22)
+    res_errs = []
+    x_arr = np.arange(10-0.5, 22-0.5, 1)
+    for i in mags:
+        mask = ((cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] > i) &
+                (cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] < i+1))
+        res_mask = model_sig.resid[mask]
+        avgsig = np.average(res_mask, weights=psfweights_noclip[~psf_clipped.mask][mask])
+        varsig = np.average((res_mask - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask][mask])
+        ressig_err = np.sqrt(varsig)
+        if ma.is_masked(ressig_err):
+            ressig_err = 0
+        res_errs.append(ressig_err)
+    res_errs = np.nan_to_num(np.array(res_errs))
+    res_errs_min = np.min((res_errs[res_errs != 0]))
+    res_errs_max = np.max(res_errs)
 
-    t = Table()
-    t['Residuals'] = model_sig.resid
-    t['mags'] = x_sig
-    t['Weights'] = psfweights_noclip[~psf_clipped.mask]
-    t.write('residual_3sig.ecsv', overwrite=True)
+    # t = Table()
+    # t['Residuals'] = model_sig.resid
+    # t['mags'] = x_sig
+    # t['Weights'] = psfweights_noclip[~psf_clipped.mask]
+    # t.write('residual_3sig.ecsv', overwrite=True)
 
     # residual plot - y int forced to zero
     """
@@ -683,12 +698,15 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.title('PRIME vs %s Residuals - %s Sigma Clip' % (survey, sigma))
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
-    plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
-    plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    # plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
+    # plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    # plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
+    # plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.scatter(x_arr, res_errs, marker='_', s=1625, c='blue')
+    plt.scatter(x_arr, -res_errs, marker='_', s=1625, c='blue')
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend(['Residuals',r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    plt.legend(['Residuals',r'1 $\sigma$ range = [%.3f - %.3f]' % (res_errs_min, res_errs_max)], loc='lower left',
+               markerscale=0.5)
     info2 = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, info2, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
@@ -711,12 +729,15 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.title('PRIME vs %s Residuals w/ %s Sigma Clip- Density Histogram' % (survey, sigma))
     plt.ylabel('Residuals')
     plt.xlabel('%s Mags' % band)
-    plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
-    plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
-    plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    # plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
+    # plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    # plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
+    # plt.axhline(y=-ressig_err * 2, color='green', linestyle='--', linewidth=1)
+    plt.scatter(x_arr, res_errs, marker='_', s=1625, c='blue')
+    plt.scatter(x_arr, -res_errs, marker='_', s=1625, c='blue')
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
-    plt.legend([r'1 $\sigma$ = %.3f' % ressig_err, r'2 $\sigma$ = %.3f' % (2 * ressig_err)], loc='lower left')
+    plt.legend([r'1 $\sigma$ range = [%.3f - %.3f]' % (res_errs_min, res_errs_max)], loc='lower left',
+               markerscale=0.5)
     infohist = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, infohist, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
