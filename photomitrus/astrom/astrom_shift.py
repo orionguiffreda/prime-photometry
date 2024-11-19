@@ -489,7 +489,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
 
 
 def removal(directory):
-    fnames = ['.shift.cat', '.psf']
+    fnames = ['.shift.cat','.psf']
     try:
         for f in os.listdir(directory):
             for name in fnames:
@@ -539,7 +539,7 @@ def shift(
         xfinal_shift, yfinal_shift = xyshift(agreeing_pairs, inner_primesources, inner_catsources, directory, header,
                                              data, imagename, stdev)
     else:
-        segments = split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, band)
+        segments = split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, filter_used)
         xfinal_shift, yfinal_shift = segmentshift(segments, acc_range, length, directory, header, data, imagename,
                                                   stdev, segstd, segtrue=True)
     if no_remove:
