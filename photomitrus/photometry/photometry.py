@@ -499,6 +499,21 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                                        frame='icrs',
                                        unit='degree')
 
+    # sexigesimal conversion
+    try:
+        float(ra)
+        ra = ra
+        dec = dec
+    except ValueError:
+        coords = ra + ' ' + dec
+        print('Sexagesimal RA = %s & Dec = %s' % (ra, dec))
+
+        deci_coords = SkyCoord(coords, frame='icrs', unit=(u.hourangle, u.deg)).to_string()
+        deci_coords = deci_coords.split(' ')
+
+        ra = deci_coords[0]
+        dec = deci_coords[1]
+
     photoDistThresh = thresh
     if coordlist:
         for i in range(len(coordlist)):
@@ -1043,6 +1058,7 @@ def photometry(
 
 
 def main():
+
     parser = argparse.ArgumentParser(
         description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
                     'outputs ecsv w/ corrected mags')
@@ -1074,9 +1090,13 @@ def main():
     parser.add_argument('-sigma', type=float, help='[float], # of sigma w/ which to sigma clip for '
                                                   'zero point calculation, default = 3',
                         default=defaults["sigma"])
-    parser.add_argument('-grb_ra', type=float, help='[float], RA for GRB source',
+    parser.add_argument('-grb_ra', type=str, help='[str], RA for GRB source, either in hh:mm:ss or decimal'
+                                                  '*NOTE* When using sexagesimal, use "-grb_ra=value_here" NOT "-grb_ra '
+                                                  'value_here", as argparse doesnt like negative sexagesimals',
                         default=defaults["RA"])
-    parser.add_argument('-grb_dec', type=float, help='[float], DEC for GRB source',
+    parser.add_argument('-grb_dec', type=str, help='[str], DEC for GRB source, either in dd:mm:ss or decimal'
+                                                   '*NOTE* When using sexagesimal, use "-grb_dec=value_here" NOT "-grb_dec '
+                                                  'value_here", as argparse doesnt like negative sexagesimals',
                         default=defaults["DEC"])
     parser.add_argument('-grb_coordlist', type=str, nargs='+',
                         help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
@@ -1086,6 +1106,8 @@ def main():
                         help='[float], # of arcsec diameter to search for GRB, default = 4.0"',
                         default=defaults["thresh"])
     args, unknown = parser.parse_known_args()
+    # print(args)
+    # print(unknown)
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.survey, args.no_plots, args.plots_only, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
