@@ -110,6 +110,7 @@ def sky(astrompath, skypath, sigma, chip):
     filelist = [f for f in os.listdir(skypath) if f.endswith('.C{}.fits'.format(chip))]
     if filelist:
         print('Previous sky %s found! Skipping sky gen..\n' % filelist[0])
+        pass
     else:
         print('generating sky...')
         FFstring = '_FF'
@@ -120,7 +121,7 @@ def sky(astrompath, skypath, sigma, chip):
 
         print('\nEquivalent argparse cmd: python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
-    gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
+        gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
 
 
 # %% sky sub

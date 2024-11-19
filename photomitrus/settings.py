@@ -7,13 +7,13 @@ Settings for pipeline
 """
 #%% Config File Names
 import os
-import fnmatch
 #base_dir = os.path.dirname(__file__)
 #base_dir = os.path.dirname(os.path.abspath('__file__'))
 
-#export PYTHONPATH=.       if fctn below isnt working from command line, cd to photomitrus and use command
-
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
+PHOTOMETRY_QUERY_WIDTH = 48     # in arcmin, should cover the whole chip even with 45 deg rotation
+PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/viking2'], '2MASS': ['J', 'II/246/'],
+                    'SDSS': ['Z', 'V/154/sdss16'], 'Skymapper': ['Z', 'II/379/smssdr4'], 'UKIDSS': ['Y', 'II/319/las9']}
 
 
 def gen_config_file_name(filename):
