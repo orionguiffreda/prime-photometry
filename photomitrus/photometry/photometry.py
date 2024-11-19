@@ -278,8 +278,27 @@ def query(raImage, decImage, band, survey=None):
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
                     '\n perhaps check UKIDSS coverage maps?')
+        elif survey == 'DES':
+            # catNum = 'II/348/vvv2'  # changing to vista
+            catNum = 'II/371/des_dr2'
+            print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
+                catNum, raImage, decImage, width))
+            try:
+                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
+                v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
+                           column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                print(v)
+                Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                   catalog=catNum, cache=False)
+                # query vizier around (ra, dec) with a radius of boxsize
+                # print(Q[0])
+                print('Queried source total = ', len(Q[0]))
+            except:
+                print(
+                    'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                    '\n perhaps check DES coverage maps?')
         else:
-            print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, or UKIDSS')
+            print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, UKIDSS, or DES')
             sys.exit('No surveys found.')
 
     return Q
@@ -1082,7 +1101,7 @@ def main():
     parser.add_argument('-band', type=str, help='[str], band, ex. "J"')
     parser.add_argument('-survey', type=str,
                         help='[str], *NOW OPTIONAL* manually specify which survey to query, choose from VHS, 2MASS'
-                             ', VIKING, Skymapper, SDSS, and UKIDSS.  If you leave out this arg, it will automatically'
+                             ', VIKING, Skymapper, SDSS, UKIDSS, & DES.  If you leave out this arg, it will automatically'
                              'pick a survey from the above list depending on the area and coverage.',
                         default=None)
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
