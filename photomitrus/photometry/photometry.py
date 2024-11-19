@@ -116,8 +116,8 @@ def query(raImage, decImage, band, survey=None):
 
         # current columns
         v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band,
-                            'e_%sap3' % band, '%smag' % band, 'e_%smag' % band, '%sPSF' % band.lower(),
-                            'e_%sPSF' % band.lower(),
+                            'e_%sap3' % band, '%smag' % band, 'e_%smag' % band, '%smag' % band.lower(),
+                            'e_%smag' % band.lower(), '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
                             '%spmag' % band.lower(), 'e_%spmag' % band.lower()])
         try:
             result = v.query_region(coords, width=str(width) + 'm', catalog=[f[1] for f in catalogs])
@@ -202,101 +202,96 @@ def query(raImage, decImage, band, survey=None):
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  H band is also not well covered!')
         elif survey == 'VIKING':
-            # catNum = 'II/348/vvv2'  # changing to vista
             catNum = 'II/343/viking2'
             print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
                 catNum, raImage, decImage, width))
             try:
-                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                 v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
                            column_filters={"%sap3" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
-                print(v)
                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                    , catalog=catNum, cache=False)
-                # query vizier around (ra, dec) with a radius of boxsize
-                # print(Q[0])
                 print('Queried source total = ', len(Q[0]))
             except:
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  H band is also not well covered!'
                     ' If you are in S.H., VIKING is only in a relatively smaller strip!')
         elif survey == 'Skymapper':
-            # catNum = 'II/348/vvv2'  # changing to vista
             catNum = 'II/379/smssdr4'
             print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
                 catNum, raImage, decImage, width))
             try:
-                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                 v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
                            column_filters={"%sPSF" % band.lower(): f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
-                print(v)
                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                    , catalog=catNum, cache=False)
-                # query vizier around (ra, dec) with a radius of boxsize
-                # print(Q[0])
                 print('Queried source total = ', len(Q[0]))
             except:
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
                     '\n perhaps check skymapper coverage maps?')
         elif survey == 'SDSS':
-            # catNum = 'II/348/vvv2'  # changing to vista
             catNum = 'V/154/sdss16'
             print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
                 catNum, raImage, decImage, width))
             try:
-                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                 v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
                            column_filters={"%spmag" % band.lower(): f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"
                                , "clean": "=1"}, row_limit=-1)
-                print(v)
                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                    , catalog=catNum, cache=False)
-                # query vizier around (ra, dec) with a radius of boxsize
-                # print(Q[0])
                 print('Queried source total = ', len(Q[0]))
             except:
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
                     '\n perhaps check SDSS coverage maps?')
         elif survey == 'UKIDSS':
-            # catNum = 'II/348/vvv2'  # changing to vista
             catNum = 'II/319/las9'
             print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
                 catNum, raImage, decImage, width))
             try:
-                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                 v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
                            column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
                 print(v)
                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                    catalog=catNum, cache=False)
-                # query vizier around (ra, dec) with a radius of boxsize
-                # print(Q[0])
                 print('Queried source total = ', len(Q[0]))
             except:
                 print(
                     'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
                     '\n perhaps check UKIDSS coverage maps?')
         elif survey == 'DES':
-            # catNum = 'II/348/vvv2'  # changing to vista
-            catNum = 'II/371/des_dr2'
-            print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                catNum, raImage, decImage, width))
-            try:
-                # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
-                v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
-                           column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
-                print(v)
-                Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
-                                   catalog=catNum, cache=False)
-                # query vizier around (ra, dec) with a radius of boxsize
-                # print(Q[0])
-                print('Queried source total = ', len(Q[0]))
-            except:
-                print(
-                    'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
-                    '\n perhaps check DES coverage maps?')
+            if band == 'Y':
+                catNum = 'II/371/des_dr2'
+                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
+                    catNum, raImage, decImage, width))
+                try:
+                    v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
+                               column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                    print(v)
+                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                       catalog=catNum, cache=False)
+                    print('Queried source total = ', len(Q[0]))
+                except:
+                    print(
+                        'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                        '\n perhaps check DES coverage maps?')
+            elif band == 'Z':
+                catNum = 'II/371/des_dr2'
+                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
+                    catNum, raImage, decImage, width))
+                try:
+                    v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band.lower(), 'e_%smag' % band.lower()],
+                               column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                    print(v)
+                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                       catalog=catNum, cache=False)
+                    print('Queried source total = ', len(Q[0]))
+                except:
+                    print(
+                        'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                        '\n perhaps check DES coverage maps?')
+            else:
+                sys.exit('DES only supports Z and Y band!')
         else:
             print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, UKIDSS, or DES')
             sys.exit('No surveys found.')
