@@ -127,12 +127,15 @@ def sky(astrompath, skypath, sigma, chip):
 # %% sky sub
 
 
-def skysub(astrompath, subpath, skypath, chip):
+def skysub(astrompath, subpath, skypath, chip, sky_override_path=None):
     os.chdir(gen_pipeline_file_name())
-    for file in os.listdir(skypath):
-        if file.endswith('.C{}.fits'.format(chip)):
-            skyfile = file
-            skyfilepath = os.path.join(skypath, skyfile)
+    if sky_override_path:
+        skyfilepath = sky_override_path
+    else:
+        for file in os.listdir(skypath):
+            if file.endswith('.C{}.fits'.format(chip)):
+                skyfile = file
+                skyfilepath = os.path.join(skypath, skyfile)
     print('cropping and subtracting sky...')
     FFstring = '_FF'
     if FFstring in astrompath:
@@ -258,7 +261,7 @@ defaults = dict(sigma=4)
 
 def master(
         parentdir, chip, band, sigma=4, rot_val=None, no_ff=False, no_shift=False, sex=False, compress=False,
-        net_refine=False
+        net_refine=False, sky_override=None
 ):
     if no_ff:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
@@ -267,7 +270,7 @@ def master(
         if sex:
             sexskysub(astromdir, subdir)
         else:
-            skysub(astromdir, subdir, skydir, chip)
+            skysub(astromdir, subdir, skydir, chip, sky_override)
         astromatic_astrometry(subdir)
         stacking(subdir, stackdir, chip)
     else:
@@ -275,14 +278,14 @@ def master(
         FFdir = makedirectoriesFF(parentdir, chip)
         astrom_angle(astromdir, parentdir, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip)
-        if sex:
+        if sex or sky_override:
             pass
         else:
             sky(FFdir, skydir, sigma, chip)
         if sex:
             sexskysub(FFdir, subdir)
         else:
-            skysub(FFdir, subdir, skydir, chip)
+            skysub(FFdir, subdir, skydir, chip, sky_override)
         if net_refine:
             astromnet_refine(subdir)
         else:
@@ -322,10 +325,13 @@ def main():
     parser.add_argument('-net_refine', action='store_true',
                         help='optional flag, used to automatically refine astrometry using '
                              'astrometry.net')
+    parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
+                                                        'sky to use in sky sub, skipping sky gen. Input full file path.',
+                        default=None)
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.rot_val, args.no_FF, args.no_shift, args.sex,
-           args.compress, args.net_refine)
+           args.compress, args.net_refine, args.sky_override)
 
 
 if __name__ == "__main__":

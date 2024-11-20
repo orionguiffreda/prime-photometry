@@ -32,34 +32,36 @@ def datadownload(parentdir, target, band, date, chip):
 #%%
 
 
-def refineprocess(parentdir, chip, band, rot_val=48):
+def refineprocess(parentdir, chip, band, rot_val=48, sky_override_path=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, net_refine=True)
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, net_refine=True,
+           sky_override=sky_override_path)
 
 
-def shiftprocess(parentdir, chip, band, rot_val=48):
+def shiftprocess(parentdir, chip, band, rot_val=48, sky_override_path=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val)
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, sky_override=sky_override_path)
 
 
-def baseprocess(parentdir, chip, band, rot_val=48):
+def baseprocess(parentdir, chip, band, rot_val=48, sky_override_path=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, no_shift=True)
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, no_shift=True,
+           sky_override=sky_override_path)
 
 #%%
 
@@ -104,7 +106,7 @@ def checkprocessparallel(parentdir,chips,band):
 
 def multi_master(
         parentdir, target, date, band, chip, rot_val=48, no_shift=False, astromnet=False, parallel=False,
-        no_download=False
+        no_download=False, sky_override_path=None
 ):
 
     if parentdir == '':
@@ -137,11 +139,11 @@ def multi_master(
 
         for f in chips:
             if astromnet:
-                refineprocess(parentdir, f, band, rot_val)
+                refineprocess(parentdir, f, band, rot_val, sky_override_path)
             elif not no_shift:
-                shiftprocess(parentdir, f, band, rot_val)
+                shiftprocess(parentdir, f, band, rot_val, sky_override_path)
             else:
-                baseprocess(parentdir, f, band, rot_val)
+                baseprocess(parentdir, f, band, rot_val, sky_override_path)
 
 
 def main():
@@ -159,10 +161,13 @@ def main():
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
                                                      ' (default = 48 deg or 172800")', default=48)
+    parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
+                                                        'sky to use in sky sub, skipping sky gen. Input full file path.',
+                        default=None)
     args, unknown = parser.parse_known_args()
 
     multi_master(args.parent, args.target, args.date, args.band, args.chip, args.rot_val, args.no_shift, args.astromnet,
-                 args.parallel, args.no_download)
+                 args.parallel, args.no_download, args.sky_override)
 
 
 if __name__ == "__main__":
