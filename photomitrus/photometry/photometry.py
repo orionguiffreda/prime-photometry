@@ -87,11 +87,19 @@ def img(directory, imageName, crop):
 # Use astroquery to get catalog search
 
 
-def query(raImage, decImage, band, survey=None, given_catalog_path=None):
+def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None):
+    # query box width
     width = PHOTOMETRY_QUERY_WIDTH
+
+    # mag lower cutoff
+    if mag_lower_lim:
+        mag_low_cutoff = mag_lower_lim
+    else:
+        mag_low_cutoff = PHOTOMETRY_MAG_LOWER_LIMIT
 
     if given_catalog_path:
         Q = ascii.read(given_catalog_path)
+        Q = Q[Q['%sMAG_PSF' % band] > mag_low_cutoff]
         chosen_survey = 'PRIME'
     else:
 
@@ -156,7 +164,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                                 catNum, raImage, decImage, width))
                             try:
                                 v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
-                                           column_filters={"%s" % cols[3]: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                                           column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}"}, row_limit=-1)
                                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                                    , catalog=catNum, cache=False)
                                 print('Queried source total = ', len(Q[0]))
@@ -184,7 +192,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                 try:
                     # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
-                               column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}", "Nd": ">6"},
+                               column_filters={"%smag" % band: f">{mag_low_cutoff:f}", "Nd": ">6"},
                                row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                        , catalog=catNum, cache=False)
@@ -200,7 +208,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                 try:
                     # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
-                               column_filters={"%sap3" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                               column_filters={"%sap3" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                        , catalog=catNum, cache=False)
                     # query vizier around (ra, dec) with a radius of boxsize
@@ -215,7 +223,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                     catNum, raImage, decImage, width))
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
-                               column_filters={"%sap3" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                               column_filters={"%sap3" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                        , catalog=catNum, cache=False)
                     print('Queried source total = ', len(Q[0]))
@@ -229,7 +237,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                     catNum, raImage, decImage, width))
                 try:
                     v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
-                               column_filters={"%sPSF" % band.lower(): f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                               column_filters={"%sPSF" % band.lower(): f">{mag_low_cutoff:f}"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                        , catalog=catNum, cache=False)
                     print('Queried source total = ', len(Q[0]))
@@ -243,7 +251,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                     catNum, raImage, decImage, width))
                 try:
                     v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
-                               column_filters={"%spmag" % band.lower(): f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"
+                               column_filters={"%spmag" % band.lower(): f">{mag_low_cutoff:f}"
                                    , "clean": "=1"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                        , catalog=catNum, cache=False)
@@ -258,7 +266,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                     catNum, raImage, decImage, width))
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
-                               column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                               column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                     print(v)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                        catalog=catNum, cache=False)
@@ -274,7 +282,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                         catNum, raImage, decImage, width))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
-                                   column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                                   column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                         print(v)
                         Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                            catalog=catNum, cache=False)
@@ -289,7 +297,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None):
                         catNum, raImage, decImage, width))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band.lower(), 'e_%smag' % band.lower()],
-                                   column_filters={"%smag" % band: f">{PHOTOMETRY_MAG_LOWER_LIMIT:f}"}, row_limit=-1)
+                                   column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                         print(v)
                         Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                            catalog=catNum, cache=False)
@@ -1060,7 +1068,8 @@ def removal(directory):
 
 
 def photometry(
-        full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None, no_plots=False, plots_only=False,
+        full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
+        mag_low_lim=None, no_plots=False, plots_only=False,
         keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=defaults['thresh']
 ):
     directory = os.path.dirname(full_filename)
@@ -1076,7 +1085,7 @@ def photometry(
                 psfcatalogName.append(f)
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog)
+        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
@@ -1091,7 +1100,7 @@ def photometry(
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
     else:
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog)
+        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
         catalogName = sex1(name)
         psfex(catalogName)
         psfcatalogName = sex2(name)
@@ -1146,6 +1155,9 @@ def main():
     parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated'
                                                    'catalog for photometry INSTEAD of querying, put in full file path.',
                         default=None)
+    parser.add_argument('-mag_cutoff', type=float, help='[float], Lower mag cutoff for survey query & crossmatch'
+                                                        ' settings default = 12.5',
+                        default=None)
     parser.add_argument('-grb_ra', type=str, help='[str], RA for GRB source, either in hh:mm:ss or decimal'
                                                   '*NOTE* When using sexagesimal, use "-grb_ra=value_here" NOT "-grb_ra '
                                                   'value_here", as argparse doesnt like negative sexagesimals',
@@ -1165,7 +1177,8 @@ def main():
     # print(args)
     # print(unknown)
 
-    photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.no_plots, args.plots_only, args.keep,
+    photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_cutoff,
+               args.no_plots, args.plots_only, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 
