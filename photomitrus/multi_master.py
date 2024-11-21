@@ -6,6 +6,22 @@ from subprocess import Popen
 
 from photomitrus.getdata import download_data
 from photomitrus.master import master
+from photomitrus.settings import PIPELINE_DEFAULT_DIR
+
+#%%
+
+
+def parentcreation(target, date, band):
+    field_dir_name = '%s_%s' % (target, date)
+    field_dir = os.path.join(PIPELINE_DEFAULT_DIR, field_dir_name)
+    parent_dir = os.path.join(field_dir, band)
+    print('Default parent dir: %s' % parent_dir)
+    if not os.path.isdir(parent_dir):
+        print('Generating parent directory!\n')
+        os.makedirs(parent_dir)
+    else:
+        pass
+    return parent_dir
 
 #%%
 
@@ -105,12 +121,14 @@ def checkprocessparallel(parentdir,chips,band):
 
 
 def multi_master(
-        parentdir, target, date, band, chip, rot_val=48, no_shift=False, astromnet=False, parallel=False,
+        target, date, band, chip, parentdir=None, rot_val=48, no_shift=False, astromnet=False, parallel=False,
         no_download=False, sky_override_path=None
 ):
 
-    if parentdir == '':
-        parentdir = '.'
+    if parentdir:
+        chosen_parent = parentdir
+    else:
+        chosen_parent = parentcreation(target, date, band)
 
     if not chip:
         chips = [1, 2, 3, 4]
@@ -121,12 +139,12 @@ def multi_master(
         pass
     else:
         chips_str = ','.join(str(x) for x in chips)
-        datadownload(parentdir, target, band, date, chips_str)
+        datadownload(chosen_parent, target, band, date, chips_str)
 
     if chip:
-        chip_path = os.path.join(parentdir, 'C%s/' % chip)
+        chip_path = os.path.join(chosen_parent, 'C%s/' % chip)
     else:
-        chip_path = os.path.join(parentdir, 'C1/')
+        chip_path = os.path.join(chosen_parent, 'C1/')
 
     if not os.listdir(chip_path):
         print('Error downloading! perhaps wrong date or target?')
@@ -139,11 +157,11 @@ def multi_master(
 
         for f in chips:
             if astromnet:
-                refineprocess(parentdir, f, band, rot_val, sky_override_path)
+                refineprocess(chosen_parent, f, band, rot_val, sky_override_path)
             elif not no_shift:
-                shiftprocess(parentdir, f, band, rot_val, sky_override_path)
+                shiftprocess(chosen_parent, f, band, rot_val, sky_override_path)
             else:
-                baseprocess(parentdir, f, band, rot_val, sky_override_path)
+                baseprocess(chosen_parent, f, band, rot_val, sky_override_path)
 
 
 def main():
@@ -153,7 +171,9 @@ def main():
     parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
                                                                ' script in place of astrom.net, will not use either (shift is default)')
     parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry')
-    parser.add_argument('-parent', type=str, help='[str] parent directory to store all data products')
+    parser.add_argument('-parent', type=str, help='[str] *NOW OPTIONAL* specify parent directory to '
+                                                  'store all data products, otherwise it will automatically generate w/'
+                                                  'the format "/target_date/band/"', default=None)
     parser.add_argument('-target', type=str, help='[str] target field, objname in log, ex. "field1234"')
     parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
     parser.add_argument('-band', type=str, help='[str] filter, ex. "J"')
@@ -166,7 +186,7 @@ def main():
                         default=None)
     args, unknown = parser.parse_known_args()
 
-    multi_master(args.parent, args.target, args.date, args.band, args.chip, args.rot_val, args.no_shift, args.astromnet,
+    multi_master(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
                  args.parallel, args.no_download, args.sky_override)
 
 

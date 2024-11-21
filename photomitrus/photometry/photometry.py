@@ -29,7 +29,7 @@ from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIM
                                   PHOTOMETRY_QUERY_CATALOGS)
 
 # %%
-defaults = dict(crop=300, RA=None, DEC=None, thresh=4.0, sigma=3)
+defaults = dict(crop=400, RA=None, DEC=None, thresh=4.0, sigma=3)
 
 
 # Read LDAC tables

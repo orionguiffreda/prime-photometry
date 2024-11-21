@@ -11,6 +11,8 @@ import os
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
+PIPELINE_DEFAULT_DIR = '/mnt/d/PRIME_photometry_test_files/'
+
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_QUERY_WIDTH = 48  # in arcmin, should cover the whole chip even with 45 deg rotation
 PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/viking2'], '2MASS': ['J', 'II/246/'],
