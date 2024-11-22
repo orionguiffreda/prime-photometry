@@ -29,7 +29,7 @@ from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIM
                                   PHOTOMETRY_QUERY_CATALOGS)
 
 # %%
-defaults = dict(crop=400, RA=None, DEC=None, thresh=4.0, sigma=3)
+defaults = dict(crop=500, RA=None, DEC=None, thresh=4.0, sigma=3)
 
 
 # Read LDAC tables
@@ -164,7 +164,8 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                                 catNum, raImage, decImage, width))
                             try:
                                 v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
-                                           column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}"}, row_limit=-1)
+                                           column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}", "%sFlag" % band.lower(): "<4"
+                                                            }, row_limit=-1)
                                 Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
                                                    , catalog=catNum, cache=False)
                                 print('Queried source total = ', len(Q[0]))
@@ -312,7 +313,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                 print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, UKIDSS, or DES')
                 sys.exit('No surveys found.')
 
-    return Q, chosen_survey
+    return Q, chosen_survey, mag_low_cutoff
 
 
 # %%
@@ -758,6 +759,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
 
     # mag comparison plot
     plt.figure(1, figsize=(8, 8))
+    plt.clf()
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass],
              'r.', markersize=14, markeredgecolor='black')
     plt.xlim(10, 22)
@@ -851,7 +853,8 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     """
 
     # res plot, y int included
-    plt.figure(3, figsize=(8, 6))
+    plt.figure(2, figsize=(8, 6))
+    plt.clf()
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
@@ -880,7 +883,8 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     elif len(idx_psfimage) <= 1000:
         bin_num_int = 50
 
-    plt.figure(8, figsize=(10, 6))
+    plt.figure(3, figsize=(10, 6))
+    plt.clf()
     plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], y=model_sig.resid,
                bins=[bin_num_int, bin_num_int], range=[[10, 21],[-1, 1]], cmap='gist_heat_r')
     plt.colorbar(label='Density')
@@ -912,6 +916,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err)
 
     plt.figure(4, figsize=(8, 8))
+    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit' % survey)
@@ -934,6 +939,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
         bin_num = 100
 
     plt.figure(5, figsize=(10, 8))
+    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit - Density Histogram' % survey)
@@ -957,6 +963,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
               '\nint err = %.4f' % b_sigerr)
 
     plt.figure(6, figsize=(8, 8))
+    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip' % (survey, sigma))
@@ -973,6 +980,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
 
     # WLS 3 sig hist density plot
     plt.figure(7, figsize=(10, 8))
+    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
@@ -1022,7 +1030,8 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
 
     print('Lim Mag = ', limmag)
 
-    plt.figure(figsize=(24, 8))
+    plt.figure(8, figsize=(24, 8))
+    plt.clf()
     plt.bar(bin_vals, height=all_sources, width=0.1, align='edge', color='red', edgecolor='black')
     plt.axhline(halfmax, linestyle='--')
     plt.axvline(limmag, color='b', linewidth=2)
@@ -1050,6 +1059,36 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     plt.savefig('%s_C%s_lim_mag_plot_%s.png' % (survey, chip, num), dpi=300)
     print('Saved lim mag plot to dir!')
 
+    return m_sig, b_sig
+
+#%%
+
+
+def int_calibration(
+        name, directory, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
+        mag_low_lim=None, grb_ra=None, grb_dec=None,
+        grb_coordlist=None, grb_radius=defaults['thresh']
+):
+    print('3 sigma fit y-intercept > 0.5! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
+    data, header, w, raImage, decImage = img(directory, name, crop)
+    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+    psfcatalogName = []
+    for f in os.listdir(directory):
+        if f.endswith('.psf.cat'):
+            psfcatalogName.append(f)
+    psfcatalogName = ''.join(psfcatalogName)
+    good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
+                                                                                    crop, given_catalog)
+    cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources,
+                                                                         idx_psfmass, idx_psfimage,
+                                                                         name, band, survey, sigma)
+    if grb_ra:
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+    elif grb_coordlist:
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
+    slope, intercept = photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
+                                        idx_psfimage, psfweights_noclip, psf_clipped, sigma)
+    return intercept
 
 # %% optional removal of intermediate files
 
@@ -1070,7 +1109,8 @@ def removal(directory):
 def photometry(
         full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
         mag_low_lim=None, no_plots=False, plots_only=False,
-        keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=defaults['thresh']
+        keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=defaults['thresh'],
+        int_cal=False
 ):
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -1085,12 +1125,12 @@ def photometry(
                 psfcatalogName.append(f)
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
                                              name, band, survey, sigma)
-        photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
+        slope, intercept = photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                          idx_psfimage, psfweights_noclip, psf_clipped, sigma)
     elif grb_only:
         os.chdir(directory)
@@ -1100,7 +1140,7 @@ def photometry(
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
     else:
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
         catalogName = sex1(name)
         psfex(catalogName)
         psfcatalogName = sex2(name)
@@ -1113,10 +1153,17 @@ def photometry(
         elif grb_coordlist:
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
         if not no_plots:
-            photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
+            slope, intercept = photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                              idx_psfimage, psfweights_noclip, psf_clipped, sigma)
-        if not keep:
-            removal(directory)
+        if not int_cal:
+            if not keep:
+                removal(directory)
+        else:
+            while intercept > 0.5:
+                print('\nIntercept = %s' % intercept)
+                mag_low_cutoff += 0.5
+                intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey, mag_low_cutoff, grb_ra,
+                                            grb_dec, grb_coordlist, grb_radius)
 
 
 def main():
@@ -1173,13 +1220,16 @@ def main():
     parser.add_argument('-grb_radius', type=float,
                         help='[float], # of arcsec diameter to search for GRB, default = 4.0"',
                         default=defaults["thresh"])
+    parser.add_argument('-int_cal', action='store_true',
+                        help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.5, the '
+                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.5.')
     args, unknown = parser.parse_known_args()
     # print(args)
     # print(unknown)
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_cutoff,
                args.no_plots, args.plots_only, args.keep,
-               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
+               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.int_cal)
 
 
 if __name__ == "__main__":
