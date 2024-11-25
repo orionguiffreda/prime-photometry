@@ -1081,7 +1081,7 @@ def int_calibration(
                                                                                     crop, given_catalog)
     cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources,
                                                                          idx_psfmass, idx_psfimage,
-                                                                         name, band, survey, sigma)
+                                                                         name, band, chosen_survey, sigma)
     if grb_ra:
         GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
     elif grb_coordlist:
@@ -1129,7 +1129,7 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
-                                             name, band, survey, sigma)
+                                             name, band, chosen_survey, sigma)
         slope, intercept = photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                          idx_psfimage, psfweights_noclip, psf_clipped, sigma)
     elif grb_only:
@@ -1147,7 +1147,7 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
-                                             name, band, survey, sigma)
+                                             name, band, chosen_survey, sigma)
         if grb_ra:
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
         elif grb_coordlist:
@@ -1159,11 +1159,31 @@ def photometry(
             if not keep:
                 removal(directory)
         else:
+            prev_intercept = intercept
+            revert_flag = False
             while intercept > 0.5:
-                print('\nIntercept = %s' % intercept)
+                print('\nIntercept = %.4f\n' % intercept)
                 mag_low_cutoff += 0.5
-                intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey, mag_low_cutoff, grb_ra,
+                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey, mag_low_cutoff, grb_ra,
                                             grb_dec, grb_coordlist, grb_radius)
+                if new_intercept > prev_intercept:
+                    print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
+                          "redoing...\n" % (new_intercept, prev_intercept))
+                    intercept = prev_intercept
+                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey,
+                                                    mag_low_cutoff-0.5, grb_ra,
+                                                    grb_dec, grb_coordlist, grb_radius)
+                    revert_flag = True
+                    break
+                else:
+                    intercept = new_intercept
+                    prev_intercept = intercept
+                    revert_flag = False
+
+            if revert_flag:
+                print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+            else:
+                print(f"Final intercept below 0.5: %.4f" % intercept)
 
 
 def main():
