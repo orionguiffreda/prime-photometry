@@ -25,7 +25,8 @@ import subprocess
 # from scipy import stats
 
 # sys.path.insert(0, 'C:\PycharmProjects\prime-photometry\photomitrus')
-from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_QUERY_WIDTH,
+from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
+                                  PHOTOMETRY_QUERY_WIDTH,
                                   PHOTOMETRY_QUERY_CATALOGS)
 
 # %%
@@ -87,7 +88,7 @@ def img(directory, imageName, crop):
 # Use astroquery to get catalog search
 
 
-def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None):
+def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None):
     # query box width
     width = PHOTOMETRY_QUERY_WIDTH
 
@@ -96,6 +97,12 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
         mag_low_cutoff = mag_lower_lim
     else:
         mag_low_cutoff = PHOTOMETRY_MAG_LOWER_LIMIT
+
+    # mag upper cutoff
+    if mag_upper_lim:
+        mag_high_cutoff = mag_upper_lim
+    else:
+        mag_high_cutoff = PHOTOMETRY_MAG_UPPER_LIMIT
 
     if given_catalog_path:
         Q = ascii.read(given_catalog_path)
@@ -160,20 +167,36 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                             catNum = ''.join(k)
                             chosen_survey = f[0]
                             print('Survey = %s' % chosen_survey)
-                            print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.2f arcmin' % (
-                                catNum, raImage, decImage, width))
-                            try:
-                                v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
-                                           column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}", "%sFlag" % band.lower(): "<4"
-                                                            }, row_limit=-1)
-                                Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                                   , catalog=catNum, cache=False)
-                                print('Queried source total = ', len(Q[0]))
-                            except Exception as e:
+                            if chosen_survey == 'DES_Y' or chosen_survey == 'DES_Z':
+                                print('\nMag upper limit active due to survey choice: %s' % mag_high_cutoff)
                                 print(
-                                    'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
-                                    ' H band is also not well covered!')
-                                print(f"Error details: {e}")
+                                    '\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.2f arcmin' % (
+                                        catNum, raImage, decImage, width))
+                                try:
+                                    v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
+                                               column_filters={"%s" % cols[3]: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                                               "%sFlag" % band.lower(): "<4"
+                                                               }, row_limit=-1)
+                                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)),
+                                                       width=str(width) + 'm'
+                                                       , catalog=catNum, cache=False)
+                                    print('Queried source total = ', len(Q[0]))
+                                except Exception as e:
+                                    print(
+                                        'Error in Vizier query.')
+                            else:
+                                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.2f arcmin' % (
+                                    catNum, raImage, decImage, width))
+                                try:
+                                    v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
+                                               column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}"}, row_limit=-1)
+                                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                                       , catalog=catNum, cache=False)
+                                    print('Queried source total = ', len(Q[0]))
+                                except Exception as e:
+                                    print(
+                                        'Error in Vizier query.')
+                                    print(f"Error details: {e}")
                             break
                         else:
                             print('no %s mag sources found, defaulting to next survey...' % band)
@@ -268,7 +291,6 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
                                column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                    print(v)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                        catalog=catNum, cache=False)
                     print('Queried source total = ', len(Q[0]))
@@ -283,8 +305,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         catNum, raImage, decImage, width))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
-                                   column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                        print(v)
+                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}"}, row_limit=-1)
                         Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                            catalog=catNum, cache=False)
                         print('Queried source total = ', len(Q[0]))
@@ -298,8 +319,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         catNum, raImage, decImage, width))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band.lower(), 'e_%smag' % band.lower()],
-                                   column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                        print(v)
+                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}"}, row_limit=-1)
                         Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                            catalog=catNum, cache=False)
                         print('Queried source total = ', len(Q[0]))
@@ -396,7 +416,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         cleanPSFSources = psfsourceTable[
             (psfsourceTable['FLAGS'] == 0) & (psfsourceTable['FLAGS_MODEL'] == 0) & (psfsourceTable['XMODEL_IMAGE']
             < (max_x - crop)) & (psfsourceTable['XMODEL_IMAGE'] > crop) & (psfsourceTable['YMODEL_IMAGE']
-            < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop)]
+            < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop) & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
 
         print('Catalogue cropped, source total = ', len(good_cat_stars))
 
@@ -423,13 +443,14 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
 
         PSFSources = psfsourceTable[
             (psfsourceTable['XMODEL_IMAGE'] < (max_x - crop)) & (psfsourceTable['XMODEL_IMAGE'] > crop)
-            & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop)]
+            & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop)
+            & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
 
         cleanPSFSources = psfsourceTable[
             (psfsourceTable['FLAGS'] == 0) & (psfsourceTable['FLAGS_MODEL'] == 0) & (psfsourceTable['XMODEL_IMAGE']
                                                                                      < (max_x - crop)) & (
                         psfsourceTable['XMODEL_IMAGE'] > crop) & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop)
-            & (psfsourceTable['YMODEL_IMAGE'] > crop)]
+            & (psfsourceTable['YMODEL_IMAGE'] > crop) & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
 
         # magmean = cleanPSFSources['MAG_POINTSOURCE'].mean()  #trimming sources more than 4 sig away from mean (outliers)
         # magerr = cleanPSFSources['MAG_POINTSOURCE'].std()
@@ -806,6 +827,9 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     rsquare_sig = model_sig.rsquared
     rss_sig = model_sig.ssr
 
+    print('3 sig fit: slope = %.4f +/- %.4f' % (m_sig, m_sigerr))
+    print('3 sig fit: y-int = %.4f +/- %.4f' % (b_sig, b_sigerr))
+
     # residual fit 3 sig clip - errors
     mags = range(10,22)
     res_errs = []
@@ -817,6 +841,7 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
         avgsig = np.average(res_mask, weights=psfweights_noclip[~psf_clipped.mask][mask])
         varsig = np.average((res_mask - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask][mask])
         ressig_err = np.sqrt(varsig)
+        # ressig_err = np.std(res_mask)
         if ma.is_masked(ressig_err):
             ressig_err = 0
         res_errs.append(ressig_err)
@@ -1045,7 +1070,10 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     xticks = np.arange(12, 25.5, 0.5)
     plt.xticks(xticks, fontsize=10)
     plt.grid()
-    plt.ylim(0, 2000)
+    if len(PSFsources) < 1500:
+        plt.ylim(0, 250)
+    else:
+        plt.ylim(0, 2000)
     # plt.yscale('log')
     # plt.yticks([0,0.05,0.1,0.15,0.2,0.25])
     # plt.legend([r'5 $\sigma$ Limit'],loc='upper left',fontsize=12)
@@ -1066,12 +1094,13 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
 
 def int_calibration(
         name, directory, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
-        mag_low_lim=None, grb_ra=None, grb_dec=None,
+        mag_low_lim=None, mag_high_lim=None, grb_ra=None, grb_dec=None,
         grb_coordlist=None, grb_radius=defaults['thresh']
 ):
     print('3 sigma fit y-intercept > 0.5! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
     data, header, w, raImage, decImage = img(directory, name, crop)
-    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_lower_lim=mag_low_lim,
+                                             mag_upper_lim=mag_high_lim)
     psfcatalogName = []
     for f in os.listdir(directory):
         if f.endswith('.psf.cat'):
@@ -1108,7 +1137,7 @@ def removal(directory):
 
 def photometry(
         full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
-        mag_low_lim=None, no_plots=False, plots_only=False,
+        mag_low_lim=None, mag_high_lim=None, no_plots=False, plots_only=False,
         keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=defaults['thresh'],
         int_cal=False
 ):
@@ -1125,7 +1154,7 @@ def photometry(
                 psfcatalogName.append(f)
         psfcatalogName = ' '.join(psfcatalogName)
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim, mag_high_lim)
         good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFsources, idx_psfmass, idx_psfimage,
@@ -1140,7 +1169,7 @@ def photometry(
             GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
     else:
         data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim)
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim, mag_high_lim)
         catalogName = sex1(name)
         psfex(catalogName)
         psfcatalogName = sex2(name)
@@ -1149,9 +1178,9 @@ def photometry(
         cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
                                              name, band, chosen_survey, sigma)
         if grb_ra:
-            GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius)
         elif grb_coordlist:
-            GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, grb_coordlist)
         if not no_plots:
             slope, intercept = photometry_plots(cleanPSFSources, PSFsources, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                              idx_psfimage, psfweights_noclip, psf_clipped, sigma)
@@ -1164,14 +1193,14 @@ def photometry(
             while intercept > 0.5:
                 print('\nIntercept = %.4f\n' % intercept)
                 mag_low_cutoff += 0.5
-                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey, mag_low_cutoff, grb_ra,
-                                            grb_dec, grb_coordlist, grb_radius)
+                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_radius)
                 if new_intercept > prev_intercept:
                     print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                           "redoing...\n" % (new_intercept, prev_intercept))
                     intercept = prev_intercept
-                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, survey,
-                                                    mag_low_cutoff-0.5, grb_ra,
+                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                    mag_low_cutoff-0.5, mag_high_lim, grb_ra,
                                                     grb_dec, grb_coordlist, grb_radius)
                     revert_flag = True
                     break
@@ -1222,8 +1251,11 @@ def main():
     parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated'
                                                    'catalog for photometry INSTEAD of querying, put in full file path.',
                         default=None)
-    parser.add_argument('-mag_cutoff', type=float, help='[float], Lower mag cutoff for survey query & crossmatch'
+    parser.add_argument('-mag_low', type=float, help='[float], Lower mag cutoff for survey query & crossmatch'
                                                         ' settings default = 12.5',
+                        default=None)
+    parser.add_argument('-mag_high', type=float, help='[float], Higher mag cutoff for survey query & crossmatch'
+                                                        ' settings default = 21, currently only applies to DES Y & Z',
                         default=None)
     parser.add_argument('-grb_ra', type=str, help='[str], RA for GRB source, either in hh:mm:ss or decimal'
                                                   '*NOTE* When using sexagesimal, use "-grb_ra=value_here" NOT "-grb_ra '
@@ -1247,8 +1279,8 @@ def main():
     # print(args)
     # print(unknown)
 
-    photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_cutoff,
-               args.no_plots, args.plots_only, args.keep,
+    photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,
+               args.mag_high, args.no_plots, args.plots_only, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.int_cal)
 
 

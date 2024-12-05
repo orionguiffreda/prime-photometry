@@ -14,10 +14,11 @@ import os
 PIPELINE_DEFAULT_DIR = '/mnt/d/PRIME_photometry_test_files/'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
+PHOTOMETRY_MAG_UPPER_LIMIT = 21
 PHOTOMETRY_QUERY_WIDTH = 48  # in arcmin, should cover the whole chip even with 45 deg rotation
 PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/viking2'], '2MASS': ['J', 'II/246/'],
-                             'DES_Z': ['Z', 'II/371/des_dr2'], 'SDSS': ['Z', 'V/154/sdss16'],
-                             'Skymapper': ['Z', 'II/379/smssdr4'], 'UKIDSS': ['Y', 'II/319/las9'],
+'Skymapper': ['Z', 'II/379/smssdr4'],
+                             'DES_Z': ['Z', 'II/371/des_dr2'], 'SDSS': ['Z', 'V/154/sdss16'], 'UKIDSS': ['Y', 'II/319/las9'],
                              'DES_Y': ['Y', 'II/371/des_dr2']
                              }
 
