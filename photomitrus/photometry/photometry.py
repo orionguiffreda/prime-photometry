@@ -345,10 +345,12 @@ def sex1(imageName):
     configFile = gen_config_file_name('sex2.config')
     paramName = gen_config_file_name('tempsource.param')
     catalogName = imageName + '.cat'
+    weightName = 'weight'+imageName[5:]
     try:
-        command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catalogName, paramName)
+        command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
+                   (imageName, configFile, catalogName, weightName, paramName))
         # print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s' % err)
     return catalogName
@@ -364,7 +366,7 @@ def psfex(catalogName):
     try:
         command = 'psfex %s -c %s' % (catalogName, psfConfigFile)
         # print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run psfex with exit error %s' % err)
 
@@ -379,12 +381,13 @@ def sex2(imageName):
     psfcatalogName = imageName.replace('.fits', '.psf.cat')
     configFile = gen_config_file_name('sex2.config')
     psfparamName = gen_config_file_name('photomPSF.param')
+    weightName = 'weight' + imageName[5:]
     try:
         # We are supplying SExtactor with the PSF model with the PSF_NAME option
-        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
-        imageName, configFile, psfcatalogName, psfName, psfparamName)
+        command = 'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
+        imageName, configFile, psfcatalogName, weightName, psfName, psfparamName)
         # print("Executing command: %s" % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s' % err)
     return psfcatalogName
@@ -564,7 +567,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
-    print('Total source # = ', len(PSFSources))
+    print('Total PRIME source # = ', len(PSFSources))
 
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
@@ -827,8 +830,10 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     rsquare_sig = model_sig.rsquared
     rss_sig = model_sig.ssr
 
-    print('3 sig fit: slope = %.4f +/- %.4f' % (m_sig, m_sigerr))
-    print('3 sig fit: y-int = %.4f +/- %.4f' % (b_sig, b_sigerr))
+    print('# of crossmatched sources used in %s sig fit: %i'
+          % (sigma, len(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask])))
+    print('%s sig fit: slope = %.4f +/- %.4f' % (sigma, m_sig, m_sigerr))
+    print('%s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_sig, b_sigerr))
 
     # residual fit 3 sig clip - errors
     mags = range(10,22)
