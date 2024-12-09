@@ -21,8 +21,7 @@ from astropy.table import Table
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import subprocess
-
-# from scipy import stats
+from scipy.stats import skew
 
 # sys.path.insert(0, 'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
@@ -835,24 +834,45 @@ def photometry_plots(cleanPSFsources, PSFsources, imageName, survey, band, good_
     print('%s sig fit: slope = %.4f +/- %.4f' % (sigma, m_sig, m_sigerr))
     print('%s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_sig, b_sigerr))
 
-    # residual fit 3 sig clip - errors
+    # residual fit 3 sig clip - bin errors and stats
     mags = range(10,22)
     res_errs = []
-    x_arr = np.arange(10-0.5, 22-0.5, 1)
+    res_means = []
+    res_ranges = []
+    res_skews = []
+    x_arr = np.arange(10+0.5, 22+0.5, 1)
     for i in mags:
         mask = ((cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] > i) &
                 (cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] < i+1))
         res_mask = model_sig.resid[mask]
         avgsig = np.average(res_mask, weights=psfweights_noclip[~psf_clipped.mask][mask])
         varsig = np.average((res_mask - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask][mask])
-        ressig_err = np.sqrt(varsig)
+        ressig_err = np.sqrt(varsig)    # spread
+        ressig_range = '%s - %s' % (i, i + 1)
+        ressig_mean = np.nanmean(res_mask)  # mean
+        ressig_skew = skew(res_mask)    # skew
         # ressig_err = np.std(res_mask)
         if ma.is_masked(ressig_err):
             ressig_err = 0
         res_errs.append(ressig_err)
+        res_means.append(ressig_mean)
+        res_ranges.append(ressig_range)
+        res_skews.append(ressig_skew)
     res_errs = np.nan_to_num(np.array(res_errs))
+    res_means = np.nan_to_num(np.array(res_means))
+    res_skews = np.nan_to_num(np.array(res_skews))
     res_errs_min = np.min((res_errs[res_errs != 0]))
     res_errs_max = np.max(res_errs)
+
+    # bin errors / stats table
+    bintable = Table()
+    bintable['Bin Range (mag)'] = res_ranges
+    bintable['Mean (mag)'] = res_means
+    bintable['Spread (mag)'] = res_errs
+    bintable['Skew'] = res_skews
+
+    bintable.write('Resid_%s-sig_Data_%s_C%s_%s.ecsv' % (sigma, band, chip, survey), overwrite=True)
+    print('Residual data table for %s sigma clip written!' % sigma)
 
     # t = Table()
     # t['Residuals'] = model_sig.resid
