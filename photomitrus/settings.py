@@ -17,11 +17,14 @@ PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 21
 PHOTOMETRY_QUERY_WIDTH = 48  # in arcmin, should cover the whole chip even with 45 deg rotation
 PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/viking2'], '2MASS': ['J', 'II/246/'],
-'Skymapper': ['Z', 'II/379/smssdr4'],
+                            'Skymapper': ['Z', 'II/379/smssdr4'],
                              'DES_Z': ['Z', 'II/371/des_dr2'], 'SDSS': ['Z', 'V/154/sdss16'], 'UKIDSS': ['Y', 'II/319/las9'],
                              'DES_Y': ['Y', 'II/371/des_dr2']
                              }
+# AB mag surveys: DES, Skymapper, & SDSS
 
+PHOTOMETRY_LIM_MAGS = {'VHS': 19.5, 'VIKING': 21.2, '2MASS': 15.5, 'Skymapper': 22, 'DES_Z': 23.1, 'SDSS': 23,
+                       'UKIDSS': 20.2, 'DES_Y': 21.7}
 
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
