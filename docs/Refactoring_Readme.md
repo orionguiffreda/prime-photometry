@@ -1,6 +1,6 @@
 # Infrared Sky Photometric & Image Reduction Implement for Transients (InSPIRIT)
 
-An image processing and photometry pipeline for PRIME telescope by @Oriohno and @joedurbak
+An image processing and photometry pipeline for PRIME telescope by [Orion Guiffreda](https://github.com/Oriohno) and [Joe Durbak](https://github.com/joedurbak)
 
 # Welcome!
 
