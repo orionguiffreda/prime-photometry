@@ -1,8 +1,14 @@
+# Infrared Sky Photometric & Image Reduction Implement for Transients (InSPIRIT)
+
+An image processing and photometry pipeline for PRIME telescope by @Oriohno and @joedurbak
+
 # Welcome!
 
 Here is the wiki of the PRIME telescope photometry pipeline!  Here will be pages of information on how to use the pipeline's scripts, how these scripts function, and other various things, such as recommended index and config files.  I'll try my best to explain everything about the pipeline, and will be updating new and current pages over time as functionality improves! 
 
-To jump right into how to utilize the pipeline, look at the Quick Start Guide below!  Then, for further information, examine the _photometrus stack_ (_master.py_) and _photometrus pipeline_ (_multi_master.py_) scripts section (as explained below!)
+If you have access to the PRIME computer and want to jump right into how to utilize the pipeline, look at the Quick Start Guide below!  Then, for further information, examine the _photometrus stack_ (_master.py_) and _photometrus pipeline_ (_multi_master.py_) scripts section (as explained below!)
+
+If you want to download and set up the pipeline, look at the Installation Guide below!
 
 ## Quick Start Guide
 
@@ -90,7 +96,7 @@ Most of the wiki will be about the scripts, how they function, what they produce
 * Stack: This section details how the final pipeline step, stacking, works.
 
 
-## Installation instructions for PRIME Pipeline (taken from initial readme)
+## Installation Guide for PRIME Pipeline
 
 ### Clone the repo
 
@@ -115,7 +121,7 @@ Most of the wiki will be about the scripts, how they function, what they produce
 
 ### About index files
 
-To utilize a key part of the pipeline, astrometry.net, you will need index files from which the package can pull from.  See these links for key details about and where to download index files:
+To utilize a part of the pipeline, astrometry.net, you will need index files from which the package can pull from.  Astrometry.net is frustratingly inconsistent, and the pipeline normally only uses it for a single final (technically optional) astrometry step.  Thus, it is possible to utilize the pipeline without it.  However, if you want to use the pipeline, you'll need to download the index files.  See these links for key details about and where to download index files:
 
 https://astrometry.net/doc/readme.html
 
