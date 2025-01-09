@@ -9,7 +9,8 @@ Here is the wiki of the PRIME telescope photometry pipeline!  Here will be pages
 
 If you have access to the PRIME computer and want to jump right into how to utilize the pipeline, look at the Quick Start Guide below!  Then, for further information, examine the _photometrus stack_ (_master.py_) and _photometrus pipeline_ (_multi_master.py_) scripts section (as explained below!)
 
-If you want to download and set up the pipeline, look at the Installation Guide below!
+**NOTE!** *A key script for downloading data is not included in the repository, due to security.  As a result (and because it is still in development) the pipeline's greater functions will not operate.*  
+If you want to download and set up the pipeline (once it's ready), look at the Installation Guide below!
 
 ## Quick Start Guide
 
