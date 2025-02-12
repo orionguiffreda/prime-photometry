@@ -3,7 +3,7 @@ import sys
 import subprocess
 import argparse
 import fnmatch
-# sys.path.insert(0,'/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
+import shutil
 
 from photomitrus.settings import makedirs
 from photomitrus.settings import makedirsFF
@@ -86,6 +86,7 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
                                                                                                               placeholder))
 
     astromangle_new.astrom_angle(input_dir=ramppath, output_dir=astrompath, rot_val=rot_val)
+    return ramppath
 
 
 # %% flat fielding
@@ -252,6 +253,19 @@ def astromnet_refine(subdir):
             os.remove(subdir + f)
         print('%i files refined! removed old fits files' % len(newlist))
 
+#%%
+
+
+def intermediate_removal(rampdir, astromdir, FFdir, skydir, subdir):
+    print('WARNING: Removing all intermediate data products & subdirectories! (only stacks will remain)')
+    subdirlist = [rampdir, astromdir, FFdir, subdir]
+    for subdirectory in subdirlist:
+        try:
+            shutil.rmtree(subdirectory, ignore_errors=True)
+        except FileNotFoundError:
+            print('%s already no longer exists.' % subdirectory)
+    print('All intermediate subdirectories removed!')
+
 
 # %%
 
@@ -261,11 +275,11 @@ defaults = dict(sigma=4)
 
 def master(
         parentdir, chip, band, sigma=4, rot_val=None, no_ff=False, no_shift=False, sex=False, compress=False,
-        net_refine=False, sky_override=None
+        net_refine=False, sky_override=None, removal=False
 ):
     if no_ff:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
-        astrom_angle(astromdir, parentdir, chip, rot_val)
+        rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
         sky(astromdir, skydir, sigma, chip)
         if sex:
             sexskysub(astromdir, subdir)
@@ -276,7 +290,7 @@ def master(
     else:
         astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
         FFdir = makedirectoriesFF(parentdir, chip)
-        astrom_angle(astromdir, parentdir, chip, rot_val)
+        rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip)
         if sex or sky_override:
             pass
@@ -297,6 +311,8 @@ def master(
         stacking(subdir, stackdir, chip)
         if compress:
             fpack(stackdir, chip)
+        if removal:
+            intermediate_removal(rampdir, astromdir, FFdir, skydir, subdir)
 
 
 def main():
@@ -325,13 +341,16 @@ def main():
     parser.add_argument('-net_refine', action='store_true',
                         help='optional flag, used to automatically refine astrometry using '
                              'astrometry.net')
+    parser.add_argument('-removal', action='store_true',
+                        help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
+                             'stacks; intended for space saving in large nights of observation')
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=None)
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.rot_val, args.no_FF, args.no_shift, args.sex,
-           args.compress, args.net_refine, args.sky_override)
+           args.compress, args.net_refine, args.sky_override, args.removal)
 
 
 if __name__ == "__main__":

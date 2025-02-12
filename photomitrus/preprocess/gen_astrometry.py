@@ -20,7 +20,7 @@ def astrom(outpath, inlist):
     for f in inlist:
         try:
             command = ('solve-field '
-                       '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
+                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
                        '-U none --no-verify --axy none -S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
                           outpath, f)
             print('Executing command: %s' % command)
@@ -35,7 +35,7 @@ def astromdir(outpath, directory):
     for f in inpath:
         try:
             command = ('solve-field '
-                       '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
+                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
                        '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
                           outpath, directory + f)
@@ -59,7 +59,7 @@ def astromdirhard(outpath, directory, rad, ds):
             dec = hdr['DEC-D']
             try:
                 command = (('solve-field '
-                            '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
+                            '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
                             '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
                             '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
                            ra, dec, rad, ds, outpath, directory+f))

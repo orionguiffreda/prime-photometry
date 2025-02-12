@@ -186,7 +186,7 @@ def astromfin(directory,chip):
         pre = os.path.splitext(f)[0]
         try:
             command = ('solve-field '
-                       '--backend-config /home/prime/miniconda3/pkgs/astrometry-0.94-py39h33f06bc_5/share/astrometry/astrometry.cfg '
+                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 -U none --axy none '
                        '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
                           directory, os.path.join(directory, f))

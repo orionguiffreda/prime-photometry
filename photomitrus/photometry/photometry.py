@@ -577,6 +577,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     cleanPSFSources.add_column(psfmagcol_clean)
     cleanPSFSources.add_column(psfmagerrcol_clean)
     cleanPSFSources.remove_column('VIGNET')
+    cleanPSFSources['FLUX_RADIUS'] = cleanPSFSources['FLUX_RADIUS'] * 0.498
+    cleanPSFSources['FLUX_RADIUS'].unit = u.arcsec
 
     # catalog for all detected sources
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
@@ -592,6 +594,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
+    PSFSources['FLUX_RADIUS'] = PSFSources['FLUX_RADIUS'] * 0.498
+    PSFSources['FLUX_RADIUS'].unit = u.arcsec
     print('Total PRIME source # = ', len(PSFSources))
 
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
@@ -720,7 +724,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 grb_dist = d2d[0].to(u.arcsec)
                 grb_dist = grb_dist / u.arcsec
 
-                print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+                print('Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
                     grb_ra, grb_dec, grb_rad, grb_snr))
                 print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
@@ -791,7 +795,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             grb_dist = d2d[0].to(u.arcsec)
             grb_dist = grb_dist / u.arcsec
 
-            print('Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+            print('Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
                 grb_ra, grb_dec, grb_rad, grb_snr))
             print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
@@ -1181,7 +1185,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     xticks = np.arange(12, 25.5, 0.5)
     plt.xticks(xticks, fontsize=10)
     plt.grid()
-    if len(PSFsources) < 1500:
+    if len(PSFsources) < 3500:
         plt.ylim(0, 250)
     else:
         plt.ylim(0, 2000)
