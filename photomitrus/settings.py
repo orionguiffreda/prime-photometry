@@ -59,10 +59,6 @@ def gen_mflat_file_name(band, chip):
 
 
 # %%
-os.chdir('/mnt/c/PycharmProjects/prime-photometry/photomitrus/')
-test = gen_mflat_file_name('J', 1)
-
-# %%
 import pandas as pd
 
 # Settings for list of directory+filenames
