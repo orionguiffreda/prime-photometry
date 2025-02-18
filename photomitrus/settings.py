@@ -11,7 +11,7 @@ import os
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
-PIPELINE_DEFAULT_DIR = '/mnt/d/PRIME_photometry_test_files/'
+PIPELINE_DEFAULT_DIR = '/mnt/photometry/FebGWEvent/'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 21

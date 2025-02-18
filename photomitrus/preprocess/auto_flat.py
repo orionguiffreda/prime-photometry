@@ -10,6 +10,7 @@ import argparse
 
 
 def flatdatadownload(directory, band, date, chip=None):
+    os.chdir(gen_pipeline_file_name())
     print('Creating parent dir: %s' % directory)
     if not os.path.isdir(directory):
         os.mkdir(directory)
