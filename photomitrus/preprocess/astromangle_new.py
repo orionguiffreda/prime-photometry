@@ -259,10 +259,13 @@ def update_ra_dec(fits_file, rot_val):
         # place found CRPIX values here
            # c1=(0,-44)              #Swift_1246989   #c3 and c4 values are not available
            # c2=(-21,-19)
+
+
 def update_ra_dec_directory(directory, rot_val):
     fits_files = [os.path.join(directory, f) for f in get_files(directory)]
     for fits_file in fits_files:
         update_ra_dec(fits_file, rot_val)
+
 
 def update_ra_dec_move_directory(input, output, rot_val):
     for f in sorted(os.listdir(input)):
@@ -273,6 +276,15 @@ def update_ra_dec_move_directory(input, output, rot_val):
             shutil.copyfile(origpath, newpath)
             update_ra_dec(newpath, rot_val)
             print('%s updated, renamed, and moved!' % fnewname)
+
+
+def update_ra_dec_list(input_list, output_dir, rot_val):
+    for filepath in input_list:
+        filename = filepath[-20:]
+        filenewname = filename.replace('.fits.ramp', '.ramp.new')
+        filenewpath = os.path.join(output_dir, filenewname)
+        shutil.copyfile(filepath, filenewpath)
+        update_ra_dec(filenewpath, rot_val)
 
 
 def old_main():
@@ -291,14 +303,16 @@ def old_main():
     print("C4: " + str(coord_C4.to_string("hmsdms")))
 
 
-def astrom_angle(input_dir, output_dir, rot_val=48):
-    if os.path.isdir(input_dir):
+def astrom_angle(input_field, output_dir, rot_val=48):
+    if type(input_field) is list:
+        update_ra_dec_list(input_field, output_dir, rot_val)
+    elif os.path.isdir(input_field):
         if output_dir:
-            update_ra_dec_move_directory(input_dir, output_dir, rot_val)
+            update_ra_dec_move_directory(input_field, output_dir, rot_val)
         if not output_dir:
-            update_ra_dec_directory(input_dir, rot_val)
-    elif os.path.isfile(input_dir):
-        update_ra_dec(input_dir, rot_val)
+            update_ra_dec_directory(input_field, rot_val)
+    elif os.path.isfile(input_field):
+        update_ra_dec(input_field, rot_val)
 
 #%%
 

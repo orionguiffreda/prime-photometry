@@ -22,15 +22,22 @@ from photomitrus.stack import stack
 # %% directory creation
 def makedirectories(parentdir, chip):
     print('generating directories for astrom, sub, sky, and stacked imgs...')
-    astromdir, skydir, subdir, stackdir = makedirs(parentdir, chip)
-    return astromdir, skydir, subdir, stackdir
+    astromdir, FFdir, skydir, subdir, stackdir = makedirs(parentdir, chip)
+    return astromdir, FFdir, skydir, subdir, stackdir
 
 
-def makedirectoriesFF(parentdir, chip):
-    print('generating FF directory')
-    FFdir = makedirsFF(parentdir, chip)
-    return FFdir
+# def makedirectoriesFF(parentdir, chip):
+#     print('generating FF directory')
+#     FFdir = makedirsFF(parentdir, chip)
+#     return FFdir
 
+
+def getchiplist(full_ramp_list, chip):
+    for ramplist in full_ramp_list:
+        if ramplist and f'C{chip}.' in ramplist[0]:
+            print(f'C{chip} ramp images:', ramplist)
+            return ramplist
+    return None
 
 # %% mflat creation
 """
@@ -46,6 +53,24 @@ def mflat(flatdir, chip):
 
 
 # %% initial astrometry
+
+
+def initastrom_list(astrompath, chipramplist, chip=None):
+    os.chdir(gen_pipeline_file_name())
+    if chip:
+        print('running initial astrometry on ramp imgs...')
+
+        print('\nEquivalent argparse cmd: python ./preprocess/gen_astrometry.py -output %s -input %s...' % (
+        astrompath, chipramplist))
+
+        gen_astrometry.gen_astrom(output=astrompath, input=chipramplist[0])
+    if not chip:
+        print('running astrometry.net on subbed imgs...')
+
+        print('\nEquivalent argparse cmd: python ./preprocess/gen_astrometry.py -output %s -input %s' % (
+        astrompath, astrompath))
+
+        gen_astrometry.gen_astrom(output=astrompath, input=astrompath)
 
 
 def initastrom(astrompath, parentdir, chip=None):
@@ -85,9 +110,24 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
                                                                                                               astrompath,
                                                                                                               placeholder))
 
-    astromangle_new.astrom_angle(input_dir=ramppath, output_dir=astrompath, rot_val=rot_val)
+    astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
     return ramppath
 
+
+def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
+    os.chdir(gen_pipeline_file_name())
+
+    if not rot_val:
+        placeholder = None
+    else:
+        placeholder = rot_val
+
+    print(
+        '\nEquivalent argparse cmd: python ./preprocess/astromangle_new.py -input %s... -output %s -rot_val %s' % (chipramplist[0],
+                                                                                                              astrompath,
+                                                                                                              placeholder))
+
+    astromangle_new.astrom_angle(input_field=chipramplist, output_dir=astrompath, rot_val=rot_val)
 
 # %% flat fielding
 
@@ -256,9 +296,12 @@ def astromnet_refine(subdir):
 #%%
 
 
-def intermediate_removal(rampdir, astromdir, FFdir, skydir, subdir):
+def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
     print('WARNING: Removing all intermediate data products & subdirectories! (only stacks will remain)')
-    subdirlist = [rampdir, astromdir, FFdir, subdir]
+    if rampdir:
+        subdirlist = [astromdir, FFdir, subdir, rampdir]
+    else:
+        subdirlist = [astromdir, FFdir, subdir]
     for subdirectory in subdirlist:
         try:
             shutil.rmtree(subdirectory, ignore_errors=True)
@@ -274,22 +317,50 @@ defaults = dict(sigma=4)
 
 
 def master(
-        parentdir, chip, band, sigma=4, rot_val=None, no_ff=False, no_shift=False, sex=False, compress=False,
+        parentdir, chip, band, sigma=4, fullramplist=None, rot_val=None, no_shift=False, sex=False, compress=False,
         net_refine=False, sky_override=None, removal=False
 ):
-    if no_ff:
-        astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
-        rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
-        sky(astromdir, skydir, sigma, chip)
-        if sex:
-            sexskysub(astromdir, subdir)
+    # if no_ff:
+    #     astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
+    #     rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
+    #     sky(astromdir, skydir, sigma, chip)
+    #     if sex:
+    #         sexskysub(astromdir, subdir)
+    #     else:
+    #         skysub(astromdir, subdir, skydir, chip, sky_override)
+    #     astromatic_astrometry(subdir)
+    #     stacking(subdir, stackdir, chip)
+    astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
+    if fullramplist:
+        # FFdir = makedirectoriesFF(parentdir, chip)
+        chipramplist = getchiplist(fullramplist, chip)
+        if chipramplist is None:
+            raise ValueError('For some reason, given chip doesnt match to any sublist!')
+        astrom_angle_list(astromdir, chipramplist, chip, rot_val)
+        flatfielding(astromdir, FFdir, band, chip)
+        if sex or sky_override:
+            pass
         else:
-            skysub(astromdir, subdir, skydir, chip, sky_override)
+            sky(FFdir, skydir, sigma, chip)
+        if sex:
+            sexskysub(FFdir, subdir)
+        else:
+            skysub(FFdir, subdir, skydir, chip, sky_override)
+        if net_refine:
+            astromnet_refine(subdir)
+        else:
+            if not no_shift:
+                shift(subdir, band)
+            else:
+                pass
         astromatic_astrometry(subdir)
         stacking(subdir, stackdir, chip)
+        if compress:
+            fpack(stackdir, chip)
+        if removal:
+            intermediate_removal(astromdir, FFdir, subdir)
     else:
-        astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
-        FFdir = makedirectoriesFF(parentdir, chip)
+        # FFdir = makedirectoriesFF(parentdir, chip)
         rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip)
         if sex or sky_override:
@@ -312,14 +383,18 @@ def master(
         if compress:
             fpack(stackdir, chip)
         if removal:
-            intermediate_removal(rampdir, astromdir, FFdir, skydir, subdir)
+            intermediate_removal(astromdir, FFdir, skydir, subdir, rampdir)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
     parser.add_argument('-parent', type=str,
-                        help='[str], parent directory of outputs, should include folders of the chips ramp data')
+                        help='[str], parent directory of all outputs')
+    parser.add_argument('-ramplist', type=str,
+                        help='[str], list of filepaths to ramp files to conduct processing on, in format: '
+                             '"image1.fits,image2.fits,image3.fits,...".  For usage w/ '
+                             'multi_master.py, better alternative to downloading ramp data')
     parser.add_argument('-chip', type=int, help='[int], number of detector')
     parser.add_argument('-band', type=str, help='*NOT NECESSARY UNLESS USING -FF* [str], band of images, ex. "J"',
                         default=None)
@@ -328,7 +403,7 @@ def main():
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
                                                      ' (default = 48 deg or 172800")', default=None)
-    parser.add_argument('-no_FF', action='store_true', help='optional flag, does not use flat fielding in pipeline')
+    # parser.add_argument('-no_FF', action='store_true', help='optional flag, does not use flat fielding in pipeline')
     parser.add_argument('-sex', action='store_true',
                         help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
     parser.add_argument('-compress', action='store_true', help='optional flag, use fpack to compress stacked images')
@@ -349,7 +424,7 @@ def main():
                         default=None)
     args, unknown = parser.parse_known_args()
 
-    master(args.parent, args.chip, args.band, args.sigma, args.rot_val, args.no_FF, args.no_shift, args.sex,
+    master(args.parent, args.chip, args.band, args.sigma, args.ramplist, args.rot_val, args.no_shift, args.sex,
            args.compress, args.net_refine, args.sky_override, args.removal)
 
 

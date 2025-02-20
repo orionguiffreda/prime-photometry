@@ -22,13 +22,16 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import subprocess
 from scipy.stats import skew
+import warnings
 
 # sys.path.insert(0, 'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS)
 
 # %%
-defaults = dict(crop=500, RA=None, DEC=None, thresh='4.0', sigma=3)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings(action="ignore", module="scipy", message="^One or more")
+defaults = dict(crop=300, RA=None, DEC=None, thresh='4.0', sigma=3)
 
 
 # Read LDAC tables
@@ -868,7 +871,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # mag comparison plot
     plt.figure(1, figsize=(8, 8))
-    plt.clf()
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass],
              'r.', markersize=14, markeredgecolor='black')
     plt.xlim(10, 22)
@@ -878,6 +880,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
     plt.grid()
     plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
+    plt.clf()
     print('Saved mag comparison plot to dir!')
 
     # residual fits
@@ -992,9 +995,8 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     print('Saved residual plot to dir!')
     """
 
-    # res plot, y int included
+    # res plot, y int include
     plt.figure(2, figsize=(8, 6))
-    plt.clf()
     plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
@@ -1014,6 +1016,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, info2, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
     plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
+    plt.clf()
 
     # res plot y int, histogram
     if len(idx_psfimage) >= 5000:
@@ -1024,7 +1027,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         bin_num_int = 50
 
     plt.figure(3, figsize=(10, 6))
-    plt.clf()
     plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], y=model_sig.resid,
                bins=[bin_num_int, bin_num_int], range=[[10, 21],[-1, 1]], cmap='gist_heat_r')
     plt.colorbar(label='Density')
@@ -1046,6 +1048,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, infohist, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
     plt.savefig('%s_C%s_residual_plot_int_hist_%s.png' % (survey, chip, num), dpi=300)
+    plt.clf()
 
     print('Saved y-int residual plots to dir!')
 
@@ -1056,7 +1059,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err)
 
     plt.figure(4, figsize=(8, 8))
-    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit' % survey)
@@ -1094,6 +1096,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
     plt.savefig('%s_C%s_WLS_fit_hist_plot_%s.png' % (survey, chip, num), dpi=300)
+    plt.clf()
 
     print('Saved WLS fit plots to dir!')
 
@@ -1103,7 +1106,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
               '\nint err = %.4f' % b_sigerr)
 
     plt.figure(6, figsize=(8, 8))
-    plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
     plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip' % (survey, sigma))
@@ -1136,6 +1138,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
     plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot_%s.png' % (survey, chip, num), dpi=300)
+    plt.clf()
 
     print('Saved WLS 3 sig fit plots to dir!')
 
@@ -1171,7 +1174,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     print('Lim Mag = ', limmag)
 
     plt.figure(8, figsize=(24, 8))
-    plt.clf()
     plt.bar(bin_vals, height=all_sources, width=0.1, align='edge', color='red', edgecolor='black')
     plt.axhline(halfmax, linestyle='--')
     plt.axvline(limmag, color='b', linewidth=2)
@@ -1201,6 +1203,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.legend(['Half Max = %s' % round(halfmax, 1), 'Limiting Mag = %s' % round(limmag, 1)], fontsize=15)
     plt.savefig('%s_C%s_lim_mag_plot_%s.png' % (survey, chip, num), dpi=300)
     print('Saved lim mag plot to dir!')
+    plt.clf()
 
     # Crossmatch location check plot
 
@@ -1216,6 +1219,9 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         ax.add_artist(c)
     plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=300)
     print('Saved source location check plot to dir!')
+    plt.clf()
+
+    plt.close('all')
 
     return m_sig, b_sig
 
@@ -1265,6 +1271,7 @@ def int_calibration(
         GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
+
     return intercept
 
 # %% optional removal of intermediate files
@@ -1334,7 +1341,7 @@ def photometry(
         else:
             prev_intercept = intercept
             revert_flag = False
-            while intercept > 0.5:
+            while intercept > 0.15:
                 print('\nIntercept = %.4f\n' % intercept)
                 mag_low_cutoff += 0.5
                 new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
@@ -1356,7 +1363,7 @@ def photometry(
             if revert_flag:
                 print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
             else:
-                print(f"Final intercept below 0.5: %.4f" % intercept)
+                print(f"Final intercept below 0.15: %.4f" % intercept)
 
 
 def main():
@@ -1416,8 +1423,8 @@ def main():
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults["thresh"])
     parser.add_argument('-int_cal', action='store_true',
-                        help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.5, the '
-                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.5.')
+                        help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
+                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.')
     args, unknown = parser.parse_known_args()
     # print(args)
     # print(unknown)

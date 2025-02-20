@@ -15,14 +15,18 @@ import os
 # %%
 
 
-def astrom(outpath, inlist):
-    # inpath = flist()
-    for f in inlist:
+def astrom(outpath, inlist, rad, ds):
+    for imgpath in inlist:
+        img = fits.open(imgpath)
+        hdr = img[0].header
+        ra = hdr['RA-D']
+        dec = hdr['DEC-D']
         try:
-            command = ('solve-field '
-                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
-                       '-U none --no-verify --axy none -S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
-                          outpath, f)
+            command = (('solve-field '
+                        '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
+                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
+                        '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
+                           ra, dec, rad, ds, outpath, imgpath))
             print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True)
         except subprocess.CalledProcessError as err:
@@ -70,9 +74,9 @@ def astromdirhard(outpath, directory, rad, ds):
     print('fields solved, all done!')
 
 
-def gen_astrom(output, input, rad=1, ds=4, filelist=False, soft=False):
-    if filelist:
-        astrom(output, input)
+def gen_astrom(output, input, rad=1, ds=4, soft=False):
+    if type(input) is list:
+        astrom(output, input, rad, ds)
     elif soft:
         astromdir(output, input)
     else:
@@ -82,10 +86,9 @@ def gen_astrom(output, input, rad=1, ds=4, filelist=False, soft=False):
 # %%
 def main():
     parser = argparse.ArgumentParser(description='Runs astrom.net on specified file')
-    parser.add_argument('-list', action='store_true',
-                        help='if downloading from a list of file paths, use this optional arg')
     parser.add_argument('-soft', action='store_true',
-                        help='run w/ looser settings (default has many tightened settings, such as center RA and DEC)')
+                        help='run on directory w/ looser settings (default has many tightened settings, such as '
+                             'center RA and DEC)')
     parser.add_argument('-output', type=str, help='[str] output path for ramps w/ astrom.')
     parser.add_argument('-input', type=str, help='[str] input path for ramps (or list if using that)')
     parser.add_argument('-rad', type=str,
@@ -93,7 +96,7 @@ def main():
     parser.add_argument('-ds', type=str, help='amount of downsample, default = 4', default=4)
     args, unknown = parser.parse_known_args()
 
-    gen_astrom(args.output, args.input, args.rad, args.ds, args.list, args.soft)
+    gen_astrom(args.output, args.input, args.rad, args.ds, args.soft)
 
 
 if __name__ == "__main__":

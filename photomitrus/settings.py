@@ -99,58 +99,29 @@ def flist(Object=object, Filter=filter, Chip=chip):
 # %% make directories
 from pathlib import Path
 
+# directory creation
+
 
 def makedirs(dir, chip):
     os.chdir(dir)
     sky = os.path.join(dir, 'sky')
     stack = os.path.join(dir, 'stack')
     a = os.path.join(dir, 'C%i_astrom' % chip)
+    FF = os.path.join(dir, 'C%i_FF' % chip)
     sub = os.path.join(dir, 'C%i_sub' % chip)
-    directories = (a, sky, sub, stack)
+    directories = (a, FF, sky, sub, stack)
     for directory in directories:
         if os.path.exists(directory):
             print(directory + ' already exists!')
         else:
             os.mkdir(directory)
             print(directory)
-    # skyexists = os.path.exists('sky')
-    # if not skyexists:
-    #     os.mkdir(sky)
-    #     print(sky)
-    # if skyexists:
-    #     print(sky + ' already exists!')
-    # stackexists = os.path.exists(stack)
-    # if not stackexists:
-    #     os.mkdir(stack)
-    #     print(stack)
-    # if stackexists:
-    #     print(dir + 'stack already exists!')
-    # aexists = os.path.exists(a)
-    # if not aexists:
-    #     os.mkdir(a)
-    #     print(dir + a)
-    # if aexists:
-    #     print(dir + a+' already exists!')
-    # subexists = os.path.exists(sub)
-    # if not subexists:
-    #     os.mkdir(sub)
-    #     print(dir + sub)
-    # if subexists:
-    #     print(dir + sub+' already exists!')
-    # dirnames = os.listdir('.')
-    # astromlist = [i for i in dirnames if i.endswith(a)]
-    # astrom = ' '.join(astromlist)
-    # sublist = [i for i in dirnames if i.endswith(sub)]
-    # sub = ' '.join(sublist)
-    # skylist = [i for i in dirnames if i.endswith('sky')]
-    # sky = ' '.join(skylist)
-    # stacklist = [i for i in dirnames if i.endswith('stack')]
-    # stack = ' '.join(stacklist)
-    # return dir + astrom +'/', dir + sky +'/', dir + sub +'/', dir + stack +'/'
     return directories
 
 
-# flat field directory creation
+# flat field directory creation, probably outdated
+
+
 def makedirsFF(dir, chip):
     # os.chdir(dir)
     FF = os.path.join(dir, 'C%i_FF' % chip)

@@ -72,41 +72,41 @@ def sex1(imageName):
     print('Running sextractor for psf...')
     configFile = gen_config_file_name('sex.config')
     paramName = gen_config_file_name('tempsource.param')
-    catalogName = imageName + '.shift.cat'
-    try:
-        command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catalogName, paramName)
-        #print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as err:
-        print('Could not run sextractor with exit error %s'%err)
-    return catalogName
-
-
-def psfex(catalogName):
-    print('Getting psf...')
-    psfConfigFile = gen_config_file_name('default.psfex')
-    try:
-        command = 'psfex %s -c %s' % (catalogName,psfConfigFile)
-        #print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as err:
-        print('Could not run psfex with exit error %s'%err)
-
-
-def sex2(imageName):
-    print('Sextracting sources...')
-    psfname = imageName + '.shift.psf'
-    configFile = gen_config_file_name('sex_shift.config')
-    paramName = gen_config_file_name('astromshift.param')
     catname = imageName + '.psf.shift.cat'
     try:
-        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
-            imageName, configFile, catname, psfname, paramName)
-        # print("Executing command: %s" % command)
+        command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' % (imageName, configFile, catname, paramName)
+        #print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
     return catname
+
+
+# def psfex(catalogName):
+#     print('Getting psf...')
+#     psfConfigFile = gen_config_file_name('default.psfex')
+#     try:
+#         command = 'psfex %s -c %s' % (catalogName,psfConfigFile)
+#         #print('Executing command: %s' % command)
+#         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+#     except subprocess.CalledProcessError as err:
+#         print('Could not run psfex with exit error %s'%err)
+#
+#
+# def sex2(imageName):
+#     print('Sextracting sources...')
+#     psfname = imageName + '.shift.psf'
+#     configFile = gen_config_file_name('sex_shift.config')
+#     paramName = gen_config_file_name('astromshift.param')
+#     catname = imageName + '.psf.shift.cat'
+#     try:
+#         command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
+#             imageName, configFile, catname, psfname, paramName)
+#         # print("Executing command: %s" % command)
+#         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+#     except subprocess.CalledProcessError as err:
+#         print('Could not run sextractor with exit error %s'%err)
+#     return catname
 
 #%% creating & prepping tables for dist calc
 
@@ -529,9 +529,9 @@ def shift(
 
     data, header, w, raImage, decImage = imaging(directory, imagename)
     Q = cat_query(raImage, decImage, filter_used, boxsize)
-    catalogName = sex1(imagename)
-    psfex(catalogName)
-    catname = sex2(imagename)
+    catname = sex1(imagename)
+    # psfex(catalogName)
+    # catname = sex2(imagename)
     inner_primesources, inner_catsources = make_tables(directory, data, w, catname, Q, filter_used, crop)
     if no_segment:
         first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
