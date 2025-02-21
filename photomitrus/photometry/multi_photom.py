@@ -28,18 +28,22 @@ def fetchstacks(stackpath, chip=None):
     return matchingstacks
 
 
-def basemultiphotom(stackpath, matchingstacks, band):
+def multiphotom(stackpath, matchingstacks, band, survey=None):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
-        photometry.photometry(full_filename=wholeimgpath, band=band)
+        if survey:
+            photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey)
+        else:
+            photometry.photometry(full_filename=wholeimgpath, band=band)
+
 
 #%%
 
 
-def mastermultiphotom(stackpath, band, chip=None):
+def mastermultiphotom(stackpath, band, chip=None, survey=None):
     matchingstacks = fetchstacks(stackpath, chip)
-    basemultiphotom(stackpath, matchingstacks, band)
+    multiphotom(stackpath, matchingstacks, band, survey)
 
 
 def main():
@@ -48,9 +52,12 @@ def main():
     parser.add_argument('-band', type=str, help='[str] filter, ex. "J"')
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                                                 ' format., default = all 4 chips',default=None)
+    parser.add_argument('-survey', type=str, help='Specify specific survey to query for photometry (default'
+                                                  ' picks for you), see photometrus photometry -h for list of available'
+                                                  ' surveys')
     args, unknown = parser.parse_known_args()
 
-    mastermultiphotom(args.stackpath, args.band, args.chip)
+    mastermultiphotom(args.stackpath, args.band, args.chip, args.survey)
 
 
 if __name__ == "__main__":
