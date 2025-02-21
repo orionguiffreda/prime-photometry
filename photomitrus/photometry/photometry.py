@@ -374,12 +374,15 @@ def sex1(imageName):
 def psfex(catalogName):
     print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
     psfConfigFile = gen_config_file_name('default.psfex')
+    psfImageName = 'PSF' + catalogName[5:-4]
     try:
-        command = 'psfex %s -c %s' % (catalogName, psfConfigFile)
+        command = 'psfex %s -c %s -CHECKIMAGE_TYPE SNAPSHOTS -CHECKIMAGE_NAME %s' % (catalogName, psfConfigFile,
+                                                                                     'PSF.fits')
         # print('Executing command: %s' % command)
         subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
         print('Could not run psfex with exit error %s' % err)
+    os.rename('PSF_' + catalogName[:-4] + '.fits', psfImageName)
 
 
 # %%

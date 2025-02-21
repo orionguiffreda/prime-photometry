@@ -19,7 +19,7 @@ def fetchstacks(stackpath, chip=None):
         chips = [int(f) for f in chips]
 
     allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.Open-J')]
-    matchingstacks = sorted([img for img in allstacks if any(f'C{onechip}' in img for onechip in chips)])
+    matchingstacks = sorted([img for img in allstacks if any(f'C{chosenchips}' in img for chosenchips in chips)])
     if not matchingstacks:
         raise FileNotFoundError('No stacks matching format and given chip(s) are found!')
     else:
@@ -51,6 +51,7 @@ def main():
     args, unknown = parser.parse_known_args()
 
     mastermultiphotom(args.stackpath, args.band, args.chip)
+
 
 if __name__ == "__main__":
     main()

@@ -46,6 +46,7 @@ CHECKIMAGE_TYPE NONE
                                 # or MOFFAT,-MOFFAT,-SYMMETRICAL
 CHECKIMAGE_NAME moffat.fits
                                 # Check-image filenames
+CHECKIMAGE_CUBE Y
  
 #----------------------------- Miscellaneous ---------------------------------
  
