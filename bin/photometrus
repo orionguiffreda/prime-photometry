@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 import sys
 from photomitrus.photometry import photometry
+from photomitrus.photometry import multi_photom
 from photomitrus import multi_master
 from photomitrus import master
+from photomitrus import multi_combo
 from photomitrus.preprocess import astromangle_new
 from photomitrus.preprocess import gen_astrometry
 from photomitrus.astrom import astrom_shift
@@ -20,8 +22,16 @@ if len(sys.argv) < 2:
           'Use "-h" to view options')
 
 elif len(sys.argv) >= 2:
+    if sys.argv[1] == 'full':
+        multi_combo.main()
     if sys.argv[1] == 'photometry':
-        photometry.main()
+        if sys.argv[2] == '-h':
+            print('Use command: "photometry single" to process a single stacked image, or use just "photometry" for '
+                  'multiple images in 1 directory.')
+        if sys.argv[2] == 'single':
+            photometry.main()
+        else:
+            multi_photom.main()
     elif sys.argv[1] == 'pipeline':
         multi_master.main()
     elif sys.argv[1] == 'stack':
@@ -31,10 +41,12 @@ elif len(sys.argv) >= 2:
 
     elif sys.argv[1] == '-h':
         print('Options:\n'
-              '     pipeline - to run the full pipeline (data download, processing, & stacking)]\n'
+              '     full - to run the full pipeline & photometry]\n'
+              '     pipeline - to run the full pipeline (data download, processing, & stacking) on whole observation]\n'
               '     stack - to specifically use the processing & stacking (no direct download, but offers more'
               ' processing options)\n'
-              '     photometry - to run photometry on a stacked image\n'
+              '     photometry - to run photometry on multiple stacked images in a directory\n'
+              '     photometry single - to run photometry on a single specific stacked image\n'
               '     astrom - to access all the separate astrometry scripts\n'
               '     process - to access all the separate processing & stack scripts\n'
               '     tds - to mass process all fields over a night (developed for time domain survey)\n'

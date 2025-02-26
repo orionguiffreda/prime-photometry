@@ -15,8 +15,13 @@ def fetchstacks(stackpath, chip=None):
     if not chip:
         chips = defaults["chip"]
     else:
-        chips = chip.split(',')
-        chips = [int(f) for f in chips]
+        if type(chip) is list:
+            chips = chip
+        elif type(chip) is int:
+            chips = [chip]
+        else:
+            chips = chip.split(',')
+            chips = [int(f) for f in chips]
 
     allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.Open-J')]
     matchingstacks = sorted([img for img in allstacks if any(f'C{chosenchips}' in img for chosenchips in chips)])
@@ -53,8 +58,8 @@ def main():
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                                                 ' format., default = all 4 chips',default=None)
     parser.add_argument('-survey', type=str, help='Specify specific survey to query for photometry (default'
-                                                  ' picks for you), see photometrus photometry -h for list of available'
-                                                  ' surveys')
+                                                  ' picks for you), see photometrus photometry single -h for list of '
+                                                  'available surveys')
     args, unknown = parser.parse_known_args()
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey)

@@ -41,13 +41,11 @@ def datalistdownload(parentdir, target, band, date):
                 print('Missing files!: ', m_list)
         except:
             print('Error fetching data!')
+            sys.exit(0)
     else:
-        try:
-            full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1='Open', filter2=band)
-            if any(lst for lst in m_list):
-                print('Missing files!: ', m_list)
-        except:
-            print('Error fetching data!')
+        full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1='Open', filter2=band)
+        if any(lst for lst in m_list):
+            print('Missing files!: ', m_list)
     return full_ramp_list, m_list
 
 

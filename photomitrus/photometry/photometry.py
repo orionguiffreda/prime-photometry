@@ -746,7 +746,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
                 print('Generated GRB data table!')
             elif len(idx_GRBcleanpsf) > 1:
-                print('Multiple sources detected in search radius (ra = %.6f, dec = %.6f, rad = %s arcsec)'
+                print('Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
                       ', refer to .ecsv file for source info!' % (ra, dec, photoDistThresh))
                 mag_ar = []
                 mag_err_ar = []
@@ -817,7 +817,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             grbdata.write('GRB_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             print('Generated GRB data table!')
         elif len(idx_GRBcleanpsf) > 1:
-            print('Multiple sources detected in search radius (ra = %.6f, dec = %.6f, rad = %s arcsec)'
+            print('Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
                   ', refer to .ecsv file for source info!' % (ra, dec, photoDistThresh))
             mag_ar = []
             mag_err_ar = []
