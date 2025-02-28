@@ -24,14 +24,10 @@ if len(sys.argv) < 2:
 elif len(sys.argv) >= 2:
     if sys.argv[1] == 'full':
         multi_combo.main()
-    if sys.argv[1] == 'photometry':
-        if sys.argv[2] == '-h':
-            print('Use command: "photometry single" to process a single stacked image, or use just "photometry" for '
-                  'multiple images in 1 directory.')
-        if sys.argv[2] == 'single':
-            photometry.main()
-        else:
-            multi_photom.main()
+    elif sys.argv[1] == 'single_photometry':
+        photometry.main()
+    elif sys.argv[1] == 'photometry':
+        multi_photom.main()
     elif sys.argv[1] == 'pipeline':
         multi_master.main()
     elif sys.argv[1] == 'stack':
@@ -46,7 +42,7 @@ elif len(sys.argv) >= 2:
               '     stack - to specifically use the processing & stacking (no direct download, but offers more'
               ' processing options)\n'
               '     photometry - to run photometry on multiple stacked images in a directory\n'
-              '     photometry single - to run photometry on a single specific stacked image\n'
+              '     single_photometry - to run photometry on a single specific stacked image\n'
               '     astrom - to access all the separate astrometry scripts\n'
               '     process - to access all the separate processing & stack scripts\n'
               '     tds - to mass process all fields over a night (developed for time domain survey)\n'

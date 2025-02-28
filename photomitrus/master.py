@@ -35,7 +35,7 @@ def makedirectories(parentdir, chip):
 def getchiplist(full_ramp_list, chip):
     for ramplist in full_ramp_list:
         if ramplist and f'C{chip}.' in ramplist[0]:
-            print(f'C{chip} ramp images:', ramplist)
+            print(f'C{chip} images:', ramplist)
             return ramplist
     return None
 

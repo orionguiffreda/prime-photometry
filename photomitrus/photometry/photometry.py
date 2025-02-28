@@ -614,11 +614,44 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
 
 # New Source Search
-def newsourcesearch(source_ra, source_dec, w, imageName, survey, band, massCatCoords, thresh):
+def newsourcesearch(source_ra, source_dec, thresh, w, imageName, survey, band, Q, data, crop):
     # crossmatch for all detected sources
     print('Large grb radius inputted, using new source search to find'
           ' detected sources brighter than survey lim mag w/ no crossmatch')
 
+    # sexigesimal conversion
+    try:
+        float(source_ra)
+        source_ra = source_ra
+        source_dec = source_dec
+    except ValueError:
+        coords = source_ra + ' ' + source_dec
+        print('Sexagesimal RA = %s & Dec = %s' % (source_ra, source_dec))
+
+        deci_coords = SkyCoord(coords, frame='icrs', unit=(u.hourangle, u.deg)).to_string()
+        deci_coords = deci_coords.split(' ')
+
+        source_ra = deci_coords[0]
+        source_dec = deci_coords[1]
+
+    # regenerate massCatCoords
+    crop = int(crop)
+    max_x = data.shape[0]
+    max_y = data.shape[1]
+
+    colnames = Q[0].colnames
+    RA = colnames[0]
+    DEC = colnames[1]
+
+    mass_imCoords = w.all_world2pix(Q[0][RA], Q[0][DEC], 1)
+    good_cat_stars = Q[0][np.where(
+        (mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x - crop)) & (mass_imCoords[1] > crop) & (
+                mass_imCoords[1] < (max_y - crop)))]
+
+    massCatCoords = SkyCoord(ra=good_cat_stars[RA], dec=good_cat_stars[DEC], frame='icrs', unit='degree')
+    print('Catalog cropped #:', len(massCatCoords))
+
+    # initial crossmatch
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvSources = mag_ecsvtable[(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
@@ -634,6 +667,7 @@ def newsourcesearch(source_ra, source_dec, w, imageName, survey, band, massCatCo
                                                                           photoDistThresh * u.arcsec)
 
     idx_psfimage_noclean_set = set(idx_psfimage_noclean)
+
     # rad / cross-match pruning
     PSFsources_nomatch = mag_ecsvSources[[i for i in range(len(mag_ecsvSources)) if i not in idx_psfimage_noclean_set]]   # removing previous crossmatched sources
     print('# of sources found after removing crossmatches: %i' % len(PSFsources_nomatch))
@@ -646,8 +680,8 @@ def newsourcesearch(source_ra, source_dec, w, imageName, survey, band, massCatCo
     idx_inputcoords, idx_PSFsources_nomatch, d2dd, d3dd = PSFsources_nomatchCatCoords.search_around_sky(sourcecoords,
                                                                                                       thresh * u.arcsec)
     PSFsources_nomatch = PSFsources_nomatch[idx_PSFsources_nomatch]     # implementing error radius
-    # lim mag pruning
 
+    # lim mag pruning
     for f in PHOTOMETRY_LIM_MAGS.keys():
         if survey == f:
             lim_mag = PHOTOMETRY_LIM_MAGS[f]
@@ -1317,7 +1351,11 @@ def photometry(
         if grb_coordlist:
             GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
         else:
-            GRB(grb_ra, grb_dec, name, survey, band, grb_thresh)
+            if grb_thresh > 60:
+                # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
+                newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
+            else:
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
     else:
         data, header, w, raImage, decImage = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim, mag_high_lim)
@@ -1330,7 +1368,7 @@ def photometry(
                                              name, band, chosen_survey, sigma)
         if grb_ra:
             if grb_thresh > 60:
-                newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
+                newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
             else:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
         elif grb_coordlist:

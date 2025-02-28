@@ -5,19 +5,28 @@ import argparse
 from subprocess import Popen
 import shutil
 
+from photomitrus.preprocess import auto_flat
 from photomitrus.getdata import download_data
 from photomitrus.getfiles import get_data_files
 from photomitrus.master import master
-from photomitrus.settings import PIPELINE_DEFAULT_DIR
+from photomitrus.settings import (PIPELINE_DEFAULT_DIR, mflat_checker)
 
 #%%
+
+
+def auto_mflat_gen(date):
+    check = mflat_checker(date)
+    if check is False:
+        auto_flat.autoflatgen(date)
+    else:
+        pass
 
 
 def parentcreation(target, date, band):
     field_dir_name = '%s_%s' % (target, date)
     field_dir = os.path.join(PIPELINE_DEFAULT_DIR, field_dir_name)
     parent_dir = os.path.join(field_dir, band)
-    print('Default parent dir: %s' % parent_dir)
+    print('\nDefault parent dir: %s' % parent_dir)
     if not os.path.isdir(parent_dir):
         print('Generating parent directory!\n')
         os.makedirs(parent_dir)
@@ -123,9 +132,11 @@ def processparallel(target, date, band, chips):
 
 
 def multi_master(
-        target, date, band, chip=None, parentdir=None, rot_val=48, no_shift=False, astromnet=False, parallel=False,
-        no_download=False, sky_override_path=None, removal=False, download_files=False
+        target, date, band, chip=None, parentdir=None, rot_val=48, no_shift=False, astromnet=False,
+        no_download=False, sky_override_path=None, removal=False, download_files=False, no_mflat=False
 ):
+    if not no_mflat:
+        auto_mflat_gen(date)
 
     if parentdir:
         chosen_parent = parentdir
@@ -139,9 +150,7 @@ def multi_master(
         chips = [int(f) for f in chips]
 
     if download_files:
-        if no_download:
-            pass
-        else:
+        if not no_download:
             chips_str = ','.join(str(x) for x in chips)
             datadownload(chosen_parent, target, band, date, chips_str)
 
@@ -201,35 +210,38 @@ def main():
     parser = argparse.ArgumentParser(description='Use to process whole observations (all chips)')
     # parser.add_argument('-parallel', action='store_true', help='optional flag, process multiple chips simultaneously,'
     #                                                            ' only use on obs. w/ small amount of images!')
-    parser.add_argument('-download_files', action='store_true', help='optional flag, use if you want to download '
-                                                                     'through old method (scp), new method passes file '
-                                                                     'paths (saves space and time)')
-    parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
-                                                                  'downloaded, *NOT* to use new file path method')
-    parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
-                                                               ' script in place of astrom.net, will not use either (shift is default)')
-    parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry')
-    parser.add_argument('-removal', action='store_true',
-                        help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
-                             'stacks & skies; intended for space saving in large nights of observation')
     parser.add_argument('-parent', type=str, help='[str] *NOW OPTIONAL* specify parent directory to '
-                                                  'store all data products, otherwise it will automatically generate w/'
-                                                  'the format "/target_date/band/"', default=None)
+                                                  'store all data products, otherwise it will automatically generate @ '
+                                                  'the default directory w/ the format "/target_date/band/"', default=None)
     parser.add_argument('-target', type=str, help='[str] target field, objname in log, ex. "field1234"')
     parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
     parser.add_argument('-band', type=str, help='[str] filter, ex. "J"')
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                                                 ' format.',default=None)
+    parser.add_argument('-download_files', action='store_true', help='optional flag, use if you want to download '
+                                                                     'through old method (scp), new method passes file '
+                                                                     'paths (new saves space and time)')
+    parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
+                                                                  'downloaded, *NOT* to use new file path method')
+    parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
+                                            ' script in place of astrom.net, will not use either (shift is default)')
+    parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry')
+    parser.add_argument('-removal', action='store_true',
+                        help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
+                             'stacks & skies; intended for space saving in large nights of observation')
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
                                                      ' (default = 48 deg or 172800")', default=48)
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=None)
+    parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
+                                                               ' automatically generate mflats for this night if none'
+                                                               ' exist')
     args, unknown = parser.parse_known_args()
 
     multi_master(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-                 args.no_download, args.sky_override, args.removal, args.download_files)
+                 args.no_download, args.sky_override, args.removal, args.download_files, args.no_mflat)
 
 
 if __name__ == "__main__":

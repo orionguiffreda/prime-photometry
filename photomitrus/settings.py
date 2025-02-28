@@ -7,6 +7,7 @@ Settings for pipeline
 """
 # %% Config File Names
 import os
+import pandas as pd
 
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
@@ -58,8 +59,21 @@ def gen_mflat_file_name(band, chip):
     return os.path.join(flat_dir, filename)
 
 
-# %%
-import pandas as pd
+def mflat_checker(date):
+    base_dir = os.path.dirname(os.path.realpath(__file__))
+    flat_dir = os.path.join(base_dir, 'mflats')
+    # flat_dir = '/home/alex/PycharmProjects/prime-photometry/photomitrus/mflats/'
+    mflat_list = [
+        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
+    if not mflat_list:
+        print('No master flat currently generated for this date!')
+        return False
+    else:
+        print('Master flats exist for this date!')
+    return True
+
+
+#%%
 
 # Settings for list of directory+filenames
 object = 'field4057'

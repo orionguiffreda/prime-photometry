@@ -1,41 +1,78 @@
 """
 Creates master flat
 """
-import pandas as pd
+from photomitrus.getfiles import (get_log_file, get_data_files)
+from photomitrus.settings import gen_pipeline_file_name
+from photomitrus.master import getchiplist
+
+from pandas import to_datetime
 from astropy.io import fits
 import os
 import numpy as np
 import argparse
-from pathlib import Path
+import sys
 
 #%% getting lists of flats for beginning and end of night
 
 
-def flatlists(path, chip):
-    import fnmatch
-    for file in os.listdir(path):
-        if fnmatch.fnmatch(file, '*.clean.dat'):
-            logname = file
-            print('\ntaken log = ',logname)
-    log = pd.read_csv(path+logname, delimiter=' ', on_bad_lines='warn')
-    direct = path
-    directory = direct + 'C%i/' % chip
+def flatlistdownload(date, chip, band=None):
+    os.chdir(gen_pipeline_file_name())
+
+    if not band:
+        try:
+            flatlists, m_lists = get_data_files(date=date, objname='FLAT')
+            if any(lst for lst in m_lists):
+                print('Missing files!: ', m_lists)
+        except FileNotFoundError:
+            print('Error fetching data!')
+            sys.exit(0)
+    else:
+        if band == 'Z':
+            try:
+                flatlists, m_lists = get_data_files(date=date, objname='FLAT', filter1=band,
+                                                        filter2='Open')
+                if any(lst for lst in m_lists):
+                    print('Missing files!: ', m_lists)
+            except FileNotFoundError:
+                print('Error fetching data!')
+                sys.exit(0)
+        else:
+            try:
+                flatlists, m_lists = get_data_files(date=date, objname='FLAT', filter1='Open',
+                                                        filter2=band)
+                if any(lst for lst in m_lists):
+                    print('Missing files!: ', m_lists)
+            except FileNotFoundError:
+                print('Error fetching data!')
+                sys.exit(0)
+
+    flatlist = getchiplist(flatlists, chip)
+    return flatlist
+
+
+def flatlists(date, flatlist, chip):
+    datetime = to_datetime(date)
+    date = datetime.strftime('%Y-%m-%d')
+    log = get_log_file(date)
+
     log_start = log.iloc[:int(len(log)/2)]
     log_end = log.iloc[int(len(log)/2):]
-    log_start_names = list(log_start['filename'][log_start['OBJNAME']=='FLAT'])
-    log_end_names = list(log_end['filename'][log_end['OBJNAME']=='FLAT'])
 
-    log_start_flats = []
-    for f in log_start_names:
-        new = f.replace('C1.fits.ramp', 'C%i.ramp.fits' % chip)
-        full = directory + new
-        log_start_flats.append(full)
+    log_start_orig_names = list(log_start['filename'][log_start['OBJNAME']=='FLAT'])
+    log_start_names = []
+    for file in log_start_orig_names:
+        new = file.replace('C1.', 'C%i.' % chip)
+        log_start_names.append(new)
+    log_end_orig_names = list(log_end['filename'][log_end['OBJNAME']=='FLAT'])
+    log_end_names = []
+    for file in log_end_orig_names:
+        new = file.replace('C1.', 'C%i.' % chip)
+        log_end_names.append(new)
 
-    log_end_flats = []
-    for f in log_end_names:
-        new = f.replace('C1.fits.ramp', 'C%i.ramp.fits' % chip)
-        full = directory + new
-        log_end_flats.append(full)
+    log_start_flats = [flatlistfile for flatlistfile in flatlist if
+                       any(logfile in flatlistfile for logfile in log_start_names)]
+    log_end_flats = [flatlistfile for flatlistfile in flatlist if
+                     any(logfile in flatlistfile for logfile in log_end_names)]
 
     if log_start_flats:
         if log_end_flats:
@@ -175,7 +212,7 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
         filter2_start = header_start.get('FILTER2', 'unknown')
         save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start, start_images_names_1[0][-20:-12],
                                                         start_images_names_2[-1][-20:-12], start_images_names_1[0][-11])
-        output_fname_start = os.path.join(direct+'mflats/', save_name_start)
+        output_fname_start = os.path.join(direct, save_name_start)
         print(output_fname_start + ' created!')
 
         fits.HDUList(fits.PrimaryHDU(header=header_start, data=start_median_norm)).writeto(output_fname_start, overwrite=True)
@@ -186,7 +223,7 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
         filter2_end = header_end.get('FILTER2', 'unknown')
         save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end, end_images_names_1[0][-20:-12],
                                                         end_images_names_2[-1][-20:-12], end_images_names_1[0][-11])
-        output_fname_end = os.path.join(direct+'mflats/', save_name_end)
+        output_fname_end = os.path.join(direct, save_name_end)
         print(output_fname_end + ' created!')
 
         fits.HDUList(fits.PrimaryHDU(header=header_end, data=end_median_norm)).writeto(output_fname_end, overwrite=True)
@@ -195,21 +232,26 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
 #%%
 
 
-def flatgen(directory, chip):
+def flatgen(directory, date, chip, band=None):
+    flatlist = flatlistdownload(date, chip, band)
     start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter = flatlists(
-        directory, chip)
+        date, flatlist, chip)
     save_name_start, save_name_end = flatprocessing(directory, start_images_names_1, start_images_names_2,
                                                     end_images_names_1, end_images_names_2)
+    return save_name_start, save_name_end, flat_filter
 
 
 def main():
     parser = argparse.ArgumentParser(description='Generates 2 master flats (1 from start of night & 1 from end) from given twilight flat data')
-    parser.add_argument('-dir', type=str, help='[str], directory where folder of flats and appropriate log is stored')
-    #parser.add_argument('-log', type=str, help='[str], path to appropriate log file')
-    parser.add_argument('-chip', type=int, help='[int], number of detector')
+    parser.add_argument('-dir', type=str, help='[str], directory')
+    parser.add_argument('-date', type=str, help='[str], date of observation, in yyyymmdd format')
+    parser.add_argument('-chip', type=int, help='[int], which detector number to run on',
+                        default=None)
+    parser.add_argument('-band', type=str, help='[str], optional, specify filter ex. "J", otherwise it will'
+                                                ' try to generate mflats regardless of filter', default=None)
     args, unknown = parser.parse_known_args()
 
-    flatgen(args.dir, args.chip)
+    save_name_start, save_name_end, flat_filter = flatgen(args.dir, args.date, args.chip, args.band)
 
 
 if __name__ == "__main__":
