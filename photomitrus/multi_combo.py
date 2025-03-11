@@ -10,7 +10,7 @@ import argparse
 
 
 def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=False, astromnet=False,
-          sky_override_path=False, removal=False, survey=None):
+          sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, survey=None):
 
     if parentdir:
         chosen_parent = parentdir
@@ -24,33 +24,13 @@ def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=F
         chips = chip.split(',')
         chips = [int(f) for f in chips]
 
-    full_ramp_list, m_list = multi_master.datalistdownload(chosen_parent, target, band, date)
-    if all(not lst for lst in full_ramp_list):
-        print('Error finding files, No data! Or perhaps wrong date or target?')
-        if parentdir:
-            pass
-        else:
-            print('Removing default directory: %s' % field_dir)
-            try:
-                os.chdir(PIPELINE_DEFAULT_DIR)
-                shutil.rmtree(field_dir, ignore_errors=True)
-            except FileNotFoundError:
-                print('Directory already no longer exists.')
     for f in chips:
-        if astromnet:
-            multi_master.refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
-                          fullramplist=full_ramp_list)
-            multi_photom.mastermultiphotom(stackpath, band, f, survey)
-        elif not no_shift:
-            multi_master.shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
-                         fullramplist=full_ramp_list)
-            multi_photom.mastermultiphotom(stackpath, band, f, survey)
-        else:
-            multi_master.baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
-                        fullramplist=full_ramp_list)
-            multi_photom.mastermultiphotom(stackpath, band, f, survey)
+        multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
+                                  sky_override_path, removal, no_get_files, no_mflat)
+        multi_photom.mastermultiphotom(stackpath, band, f, survey)
 
 #%%
+
 
 def main():
     parser = argparse.ArgumentParser(description='Use to process and run photometry on whole observations (all chips).'
@@ -62,6 +42,11 @@ def main():
     parser.add_argument('-chip', type=str,
                         help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                              ' format.', default=None)
+    parser.add_argument('-no_get_files', action='store_true', help='optional flag, use if you want to download '
+                                                                     'through old method (scp), new method passes file '
+                                                                     'paths (new saves space and time)')
+    parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
+                                                                  'downloaded, *NOT* to use new file path method')
     parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
                                                                ' script in place of astrom.net, will not use either (shift is default)')
     parser.add_argument('-astromnet', action='store_true',
@@ -78,13 +63,16 @@ def main():
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=None)
+    parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
+                                                               ' automatically generate mflats for this night if none'
+                                                               ' exist')
     parser.add_argument('-survey', type=str, help='Specify specific survey to query for photometry (default'
-                                                  ' picks for you), see photometrus photometry single -h for list of '
+                                                  ' picks for you), see photometrus single_photometry -h for list of '
                                                   'available surveys')
     args, unknown = parser.parse_known_args()
 
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-          args.sky_override, args.removal, args.survey)
+          args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.survey)
 
 
 if __name__ == "__main__":

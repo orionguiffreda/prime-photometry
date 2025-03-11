@@ -66,10 +66,10 @@ def mflat_checker(date):
     mflat_list = [
         f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
     if not mflat_list:
-        print('No master flat currently generated for this date!')
+        print('\nNo master flat currently generated for this date!')
         return False
     else:
-        print('Master flats exist for this date!')
+        print('\nMaster flats exist for this date!')
     return True
 
 

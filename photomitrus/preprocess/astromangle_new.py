@@ -269,13 +269,20 @@ def update_ra_dec_directory(directory, rot_val):
 
 def update_ra_dec_move_directory(input, output, rot_val):
     for f in sorted(os.listdir(input)):
-        if f.endswith('.ramp.fits'):
+        if f.endswith('.ramp.fits') or f.endswith('.fits.ramp'):
             origpath = os.path.join(input, f)
-            fnewname = f.replace('.ramp.fits', '.ramp.new')
+            if f.endswith('.ramp.fits'):
+                fnewname = f.replace('.ramp.fits', '.ramp.new')
+            elif f.endswith('.fits.ramp'):
+                fnewname = f.replace('.fits.ramp', '.ramp.new')
+            else:
+                FileNotFoundError('No matching filenames found!')
             newpath = os.path.join(output,fnewname)
             shutil.copyfile(origpath, newpath)
             update_ra_dec(newpath, rot_val)
             print('%s updated, renamed, and moved!' % fnewname)
+        else:
+            FileNotFoundError('No matching filenames found!')
 
 
 def update_ra_dec_list(input_list, output_dir, rot_val):

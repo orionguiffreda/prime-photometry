@@ -906,6 +906,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     else:
         num = imageName[-16:-8]
 
+    plt.close('all')
     # mag comparison plot
     plt.figure(1, figsize=(8, 8))
     plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass],

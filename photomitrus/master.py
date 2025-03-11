@@ -297,7 +297,7 @@ def astromnet_refine(subdir):
 
 
 def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
-    print('WARNING: Removing all intermediate data products & subdirectories! (only stacks will remain)')
+    print('WARNING: Removing all intermediate data products & subdirectories! (only stacks & skies will remain)')
     if rampdir:
         subdirlist = [astromdir, FFdir, subdir, rampdir]
     else:
@@ -383,7 +383,7 @@ def master(
         if compress:
             fpack(stackdir, chip)
         if removal:
-            intermediate_removal(astromdir, FFdir, skydir, subdir, rampdir)
+            intermediate_removal(astromdir, FFdir, subdir, rampdir)
 
 
 def main():

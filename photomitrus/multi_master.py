@@ -16,6 +16,7 @@ from photomitrus.settings import (PIPELINE_DEFAULT_DIR, mflat_checker)
 
 def auto_mflat_gen(date):
     check = mflat_checker(date)
+    print('Running auto-MFLAT generation...')
     if check is False:
         auto_flat.autoflatgen(date)
     else:
@@ -133,7 +134,7 @@ def processparallel(target, date, band, chips):
 
 def multi_master(
         target, date, band, chip=None, parentdir=None, rot_val=48, no_shift=False, astromnet=False,
-        no_download=False, sky_override_path=None, removal=False, download_files=False, no_mflat=False
+        no_download=False, sky_override_path=None, removal=False, no_get_files=False, no_mflat=False
 ):
     if not no_mflat:
         auto_mflat_gen(date)
@@ -146,16 +147,23 @@ def multi_master(
     if not chip:
         chips = [1, 2, 3, 4]
     else:
-        chips = chip.split(',')
-        chips = [int(f) for f in chips]
+        if type(chip) is int:
+            chips = chip
+        else:
+            chips = chip.split(',')
+            chips = [int(f) for f in chips]
 
-    if download_files:
+    if no_get_files:
+        print('Omitting usage of getfiles!')
         if not no_download:
             chips_str = ','.join(str(x) for x in chips)
             datadownload(chosen_parent, target, band, date, chips_str)
 
         if chip:
-            chip_path = os.path.join(chosen_parent, 'C%s/' % chips[0])
+            if type(chip) is int:
+                chip_path = os.path.join(chosen_parent, 'C%s/' % chips)
+            else:
+                chip_path = os.path.join(chosen_parent, 'C%s/' % chips[0])
             print(chip_path)
         else:
             chip_path = os.path.join(chosen_parent, 'C1/')
@@ -171,13 +179,22 @@ def multi_master(
                     shutil.rmtree(field_dir, ignore_errors=True)
                 except FileNotFoundError:
                     print('Directory already no longer exists.')
-        for f in chips:
+        if type(chips) is int:
             if astromnet:
-                refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                refineprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
             elif not no_shift:
-                shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                shiftprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
             else:
-                baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                baseprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
+        else:
+            for f in chips:
+                if astromnet:
+                    refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                elif not no_shift:
+                    shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                else:
+                    baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+
     else:
         full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date)
         if all(not lst for lst in full_ramp_list):
@@ -194,16 +211,27 @@ def multi_master(
         # if parallel:
         #     print('Processing all chosen chips in parallel!')
         #     processparallel(target, date, band, chips)
-        for f in chips:
+        if type(chips) is int:
             if astromnet:
-                refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                refineprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
                               fullramplist=full_ramp_list)
             elif not no_shift:
-                shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                shiftprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
                              fullramplist=full_ramp_list)
             else:
-                baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                baseprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
                             fullramplist=full_ramp_list)
+        else:
+            for f in chips:
+                if astromnet:
+                    refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                                  fullramplist=full_ramp_list)
+                elif not no_shift:
+                    shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                                 fullramplist=full_ramp_list)
+                else:
+                    baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                                fullramplist=full_ramp_list)
 
 
 def main():
@@ -218,7 +246,7 @@ def main():
     parser.add_argument('-band', type=str, help='[str] filter, ex. "J"')
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                                                 ' format.',default=None)
-    parser.add_argument('-download_files', action='store_true', help='optional flag, use if you want to download '
+    parser.add_argument('-no_get_files', action='store_true', help='optional flag, use if you want to download '
                                                                      'through old method (scp), new method passes file '
                                                                      'paths (new saves space and time)')
     parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
@@ -241,7 +269,7 @@ def main():
     args, unknown = parser.parse_known_args()
 
     multi_master(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-                 args.no_download, args.sky_override, args.removal, args.download_files, args.no_mflat)
+                 args.no_download, args.sky_override, args.removal, args.no_get_files, args.no_mflat)
 
 
 if __name__ == "__main__":
