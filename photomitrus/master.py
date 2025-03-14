@@ -132,10 +132,10 @@ def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
 # %% flat fielding
 
 
-def flatfielding(astrompath, FFpath, band, chip):
+def flatfielding(astrompath, FFpath, band, chip, date=None):
     os.chdir(gen_pipeline_file_name())
     print('using master flat to flat field ramp imgs..')
-    flatpath = gen_mflat_file_name(band, chip)
+    flatpath = gen_mflat_file_name(band, chip, date)
 
     print('\nEquivalent argparse cmd: python ./preprocess/flatfield.py -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
@@ -317,7 +317,7 @@ defaults = dict(sigma=4)
 
 
 def master(
-        parentdir, chip, band, sigma=4, fullramplist=None, rot_val=None, no_shift=False, sex=False, compress=False,
+        parentdir, chip, band, sigma=4, date=None, fullramplist=None, rot_val=None, no_shift=False, sex=False, compress=False,
         net_refine=False, sky_override=None, removal=False
 ):
     # if no_ff:
@@ -337,7 +337,7 @@ def master(
         if chipramplist is None:
             raise ValueError('For some reason, given chip doesnt match to any sublist!')
         astrom_angle_list(astromdir, chipramplist, chip, rot_val)
-        flatfielding(astromdir, FFdir, band, chip)
+        flatfielding(astromdir, FFdir, band, chip, date)
         if sex or sky_override:
             pass
         else:
@@ -362,7 +362,7 @@ def master(
     else:
         # FFdir = makedirectoriesFF(parentdir, chip)
         rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
-        flatfielding(astromdir, FFdir, band, chip)
+        flatfielding(astromdir, FFdir, band, chip, date)
         if sex or sky_override:
             pass
         else:
@@ -400,6 +400,8 @@ def main():
                         default=None)
     parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4',
                         default=defaults["sigma"])
+    parser.add_argument('-date', type=str, help='date of observation (yyyymmdd), useful for chosing mflats',
+                        default=None)
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
                                                      ' (default = 48 deg or 172800")', default=None)
@@ -424,7 +426,7 @@ def main():
                         default=None)
     args, unknown = parser.parse_known_args()
 
-    master(args.parent, args.chip, args.band, args.sigma, args.ramplist, args.rot_val, args.no_shift, args.sex,
+    master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.no_shift, args.sex,
            args.compress, args.net_refine, args.sky_override, args.removal)
 
 

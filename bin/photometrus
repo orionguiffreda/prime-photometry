@@ -2,6 +2,7 @@
 import sys
 from photomitrus.photometry import photometry
 from photomitrus.photometry import multi_photom
+from photomitrus.photometry import ellipticity_logger
 from photomitrus import multi_master
 from photomitrus import master
 from photomitrus import multi_combo
@@ -45,6 +46,7 @@ elif len(sys.argv) >= 2:
               '     single_photometry - to run photometry on a single specific stacked image\n'
               '     astrom - to access all the separate astrometry scripts\n'
               '     process - to access all the separate processing & stack scripts\n'
+              '     utilities - to access other scripts, usually analysis-based\n'
               '     tds - to mass process all fields over a night (developed for time domain survey)\n'
               )
 
@@ -89,6 +91,16 @@ elif len(sys.argv) >= 2:
             sky_sub.main()
         elif sys.argv[2] == 'stack':
             stack.main()
+
+    elif sys.argv[1] == 'utilities':
+        if sys.argv[2] == '-h':
+            print(
+                'Utilities script options:\n'
+                '   logger - ellipticity_logger.py (generates csvs and 3d plots of ellipticity & psf size across all'
+                ' chips for an observations stacked images)\n'
+            )
+        elif sys.argv[2] == 'logger':
+            ellipticity_logger.main()
 
     else:
         print('Use only designated commands!, see "-h"')

@@ -24,7 +24,6 @@ import subprocess
 from scipy.stats import skew
 import warnings
 
-# sys.path.insert(0, 'C:\PycharmProjects\prime-photometry\photomitrus')
 from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS)
 
@@ -56,8 +55,38 @@ def get_table_from_ldac(filename, frame=1):
     tbl = Table.read(filename, hdu=frame)
     return tbl
 
+#%% vega to AB mag conversion
 
-# %%
+
+def ab_convert(mag, band, survey=None):
+    # jy zero points
+    # from 2MASS
+    if survey == '2MASS':
+        zp_dict = {'zp_J': 1594, 'zp_H': 1024}
+        pick_zp = 'zp_' + band
+
+        for k, v in zp_dict.items():
+            if k == pick_zp:
+                zp = v
+
+        flx = zp * 10 ** (-mag / 2.5)
+        ab_mag = -2.5 * np.log10(flx / 3631)
+        ab_mag = round(ab_mag, 3)
+    elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS':
+        print('Survey %s is already reported in AB mag, no offset required.' % survey)
+        ab_mag = mag
+    else:
+        # for vista (AB-Vega offsets): https://www.aanda.org/articles/aa/full_html/2015/03/aa24973-14/T3.html
+        offset_dict = {'J': 0.94, 'H': 1.38, 'Y': 0.62, 'Z': 0.52}
+
+        for k, v in offset_dict.items():
+            if k == band:
+                offset = v
+
+        ab_mag = mag+offset
+    return ab_mag
+
+#%%
 # import img and get wcs
 
 
@@ -519,26 +548,6 @@ def gal_match(raImage, decImage):
 
 
 # %%
-
-
-def ab_convert(mag, band):
-    # jy zero points
-    # TODO add more survey-specific zps once query is overhauled (ex. VISTA, etc)
-    # from 2MASS
-    zp_dict = {'zp_J': 1594, 'zp_H': 1024}
-    pick_zp = 'zp_' + band
-
-    for k, v in zp_dict.items():
-        if k == pick_zp:
-            zp = v
-
-    flx = zp * 10 ** (-mag / 2.5)
-    ab_mag = -2.5 * np.log10(flx / 3631)
-    ab_mag = round(ab_mag, 3)
-    return ab_mag
-
-
-# %%
 # derive zero pt / put in swarped header
 
 
@@ -574,12 +583,15 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     # print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
     print('zp = %.4f, zp err = %.6f' % (zero_psfmean, zero_psfstd))
+
     # catalog for just clean sources (no flags)
     psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
     psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+    # ab mag conversion
+    psfmag_clean = ab_convert(psfmag_clean, band=band, survey=survey)
 
-    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit='mag')
-    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit='mag')
+    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit='AB mag')
+    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit='AB mag')
     cleanPSFSources.add_column(psfmagcol_clean)
     cleanPSFSources.add_column(psfmagerrcol_clean)
     cleanPSFSources.remove_column('VIGNET')
@@ -588,15 +600,13 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
     # catalog for all detected sources
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
-
-    # caterr_all = good_cat_stars[magerrcolname]
-    # primeerr_all = cleanPSFSources['MAGERR_POINTSOURCE']
-
-    # np.sqrt(caterr_all**2 + primeerr_all**2)
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+    # ab mag conversion
+    print('Converting mags from Vega to AB for all sources!')
+    psfmag = ab_convert(psfmag, band=band, survey=survey)
 
-    psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit='mag')
-    psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit='mag')
+    psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit='AB mag')
+    psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit='AB mag')
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
@@ -1139,7 +1149,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     print('Saved WLS fit plots to dir!')
 
     # WLS fit for 3 sig clip of data
-
     sigtxt = ('slope = %.4f' % m_sig + '\nslope err = %.4f' % m_sigerr + '\nint = %.4f' % b_sig +
               '\nint err = %.4f' % b_sigerr)
 
@@ -1244,7 +1253,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     # Crossmatch location check plot
-
     mean, median, sigma = sigma_clipped_stats(data)
 
     fig = plt.figure(figsize=(10, 10))
@@ -1280,6 +1288,7 @@ def grb_rad_convert(rad):
         print('Only arcsec, arcmin, and deg are supported! Default = arcsec')
         sys.exit('Use supported units.')
     return arcconvert
+
 
 #%% automated y int fit calibration
 
@@ -1342,7 +1351,8 @@ def photometry(
     directory = directory + '/'
     name = os.path.basename(full_filename)
 
-    grb_thresh = grb_rad_convert(grb_radius)
+    if grb_ra:
+        grb_thresh = grb_rad_convert(grb_radius)
 
     if grb_only:
         os.chdir(directory)

@@ -454,7 +454,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
 
             fits.writeto(newpath, data, header, overwrite=True)
 
-        print('Moving old files to %sold/ directory and renaming shifted images...' % directory)
+        print('Moving old files to %s/old/ directory and renaming shifted images...' % directory)
         old_storage_dir = os.path.join(directory, 'old')
         if not os.path.exists(old_storage_dir):
             os.mkdir(old_storage_dir)

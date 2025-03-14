@@ -8,6 +8,7 @@ Settings for pipeline
 # %% Config File Names
 import os
 import pandas as pd
+from datetime import datetime
 
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
@@ -47,15 +48,27 @@ def gen_master_name():
     return os.path.join(base_dir, 'master.py')
 
 
-def gen_mflat_file_name(band, chip):
+def gen_mflat_file_name(band, chip, date=None):
     base_dir = os.path.dirname(os.path.realpath(__file__))
     flat_dir = os.path.join(base_dir, 'mflats')
     mflat_list = [
         f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f]
 
-    # get latest mflat
-    mflat_list = sorted(mflat_list, reverse=True)
-    filename = mflat_list[0]
+    if date:
+        # get mflat closest to obs date, if there is a tie, it picks the earlier one to be safe
+        def closest_file(file_list, target_date):
+            target = datetime.strptime(target_date, "%Y%m%d")
+
+            def extract_date(file):
+                return datetime.strptime(file.split(".")[2], "%Y%m%d")
+
+            return min(file_list, key=lambda f: (abs((extract_date(f) - target).days), extract_date(f)))
+
+        filename = closest_file(mflat_list, date)
+    else:
+        # if no date given, get latest mflat
+        mflat_list = sorted(mflat_list, reverse=True)
+        filename = mflat_list[0]
     return os.path.join(flat_dir, filename)
 
 

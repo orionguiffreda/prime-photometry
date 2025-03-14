@@ -41,7 +41,7 @@ def parentcreation(target, date, band):
 def datalistdownload(parentdir, target, band, date):
     print('Verifying parent dir: %s' % parentdir)
     if not os.path.isdir(parentdir):
-        os.mkdir(parentdir)
+        os.makedirs(parentdir)
     else:
         pass
     if band == 'Z':
@@ -81,36 +81,36 @@ def datadownload(parentdir, target, band, date, chip):
 #%%
 
 
-def refineprocess(parentdir, chip, band, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
+def refineprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val,net_refine=True,
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, net_refine=True,
            sky_override=sky_override_path, removal=removal, fullramplist=fullramplist)
 
 
-def shiftprocess(parentdir, chip, band, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
+def shiftprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, sky_override=sky_override_path,
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, sky_override=sky_override_path,
            removal=removal, fullramplist=fullramplist)
 
 
-def baseprocess(parentdir, chip, band, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
+def baseprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, rot_val=rot_val, no_shift=True,
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, no_shift=True,
            sky_override=sky_override_path, removal=removal, fullramplist=fullramplist)
 
 
@@ -181,19 +181,19 @@ def multi_master(
                     print('Directory already no longer exists.')
         if type(chips) is int:
             if astromnet:
-                refineprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
+                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal)
             elif not no_shift:
-                shiftprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
+                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal)
             else:
-                baseprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal)
+                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal)
         else:
             for f in chips:
                 if astromnet:
-                    refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                    refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal)
                 elif not no_shift:
-                    shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                    shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal)
                 else:
-                    baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal)
+                    baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal)
 
     else:
         full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date)
@@ -213,24 +213,24 @@ def multi_master(
         #     processparallel(target, date, band, chips)
         if type(chips) is int:
             if astromnet:
-                refineprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
+                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal,
                               fullramplist=full_ramp_list)
             elif not no_shift:
-                shiftprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
+                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal,
                              fullramplist=full_ramp_list)
             else:
-                baseprocess(chosen_parent, chips, band, rot_val, sky_override_path, removal=removal,
+                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal,
                             fullramplist=full_ramp_list)
         else:
             for f in chips:
                 if astromnet:
-                    refineprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                    refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal,
                                   fullramplist=full_ramp_list)
                 elif not no_shift:
-                    shiftprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                    shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal,
                                  fullramplist=full_ramp_list)
                 else:
-                    baseprocess(chosen_parent, f, band, rot_val, sky_override_path, removal=removal,
+                    baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal,
                                 fullramplist=full_ramp_list)
 
 
