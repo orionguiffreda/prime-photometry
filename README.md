@@ -16,47 +16,53 @@ If you want to download and set up the pipeline (once it's ready), look at the I
 
 ### Setting up Access
 
-To begin, if you're using the main pipeline on the PRIME computer, you'll need to access the computer via SSH or Microsoft Remote Desktop.  I personally use Remote Desktop, as it makes it easy for me to examine scripts, files, and results visually.  There is a Google Doc that details how to set up the VPN and access goddardpc01 (I won't link it here as it contains sensitive logins, but if you're in the PRIME ToO slack, it should be a bookmark under 'PRIME data retrieval').  Remember, the pipeline is stored on goddardpc01 specifically, so access that computer only.
+To begin, if you're using the main pipeline on the PRIME computer, you'll need to access the computer via SSH or TigerVNC.  TigerVNC allows remote desktop access but as we're currently working through some issues with it, it's capabilities are limited.  SSH works as normal.  There is a Google Doc that details how to set up the VPN and access goddardpc01 (I won't link it here as it contains sensitive logins, but if you're in the PRIME ToO slack, it should be a bookmark under 'PRIME data retrieval').  Remember, the pipeline is stored on goddardpc01 specifically, so access that computer only.
 
 ### Confirming an Observation
 
-Confirm that you can access goddardpc01.  Before we move to utilizing the pipeline itself, we should first confirm the observation we want to process.  It's good practice to verify that your observation target has been observed in the date and filter you think it is.  You can verify by checking the PRIME ramp log at the link below:
+Confirm that you can access goddardpc01.  Before we move to utilizing the pipeline itself, we should first confirm the observation we want to process.  It's good practice to verify that your observation target has been observed in the date and filter you think it is.  You can verify by checking either the PRIME ramp log or the new online log at the links below:
 
 http://www-ir.ess.sci.osaka-u.ac.jp/prime_staff/LOG/Ramp_LOG/
 
+http://www-ir.ess.sci.osaka-u.ac.jp/prime_staff/Online_Log/
+
 Simply navigate to your date and search for your field and filter.
 
-For the purposes of this guide, let us assume a transient has been observed.  We'll use GRB240825a as an example.  This was observed by PRIME on 8/25/2024.  We have the date, now we need the field number (OBJNAME in the log).  If you're in the PRIME discord, you should be able to navigate to the _obs_request_ channel.  This is where observation request csvs are sent to the observers.  You can scroll until you find the csv titled 'GRB240825a.csv'.  Within this csv, you can find the *ObjectName* column.  This corresponds to the field on the observation grid that should be observed, and is the field number we need.  If you aren't currently in the PRIME discord, then the field number for this GRB is _field16359_.  
+For the purposes of this guide, let us assume a transient has been observed.  We'll use the recent observation of GRB250309B as an example.  This was observed by PRIME on March 10, 2025.  We have the date, now we need the field number (OBJNAME in the ramp log).  This corresponds to where on the PRIME observing grid the target was observed.  When you learn to create observation CSVs to schedule observation, this corresponds to the *ObjectName* column.  Currently, observation CSVs are submitted via a Google submission portal, so they are not easily accessible by people other than the submitter.  A good piece of advice would be to check the ramp log for the field (or fields) on your certain night which were observed by 'NASA' in the *Observer* column.  In the case of this transient, the field number is *no_grid*, as the transient's position caused us to shift off the grid to cover the localization radius.  Most fields will have the format: *field12345*.  
 
-Let's just try and process J band for the filter.  So now we have the necessary date, field, and filter.  Look at the corresponding log to determine if the information is accurate (the observation should be there!).  Once you've confirmed the observation was taken, we can move on.
+Let's just try and process J band for the filter.  Most PRIME observations are taken in J and or H, sometimes with Y and or Z.  So now we have the necessary date, field, and filter.  Look at the corresponding log to determine if the information is accurate (the observation should be there!).  Once you've confirmed the observation was taken, we can move on.
 
-### Utilizing the Pipeline
+### Utilizing the Pipeline (Processing & Photometry)
 
-Now we can finally start using the pipeline!  Remote into goddardpc01 and open up WSL (it should be on the taskbar).  
+Now we can finally start using the pipeline!  SSH into goddardpc01.  
 
 Currently, to get the pipeline ready for use, let's begin by activating the correct conda environment:
 
     conda activate prime-photometrus
 
-To utilize all the scripts in this pipeline, you'll call the main command _photometrus_.  Specifically, we'll begin by using the script most often utilized in the pipeline: _multi_master.py_.  We can call this script through calling the command _photometrus pipeline_.  This allows the data download, processing, and stacking for 1 or more detectors (chips) all from a single command.  This script takes several fields (such as date, band, etc.) as input, if you want detailed explanations of every argument, go to the Scripts section.
+To utilize all the scripts in this pipeline, you'll call the main command _photometrus_.  There are many, many scripts associated with this pipeline, and _photometrus_ allows access to nearly all of them.  Specifically, we'll begin by using the script most often utilized in the pipeline: _multi_combo.py_.  We can call this script through calling the command _photometrus full_.  This allows the processing, stacking, and photometric analysis of a target field for 1 or more detectors (chips) all from a single command.  This script takes several fields (such as date, band, etc.) as input, if you want detailed explanations of every argument, go to the Scripts section.
 
-We first need to determine what parent directory all the processing will take place in.  Preferably, it should be a new directory in the _/mnt/d/PRIME_photometry_test_files/_ path (this is where most observations are stored).  For the sake of this guide, let's make the directory:
-_/mnt/d/PRIME_photometry_test_files/pipeline_demo/_.
+We first need to determine what parent directory all the processing will take place in.  Preferably, it should be a new directory in the _/mnt/photometry/TransientEvents/_ path (this is where most GRB observations are stored).  For the sake of this guide, let's make the directory:
+_/mnt/photometry/TransientEvents/pipeline_demo/J/_.
 
 This script has many optional args.  For the sake of this quickstart guide, I won't go over them, but explore them through the documentation or running: 
 
-    photometrus pipeline -h
+    photometrus full -h
 
-Let's run the pipeline only on chip 2 in J band, to save time and disk space.  To run the pipeline on this observation, we should utilize the command:
+Let's run the pipeline only on chip 1 in J band, as this is where the target landed.  To run the pipeline on this observation, we should utilize the command:
 
-    photometrus pipeline -parent /mnt/d/PRIME_photometry_test_files/pipeline_demo/ -target field16539 -date 20240825 -band J -chip 2
+    photometrus full -parent /mnt/photometry/TransientEvents/pipeline_demo/J/ -date 20250310 -target no_grid -band J -chip 1 -grb_ra 210.80129 -grb_dec -8.50302 -grb_radius 4.0
 
-Once you run this command, you'll notice the script is quite verbose in WSL.  This is good for monitoring progress, as it details exactly what is occuring on every step.  
+This is a pretty long command, so let's go over a few things briefly.  Some args are self-explanatory (-parent is the parent directory, -date is the date, -band is the filter, etc.).  
+Remember, this is a transient observation, so not only are we generating photometry for the whole image, we're also looking for a specific source.  The RA, Dec, and error radius of this transient is inputted at -grb_ra, -grb_dec, and -grb_radius.  We got the coordinates and error radius from the GCN network, specifically from Swift through the GCN below (I increased the error radius slightly):
 
-_Ideally_, this command should run without issue, producing many subdirectories (the pipeline currently keeps all intermediate data products, useful for troubleshooting errors).  For a detailed overview of each of these subdirectories and data products, examine the _photometrus stack_ (_master.py_) documentation.  But quickly, below should be the format:
+https://gcn.nasa.gov/circulars/39649
 
-    ├── J_Band (Parent)
-    │   ├── C1  -  Subdirectory for storage of input ramp images
+Once you run this command, you'll notice the script is quite verbose.  This is good for monitoring progress, as it details exactly what is occuring on every step.  
+
+_Ideally_, this command should run without issue, producing many subdirectories (the pipeline currently keeps all intermediate data products by default, useful for troubleshooting errors).  For a detailed overview of each of these subdirectories and data products, examine the _photometrus stack_ (_master.py_) documentation.  But quickly, below should be the format:
+
+    ├── J (Parent)
     │   ├── C1_astrom  -  Subdirectory for storage of ramps w/ basic astrometry
     │   ├── C1_sub  -  Subdirectory for storage of processed images w/ improved astrometry
     │   ├── sky  -  Subdirectory for storage of sky image
@@ -64,38 +70,34 @@ _Ideally_, this command should run without issue, producing many subdirectories 
     │   ├── ramp_fit_log_****-**-**.dat  -  PRIME observation logs for the night
     │   ├── ramp_fit_log_****-**-**.clean.dat
 
-The final stacked image is the one we're interested in.  Open the image in DS9 and examine it.  Hopefully it looks acceptable! (no star streaking or blurriness).  Once we've confirmed the image is of good quality, let's move onto photometry.
+The final stacked image and it's photometric information is the one we're interested in.  If you're using TigerVNC you can open Dolphin, the file viewer, then open the image in DS9 and examine it.  Here, the corrected mounted drive should be titled _wsldata_.  If you're just SSH'd in, you'll have to scp it.  Hopefully it looks acceptable! (no star streaking or blurriness).  Within the _stack_ subdirectory, there should be many files corresponding to photometry.
 
-### Utilizing Photometry
+    ├── stack
+    │   ├── coadd.Open-J.02182248-02182886.C1.fits - final stacked image
+    │   ├── weight.Open-J.02182248-02182886.C1.fits - weightmap for stacked image
+    │   ├── coadd.Open-J.02182248-02182886.C1.fits.VHS.ecsv - full photometric catalog
+    │   ├── coadd.Open-J.02182248-02182886.C1.wcs - external WCS header generated by astrometry.net
+    │   ├── PSF.Open-J.02182248-02182886.C1.fits - PSF model fits file
+    │   ├── Resid_3-sig_Data_J_C1_VHS.ecsv - residual statistics file
+    │   ├── GRB_J_Data_VHS.ecsv - transient target information file
+    │   ├── VHS_C1_*.png... - Many check-plots for photometry
 
-We have our image, now it's time to get photometric information from it.  To utilize _photometry.py_, we will call photometrus through the command _photometrus photometry_ (self explanatory).  For this observation, we'll utilize the command:
-
-    photometrus photometry -filepath /mnt/d/PRIME_photometry_test_files/pipeline_demo/stack/coadd.Open-J.01599131-01599329.C2.fits -band J -survey VHS -grb_ra 344.57200 -grb_dec 1.02675 -grb_radius 5.0
-
-This is a pretty long command, so let's go over a few things briefly.  Some args are self-explanatory (-filepath being the path to the stacked image, -band being the filter).  
-
--survey is the catalog that is used for source matching.  We match PRIME sources in the image to known catalog sources to generate accurate magnitudes.  
-
-Remember, this is a transient observation, so not only are we generating photometry for the whole image, we're looking for a specific source.  The RA, Dec, and error radius of this transient is inputted at -grb_ra, -grb_dec, and -grb_radius.
-
-There are many optional args with this script.  To explore them and how the script works in general, look into the documentation and or run the command:
-
-    photometrus photometry -h
-
-Anyway, once the long command I gave earlier is run, you'll see some info printed to WSL, and several data products created.  As we're looking for a transient, the file titled _GRB_J_Data_VHS.ecsv_ is the one we're interested in.  If you open it in Notepad, you'll see it contains various info on a source at the inputted coordinates and threshold, such as magnitude, radius, SNR, etc.  Congrats! This is our grb!  
+We won't get into each data product (check the _photometrus photometry_ (_photometry.py_) documentation for more info), but the one we're interested in is the file titled _GRB_J_Data_VHS.ecsv_ is the one we're interested in.  If you open it, you'll see it contains various info on a source at the inputted coordinates and threshold, such as magnitude, radius, SNR, etc.  Congrats! This is our grb! 
 
 ## Sections
 
 ### Scripts: 
 Most of the wiki will be about the scripts, how they function, what they produce, and how to use them.  *NOTE*: Not every utilized script currently has complete documentation, but it will be updated over time!  
 
-* Photometrus Stack & Photometrus Pipeline: The pipeline itself will be run from either _master.py_ or _multi-master.py_ (called by _stack_ and _pipeline_ respectively).  For most use case scenarios and normal observations _multi-master.py_ is sufficient, though specific scenarios may require the greater number of knobs to turn given by _master.py_.  In any case, the sections on these scripts are the most important, though other script documentation is useful for knowing how the master scripts run.  To begin to understand how to run things, I recommend first reading through _multi-master.py_ (utilized the most), then _master.py_, and finally the other scripts.
+* Photometrus Stack & Photometrus Pipeline: The pipeline itself will be run from either _master.py_ or _multi_master.py_ (called by _stack_ and _pipeline_ respectively).  For most use case scenarios and normal observations _multi_master.py_ is sufficient, though specific scenarios may require the greater number of knobs to turn given by _master.py_.  In any case, the sections on these & the photometry scripts are the most important, though other script documentation is useful for knowing how the master scripts run.  To begin to understand how to run things, I recommend first reading through _multi-master.py_ (utilized the most), then _master.py_, and finally the other scripts.
 
-* Astrometry: This section details each of the 4 current astrometry scripts that can be used in the pipeline.
+* Photometrus Photometry & Photometrus Single_Photometry: The photometry will be run either from _photometry.py_ or _multi_photom.py_ (called by _single_photometry_ and _photometry_ respectively).  The former runs photometry on all or specific chips in a given observations, while the latter runs on a single chip, but can offer more knobs to turn.
 
-* Photometry: This section details how photometry is generated for a chip's data, and what data products are produced.
+* Photometrus Astrom: This section details each of the 4 current astrometry scripts that can be used in the pipeline.
 
-* Stack: This section details how the final pipeline step, stacking, works.
+* Photometrus Process: This section will include details on processing scripts responsible for specific steps, such as stacking.
+
+Please refer to the Wiki tab for the above pages!
 
 
 ## Installation Guide for PRIME Pipeline
