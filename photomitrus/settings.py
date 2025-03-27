@@ -65,10 +65,12 @@ def gen_mflat_file_name(band, chip, date=None):
             return min(file_list, key=lambda f: (abs((extract_date(f) - target).days), extract_date(f)))
 
         filename = closest_file(mflat_list, date)
+        print('Getting mflat closest to given date: ', filename)
     else:
         # if no date given, get latest mflat
         mflat_list = sorted(mflat_list, reverse=True)
         filename = mflat_list[0]
+        print('No date, getting latest mflat: ', filename)
     return os.path.join(flat_dir, filename)
 
 

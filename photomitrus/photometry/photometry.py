@@ -71,7 +71,6 @@ def ab_convert(mag, band, survey=None):
 
         flx = zp * 10 ** (-mag / 2.5)
         ab_mag = -2.5 * np.log10(flx / 3631)
-        ab_mag = round(ab_mag, 3)
     elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS':
         print('Survey %s is already reported in AB mag, no offset required.' % survey)
         ab_mag = mag
@@ -82,7 +81,6 @@ def ab_convert(mag, band, survey=None):
         for k, v in offset_dict.items():
             if k == band:
                 offset = v
-
         ab_mag = mag+offset
     return ab_mag
 
@@ -602,7 +600,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
     psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
     # ab mag conversion
-    print('Converting mags from Vega to AB for all sources!')
+    print('Converting mags from Vega to AB for all sources! (if not already in AB)')
     psfmag = ab_convert(psfmag, band=band, survey=survey)
 
     psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit='AB mag')
@@ -1257,7 +1255,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.gca()
-    plt.imshow(data, vmin=median - 1.5 * sigma, vmax=median + 1.5 * sigma)
+    plt.imshow(data, vmin=median - 1.5 * sigma, vmax=median + 1.5 * sigma, origin='lower')
     circles = [
         plt.Circle((cleanPSFsources['X_IMAGE'][idx_psfimage][i], cleanPSFsources['Y_IMAGE'][idx_psfimage][i]), radius=5,
                    edgecolor='r', facecolor='None') for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))]

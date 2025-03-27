@@ -72,7 +72,7 @@ def ellipticity_log(directory,catname,parentdir=None):
     if catpath.endswith('.ecsv'):
         cat = Table.read(catpath)
     else:
-        cat = Table.read(catpath, hdu=2)
+        cat = Table.read(catname, hdu=2)
     # img = fits.open(imgname)
     # hdr = img[0].header
     # img_x = hdr['NAXIS1']
@@ -146,7 +146,7 @@ def ellipticity_log(directory,catname,parentdir=None):
     log.close()"""
 
 
-def table_construction(master_ells, master_psfs, stackdir):
+def table_construction(master_ells, master_psfs, stackdir, single=False):
     upper_ells = np.hstack((master_ells[0], master_ells[1]))
     lower_ells = np.hstack((master_ells[2], master_ells[3]))
     final_ells = np.vstack((upper_ells, lower_ells))
@@ -159,17 +159,30 @@ def table_construction(master_ells, master_psfs, stackdir):
     psf_df = pd.DataFrame(final_psfs)
 
     split = stackdir.split('/')
-    fieldname = [f for f in split if 'field' in f or 'GRB' in f]
-    if not fieldname:
-        if stackdir[-1] == '/':
-            fieldname = split[-4]
+    if single:
+        fieldname = [f for f in split if 'field' in f or 'GRB' in f]
+        if not fieldname:
+            if stackdir[-1] == '/':
+                fieldname = split[-3]
+            else:
+                fieldname = split[-2]
         else:
-            fieldname = split[-3]
-    else:
-        fieldname = ' '.join(fieldname)
+            fieldname = ' '.join(fieldname)
 
-    elltablename = fieldname + '_ellip_table.csv'
-    psftablename = fieldname + '_psf_table.csv'
+        elltablename = fieldname + '_single_ellip_table.csv'
+        psftablename = fieldname + '_single_psf_table.csv'
+    else:
+        fieldname = [f for f in split if 'field' in f or 'GRB' in f]
+        if not fieldname:
+            if stackdir[-1] == '/':
+                fieldname = split[-4]
+            else:
+                fieldname = split[-3]
+        else:
+            fieldname = ' '.join(fieldname)
+
+        elltablename = fieldname + '_ellip_table.csv'
+        psftablename = fieldname + '_psf_table.csv'
 
     elltablepath = os.path.join(stackdir, elltablename)
     psftablepath = os.path.join(stackdir, psftablename)
@@ -180,7 +193,7 @@ def table_construction(master_ells, master_psfs, stackdir):
     return final_ells, final_psfs, fieldname
 
 
-def plots(final_ells, final_psfs, fieldname):
+def plots(final_ells, final_psfs, fieldname, stackdir, single=False):
 
     print('Generating 3d bar plots!')
 
@@ -190,10 +203,10 @@ def plots(final_ells, final_psfs, fieldname):
     titles = ['Median Ellipticity across all chips', 'Median PSF Size across all chips']
     z_labels = ['Ellipticity Value', 'PSF Size Value']
 
-    plot_mins = [0, 0.5]
-    plot_maxes = [0.4, 3.0]
+    plot_mins = [0, 1.25]
+    plot_maxes = [0.4, 2.5]
     z_lims_norm = [0.65, 4.0]
-    z_lims_high = [0.75, 5.5]
+    z_lims_high = z_lims_norm
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 6), subplot_kw={'projection': '3d'})
     cmap = plt.get_cmap('plasma')
@@ -230,49 +243,82 @@ def plots(final_ells, final_psfs, fieldname):
         ax.set_zlabel(z_labels[i])
         ax.set_title(titles[i])
 
-    plt.title('Source Statistics across All Chips for Observation')
-
+    if single:
+        fig.suptitle('Ellipticity and PSF Size 3D plots for %s - Single Image' % fieldname)
+        savename = os.path.join(stackdir, '%s_single_detector_plots.png' % fieldname)
+    else:
+        fig.suptitle('Ellipticity and PSF Size 3D plots for %s - Stacked Image' % fieldname)
+        savename = os.path.join(stackdir, '%s_detector_plots.png' % fieldname)
     plt.subplots_adjust(wspace=0.5)
-    plt.savefig('%s_detector_plots.png' % fieldname, dpi=300)
-    print('%s_detector_plots.png generated.' % fieldname)
+    plt.savefig(savename, dpi=300)
+    print('%s generated.' % savename)
 
     plt.close('all')
 
 #%%
 
 
-def logger(directory):
+def logger(directory, single=False):
     # stackdir = os.path.join(directory, 'stack')
-    stackdir = directory
-    os.chdir(stackdir)
+    if single:
+        os.chdir(directory)
+        chips = ['1','2','3','4']
 
-    print('Checking ellipticity & psfs of stacked images...')
-    stacklist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.ecsv') and f.startswith('coadd')]
-    # imglist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.fits') and f.startswith('coadd')]
-    print(stacklist)
-    master_ell = []
-    master_psfs = []
-    for catpath in stacklist:
-        ells, psfs = ellipticity_log(stackdir,catpath,directory)
-        master_ell.append(ells)
-        master_psfs.append(psfs)
+        imglist = []
+        for c in chips:
+            subdir = os.path.join(directory, 'C%s_sub' % c)
+            sublist = [f for f in sorted(os.listdir(subdir)) if f.endswith('.flat.cat')]
+            imgpath = os.path.join(subdir,sublist[0])
+            imglist.append(imgpath)
 
-    final_ells, final_psfs, fieldname = table_construction(master_ell, master_psfs, stackdir)
-    plots(final_ells, final_psfs, fieldname)
+        print('Checking ellipticity & psfs of single processed images in dir...')
+        print(imglist)
+        master_ell = []
+        master_psfs = []
+        for catpath in imglist:
+            ells, psfs = ellipticity_log(directory,catpath,directory)
+            master_ell.append(ells)
+            master_psfs.append(psfs)
+
+        if not master_ell:
+            raise FileNotFoundError('No matching catalogs found!')
+        else:
+            final_ells, final_psfs, fieldname = table_construction(master_ell, master_psfs, directory, single)
+            plots(final_ells, final_psfs, fieldname, directory, single)
+    else:
+        stackdir = directory
+        os.chdir(stackdir)
+
+        print('Checking ellipticity & psfs of stacked images...')
+        stacklist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.ecsv') and f.startswith('coadd')]
+        # imglist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.fits') and f.startswith('coadd')]
+        print(stacklist)
+        master_ell = []
+        master_psfs = []
+        for catpath in stacklist:
+            ells, psfs = ellipticity_log(stackdir,catpath,directory)
+            master_ell.append(ells)
+            master_psfs.append(psfs)
+
+        if not master_ell:
+            raise FileNotFoundError('No matching ecsvs found!')
+        else:
+            final_ells, final_psfs, fieldname = table_construction(master_ell, master_psfs, stackdir, single)
+            plots(final_ells, final_psfs, fieldname, stackdir, single)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Logs ellipticity for a single observation (checks start, middle, and '
                                                  'end of observation along with stack')
     parser.add_argument('-dir', type=str, help='[str] parent path where observation is stored '
-                                               '(likely "/stack"), or path where specific image is held')
-    # parser.add_argument('-imgname', type=str, help='[str] optional manual field to specify image filename',
-    #                     default=None)
-    # parser.add_argument('-include_sub', action='store_true', help='if you want to run logger on ALL '
-    #                                                               'processed images instead of just stacks, use this')
-    args = parser.parse_args()
+                                               '(likely "/stack"), or parent directory of observation (if you want to '
+                                               'run on single images)')
+    parser.add_argument('-single', action='store_true', help='if you want to run logger on a set of'
+                                                             'processed images (from C#_sub dirs) '
+                                                             'instead of just stacks, use this')
+    args, unknown = parser.parse_known_args()
 
-    logger(args.dir)
+    logger(args.dir, args.single)
 
 
 if __name__ == "__main__":

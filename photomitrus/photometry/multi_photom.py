@@ -42,7 +42,10 @@ def multiphotom(stackpath, matchingstacks, band, survey=None, grb_ra=None, grb_d
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
                            grb_coordlist=grb_coordlist, grb_radius=grb_radius)
 
-    ellipticity_logger.logger(directory=stackpath)
+    if len(matchingstacks) == 4:
+        ellipticity_logger.logger(directory=stackpath)
+    else:
+        pass
 
 #%%
 

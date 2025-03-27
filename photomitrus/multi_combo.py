@@ -1,5 +1,6 @@
 from photomitrus import multi_master
 from photomitrus.photometry import multi_photom
+from photomitrus.photometry import ellipticity_logger
 from photomitrus.settings import PIPELINE_DEFAULT_DIR
 
 import os
@@ -11,7 +12,7 @@ import argparse
 
 def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=False, astromnet=False,
           sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, survey=None,
-          grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=None
+          grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=None, auto_mode=False, input_ramp_lists=None
           ):
 
     if parentdir:
@@ -28,8 +29,14 @@ def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=F
 
     for f in chips:
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
-                                  sky_override_path, removal, no_get_files, no_mflat)
+                                  sky_override_path, removal, no_get_files, no_mflat, auto_mode=auto_mode,
+                                  input_ramp_lists=input_ramp_lists)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius)
+
+    if len(chips) == 4:
+        ellipticity_logger.logger(directory=stackpath)
+    else:
+        pass
 
 #%%
 

@@ -38,8 +38,8 @@ elif len(sys.argv) >= 2:
 
     elif sys.argv[1] == '-h':
         print('Options:\n'
-              '     full - to run the full pipeline & photometry]\n'
-              '     pipeline - to run the full pipeline (data download, processing, & stacking) on whole observation]\n'
+              '     full - to run the full pipeline & photometry\n'
+              '     pipeline - to run the full pipeline (data download, processing, & stacking) on whole observation\n'
               '     stack - to specifically use the processing & stacking (no direct download, but offers more'
               ' processing options)\n'
               '     photometry - to run photometry on multiple stacked images in a directory\n'

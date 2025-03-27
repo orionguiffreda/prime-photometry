@@ -134,7 +134,8 @@ def processparallel(target, date, band, chips):
 
 def multi_master(
         target, date, band, chip=None, parentdir=None, rot_val=48, no_shift=False, astromnet=False,
-        no_download=False, sky_override_path=None, removal=False, no_get_files=False, no_mflat=False
+        no_download=False, sky_override_path=None, removal=False, no_get_files=False, no_mflat=False, auto_mode=False,
+        input_ramp_lists=None
 ):
     if not no_mflat:
         auto_mflat_gen(date)
@@ -196,7 +197,12 @@ def multi_master(
                     baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal)
 
     else:
-        full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date)
+        if not auto_mode:
+            full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date)
+        else:
+            full_ramp_list = input_ramp_lists[0]
+            m_list = input_ramp_lists[1]
+            removal = True
         if all(not lst for lst in full_ramp_list):
             print('Error finding files, No data! Or perhaps wrong date or target?')
             if parentdir:
@@ -268,8 +274,10 @@ def main():
                                                                ' exist')
     args, unknown = parser.parse_known_args()
 
-    multi_master(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-                 args.no_download, args.sky_override, args.removal, args.no_get_files, args.no_mflat)
+    multi_master(target=args.target, date=args.date, band=args.band, chip=args.chip, parentdir=args.parent,
+                 rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,
+                 sky_override_path=args.sky_override, removal=args.removal, no_get_files=args.no_get_files,
+                 no_mflat=args.no_mflat)
 
 
 if __name__ == "__main__":
