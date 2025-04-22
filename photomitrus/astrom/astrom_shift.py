@@ -9,9 +9,25 @@ import argparse
 from astropy.table import Table
 import numpy as np
 from astropy.table import Column
+import threading
 import math
 
 from photomitrus.settings import gen_config_file_name
+
+
+def timed_input(prompt, timeout=60, default='Y'):
+    answer = [default]
+
+    def ask():
+        ans = input(prompt)
+        if ans:
+            answer[0] = ans
+
+    thread = threading.Thread(target=ask)
+    thread.daemon = True
+    thread.start()
+    thread.join(timeout)
+    return answer[0]
 
 #%% image info
 
@@ -384,8 +400,9 @@ def segmentshift(segments, acc_range, length, directory, header, data, imageName
     if not x_finalshift_prune:
         nonzero_idx = [idx for idx, val in enumerate(final_xshifts_arr_orig) if val != 0]
         if len(nonzero_idx) == 1:
-            check = input('Only 1 segment had a solution, do you want to go along with it? (Input Y or N): ')
-            if check == 'Y':
+            check = timed_input('Only 1 segment had a solution, do you want to go along with it? (Input Y or N): '
+                                , timeout=60)
+            if check.upper() == 'Y':
                 idx = nonzero_idx[0]
                 xfinal_shift = final_xshifts_arr_orig[idx]
                 yfinal_shift = final_yshifts_arr_orig[idx]

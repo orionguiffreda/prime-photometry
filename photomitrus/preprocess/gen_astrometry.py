@@ -23,7 +23,7 @@ def astrom(outpath, inlist, rad, ds):
         dec = hdr['DEC-D']
         try:
             command = (('solve-field '
-                        '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
+                        '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                         '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
                         '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
                            ra, dec, rad, ds, outpath, imgpath))
@@ -39,7 +39,7 @@ def astromdir(outpath, directory):
     for f in inpath:
         try:
             command = ('solve-field '
-                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
+                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
                        '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
                           outpath, directory + f)
@@ -57,13 +57,13 @@ def astromdirhard(outpath, directory, rad, ds):
     inpath = sorted(os.listdir(directory))
     for f in inpath:
         if f.endswith('.fits'):
-            img = fits.open(directory + f)
+            img = fits.open(os.path.join(directory, f))
             hdr = img[0].header
             ra = hdr['RA-D']
             dec = hdr['DEC-D']
             try:
                 command = (('solve-field '
-                            '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometryastrometry.cfg '
+                            '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                             '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
                             '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
                            ra, dec, rad, ds, outpath, directory+f))

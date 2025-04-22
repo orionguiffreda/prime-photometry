@@ -71,7 +71,7 @@ def ab_convert(mag, band, survey=None):
 
         flx = zp * 10 ** (-mag / 2.5)
         ab_mag = -2.5 * np.log10(flx / 3631)
-    elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS':
+    elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS':
         print('Survey %s is already reported in AB mag, no offset required.' % survey)
         ab_mag = mag
     else:
@@ -925,7 +925,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.xlabel('PRIME %s Mags' % band, fontsize=15)
     plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
     plt.grid()
-    plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
+    # plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
     plt.clf()
     print('Saved mag comparison plot to dir!')
 
@@ -1061,7 +1061,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     info2 = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
                 '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
     plt.text(15, -0.9, info2, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
-    plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
+    # plt.savefig('%s_C%s_residual_plot_int_%s.png' % (survey, chip, num), dpi=300)
     plt.clf()
 
     # res plot y int, histogram
@@ -1116,7 +1116,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
              predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], m2, b2), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
-    plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
+    # plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS hist density plot
     if len(idx_psfimage) >= 5000:
@@ -1163,7 +1163,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
              predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], m_sig, b_sig), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
-    plt.savefig('%s_C%s_WLS_fit_3sig_plot_%s.png' % (survey, chip, num), dpi=300)
+    # plt.savefig('%s_C%s_WLS_fit_3sig_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS 3 sig hist density plot
     plt.figure(7, figsize=(10, 8))

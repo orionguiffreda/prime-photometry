@@ -202,7 +202,7 @@ def multi_master(
         else:
             full_ramp_list = input_ramp_lists[0]
             m_list = input_ramp_lists[1]
-            removal = True
+            # removal = False
         if all(not lst for lst in full_ramp_list):
             print('Error finding files, No data! Or perhaps wrong date or target?')
             if parentdir:

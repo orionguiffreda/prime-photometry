@@ -23,6 +23,8 @@ def get_most_current_log_date():
     logdate = logdate.replace('-','')
     return logdate
 
+#%%
+
 
 def get_fields_from_log(date=None):
 
@@ -53,27 +55,41 @@ def get_fields_from_log(date=None):
 
     # Process the entries to distribute them into groups based on NINT
     for objname, entries in data_dict.items():
-        nint = int(entries[0]['NINT'])
-        filter_val = entries[0]['FILTER2']
-        obs = entries[0]['OBSERVER']
+        if not entries:
+            continue
 
-        key_base = f"{objname}"
+        # Sort by timestamp (if not already sorted)
+        entries.sort(key=lambda x: x['filename'])  # assuming filenames are timestamped
 
-        files_list = []
-        for i, entry in enumerate(entries):
-            files_list.append(entry['filename'])
-            if len(files_list) == nint or i == len(entries) - 1:
-                int_val = len(files_list)
-                key_suffix = (i // nint) + 1
-                key = f"{key_base}_{key_suffix}" if key_suffix > 1 else key_base
-                structured_data[key] = {
-                    'NINT': nint,
-                    'INT': int_val,
-                    'OBSERVER': obs,
-                    'BAND': filter_val,
-                    'FILES': files_list.copy()
-                }
-                files_list.clear()
+        # Split entries into groups where INT == 1.0 (i.e., start of new observation)
+        observation_blocks = []
+        current_block = []
+
+        for entry in entries:
+            if float(entry['INT']) == 1.0 and current_block:
+                observation_blocks.append(current_block)
+                current_block = []
+            current_block.append(entry)
+        if current_block:
+            observation_blocks.append(current_block)
+
+        for block_index, block in enumerate(observation_blocks):
+            nint = int(block[0]['NINT'])
+            filter_val = block[0]['FILTER2']
+            obs = block[0]['OBSERVER']
+
+            files_list = [entry['filename'] for entry in block]
+            int_val = len(files_list)
+            key_suffix = block_index + 1
+            key = f"{objname}_{key_suffix}" if key_suffix > 1 else objname
+
+            structured_data[key] = {
+                'NINT': nint,
+                'INT': int_val,
+                'OBSERVER': obs,
+                'BAND': filter_val,
+                'FILES': files_list
+            }
 
     # pruning out calibration files, i.e. flats, etc.
     structured_target_observations = {k: v for k, v in structured_data.items() if 'FLAT' not in k and '_test' not in k
@@ -82,9 +98,13 @@ def get_fields_from_log(date=None):
                                       not in v['OBSERVER']}
 
     if structured_target_observations:
+        print('Running automatically on all applicable fields on', logdate)
         return structured_target_observations
     else:
         sys.exit('No applicable fields were taken during %s!' % logdate)
+
+
+#%%
 
 
 def full_processing_from_log(observations, date):

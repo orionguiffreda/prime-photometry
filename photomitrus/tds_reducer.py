@@ -54,7 +54,8 @@ def reduce_and_photom_all(csvpath, date, bands, chips=None, reduction_only=False
 def main():
     parser = argparse.ArgumentParser(description='data reducer / photometric runner for large time domain surveys')
     parser.add_argument('-csvpath', type=str, help='[str] input path to csv with all pointings for certain'
-                                                   ' date')
+                                                   ' date: csv should have simple format of 1 column w/ column name '
+                                                   '"FieldNumber" and field names below in column')
     parser.add_argument('-date', type=str, help='[str] date in yyyymmdd, leave blank if csv named w/ format '
                                                 'ex. "Durbak_20241224_TDS.csv"')
     parser.add_argument('-chips', type=str, help='[str] specific chip or chips to process')
