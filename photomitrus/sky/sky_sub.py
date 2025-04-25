@@ -5,8 +5,11 @@ import os
 from astropy.io import fits
 import subprocess
 import argparse
-from photomitrus.settings import gen_config_file_name
 import numpy as np
+import threading
+import sys
+
+from photomitrus.settings import gen_config_file_name
 
 #%%
 
@@ -64,22 +67,46 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
 
 
 def sexback(imgdir,outdir):
+    print('Using sextractor background subtraction...')
     os.chdir(str(imgdir))
-    sx = gen_config_file_name('sexback.config')
-    ap = gen_config_file_name('astrom.param')
-    for f in sorted(os.listdir(str(imgdir))):
-        if f.endswith('flat.fits'):
+    sx = gen_config_file_name('sex_bulge.config')
+    ap = gen_config_file_name('tempsource.param')
+
+    def sxbackcmd(imgpath, sx, catpath, ap, outpath, first=False):
+        if first:
+            command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_NAME %s'
+                       % (imgpath, sx, catpath, ap, outpath))
+            rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            command = ('sex %s -c %s -CATALOG_TYPE NONE -PARAMETERS_NAME %s -CHECKIMAGE_NAME %s'
+                       % (imgpath, sx, ap, outpath))
+            rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    threads = []
+    files = [f for f in sorted(os.listdir(str(imgdir))) if f.endswith('flat.fits')]
+    if files:
+        output_fname = files[0].replace('.flat.fits', '.sky.flat.fits')
+        pre = os.path.splitext(output_fname)[0]
+        imgpath = os.path.join(imgdir, files[0])
+        catpath = os.path.join(outdir, pre+'.cat')
+        outpath = os.path.join(outdir, output_fname)
+        sxbackcmd(imgpath, sx, catpath, ap, outpath, first=True)
+        for f in files[1:]:
             output_fname = f.replace('.flat.fits', '.sky.flat.fits')
             pre = os.path.splitext(output_fname)[0]
-            ext = os.path.splitext(output_fname)[1]
-            com = ["sex ", imgdir + f, ' -c '+sx, " -CATALOG_NAME " + outdir + pre + '.cat', ' -PARAMETERS_NAME '+ap,
-                   ' -CHECKIMAGE_NAME  '+ outdir + output_fname]
-            s0 = ''
-            com = s0.join(com)
-            out = subprocess.Popen([com], shell=True,  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            out.wait()
-            print(output_fname + ' back subbed!')
-    print('sxtrctr back sub complete!')
+            imgpath = os.path.join(imgdir, f)
+            catpath = os.path.join(outdir, pre+'.cat')
+            outpath = os.path.join(outdir, output_fname)
+            first = False
+
+            thread = threading.Thread(target=sxbackcmd, args=(imgpath, sx, catpath, ap, outpath, first), name=f)
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+    else:
+        sys.exit('No applicable flat-fielded .flat.fits files found!')
+    print('Sxtrctr back sub complete!')
 
 #%%
 

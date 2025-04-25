@@ -1373,47 +1373,51 @@ def photometry(
         psfcatalogName = sex2(name)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
-        cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
-                                             name, band, chosen_survey, sigma)
-        if grb_ra:
-            if grb_thresh > 60:
-                newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
-            else:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
-        elif grb_coordlist:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
-        if not no_plots:
-            slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
-                             idx_psfimage, psfweights_noclip, psf_clipped, sigma)
-        if not int_cal:
-            if not keep:
-                removal(directory)
+        if not idx_psfimage:
+            print('No crossmatches found!  Cannot continue with photometry!  Is there something wrong with the image, '
+                  'source catalogs, or psf model?')
+            pass
         else:
-            prev_intercept = intercept
-            revert_flag = False
-            while intercept > 0.15:
-                print('\nIntercept = %.4f\n' % intercept)
-                mag_low_cutoff += 0.5
-                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
-                if new_intercept > prev_intercept:
-                    print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
-                          "redoing...\n" % (new_intercept, prev_intercept))
-                    intercept = prev_intercept
-                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                    mag_low_cutoff-0.5, mag_high_lim, grb_ra,
-                                                    grb_dec, grb_coordlist, grb_thresh)
-                    revert_flag = True
-                    break
+            cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
+                                                 name, band, chosen_survey, sigma)
+            if grb_ra:
+                if grb_thresh > 60:
+                    newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
                 else:
-                    intercept = new_intercept
-                    prev_intercept = intercept
-                    revert_flag = False
-
-            if revert_flag:
-                print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
+            elif grb_coordlist:
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
+            if not no_plots:
+                slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
+                                 idx_psfimage, psfweights_noclip, psf_clipped, sigma)
+            if not int_cal:
+                if not keep:
+                    removal(directory)
             else:
-                print(f"Final intercept below 0.15: %.4f" % intercept)
+                prev_intercept = intercept
+                revert_flag = False
+                while intercept > 0.15:
+                    print('\nIntercept = %.4f\n' % intercept)
+                    mag_low_cutoff += 0.5
+                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
+                    if new_intercept > prev_intercept:
+                        print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
+                              "redoing...\n" % (new_intercept, prev_intercept))
+                        intercept = prev_intercept
+                        new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                        mag_low_cutoff-0.5, mag_high_lim, grb_ra,
+                                                        grb_dec, grb_coordlist, grb_thresh)
+                        revert_flag = True
+                        break
+                    else:
+                        intercept = new_intercept
+                        prev_intercept = intercept
+                        revert_flag = False
+                if revert_flag:
+                    print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+                else:
+                    print(f"Final intercept below 0.15: %.4f" % intercept)
 
 
 def main():
