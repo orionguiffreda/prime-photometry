@@ -58,7 +58,7 @@ remote_file_formats = {
 
 replace_list = [
     'all sky grid',
-    # 'no_grid ',  # TODO: remove this before commit
+    # 'no_grid ',
     # 'no_grid_test '  # remove this before commit
 ]
 
