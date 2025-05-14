@@ -69,7 +69,7 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
 def sexback(imgdir,outdir):
     print('Using sextractor background subtraction...')
     os.chdir(str(imgdir))
-    sx = gen_config_file_name('sex_bulge.config')
+    sx = gen_config_file_name('bulge_new.config')
     ap = gen_config_file_name('tempsource.param')
 
     def sxbackcmd(imgpath, sx, catpath, ap, outpath, first=False):

@@ -582,6 +582,14 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
     print('zp = %.4f, zp err = %.6f' % (zero_psfmean, zero_psfstd))
 
+    # writing zp to header
+    print('Writing ZP info to image header...')
+    with fits.open(imageName, mode='update') as hdul:
+        hdr = hdul[0].header
+        hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
+        hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
+        hdul.close()
+
     # catalog for just clean sources (no flags)
     psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
     psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
@@ -1373,7 +1381,7 @@ def photometry(
         psfcatalogName = sex2(name)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
-        if not idx_psfimage:
+        if len(idx_psfimage) == 0:
             print('No crossmatches found!  Cannot continue with photometry!  Is there something wrong with the image, '
                   'source catalogs, or psf model?')
             pass

@@ -52,7 +52,8 @@ def flatlistdownload(date, chip, band=None):
 
 def flatlists(date, flatlist, chip):
     if flatlist is None:
-        raise FileNotFoundError('No flat fields found in storage dir for date? Are you sure you have the right date?')
+        raise FileNotFoundError('No flat fields found in storage dir for date? Are you sure you have the right date? '
+                                'Or were there missing files in the flat generation?')
     datetime = to_datetime(date)
     date = datetime.strftime('%Y-%m-%d')
     log = get_log_file(date)

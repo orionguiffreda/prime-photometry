@@ -57,7 +57,9 @@ remote_file_formats = {
 }
 
 replace_list = [
-    'all sky grid'
+    'all sky grid',
+    # 'no_grid ',  # TODO: remove this before commit
+    # 'no_grid_test '  # remove this before commit
 ]
 
 
@@ -67,6 +69,7 @@ def replace_bad_string(lines):
         fixed_line = line
         for replacement in replace_list:
             fixed_line = fixed_line.replace(replacement, replacement.replace(' ', '_'))
+            # print(fixed_line)
         replaced_lines.append(fixed_line)
     return replaced_lines
 

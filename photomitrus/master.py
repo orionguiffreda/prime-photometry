@@ -335,7 +335,8 @@ def master(
         # FFdir = makedirectoriesFF(parentdir, chip)
         chipramplist = getchiplist(fullramplist, chip)
         if chipramplist is None:
-            raise ValueError('For some reason, given chip doesnt match to any sublist!')
+            raise ValueError('For some reason, given chip doesnt match to any sublist!  Are there missing files when '
+                             'trying to retrieve?')
         astrom_angle_list(astromdir, chipramplist, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip, date)
         if sex or sky_override:
