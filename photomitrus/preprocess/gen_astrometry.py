@@ -25,7 +25,7 @@ def astrom(outpath, inlist, rad, ds):
             command = (('solve-field '
                         '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                         '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
-                        '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
+                        '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -t 4 -z %s -D %s %s') % (
                            ra, dec, rad, ds, outpath, imgpath))
             print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True)
@@ -41,7 +41,7 @@ def astromdir(outpath, directory):
             command = ('solve-field '
                        '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
-                       '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
+                       '-S none -M none -R none -B none -O -p -t 4 -z 4 -D %s %s') % (
                           outpath, directory + f)
             print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True)
@@ -65,7 +65,7 @@ def astromdirhard(outpath, directory, rad, ds):
                 command = (('solve-field '
                             '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
                             '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
-                            '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -z %s -D %s %s') % (
+                            '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -t 4 -z %s -D %s %s') % (
                            ra, dec, rad, ds, outpath, directory+f))
                 print('Executing command: %s' % command)
                 subprocess.run(command.split(), check=True)

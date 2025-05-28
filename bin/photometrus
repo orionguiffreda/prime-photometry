@@ -8,6 +8,7 @@ from photomitrus import master
 from photomitrus import multi_combo
 from photomitrus import super_master
 from photomitrus.preprocess import astromangle_new
+from photomitrus.preprocess import astromangle_wcs
 from photomitrus.preprocess import gen_astrometry
 from photomitrus.astrom import astrom_shift
 from photomitrus.astrom import astrometry
@@ -64,7 +65,8 @@ elif len(sys.argv) >= 2:
                 '   net - gen_astrometry.py (astrometry.net)\n'
             )
         elif sys.argv[2] == 'angle':
-            astromangle_new.main()
+            # astromangle_new.main()
+            astromangle_wcs.main()
         elif sys.argv[2] == 'shift':
             astrom_shift.main()
         elif sys.argv[2] == 'astromatic':

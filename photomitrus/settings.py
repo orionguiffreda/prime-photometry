@@ -29,8 +29,9 @@ PHOTOMETRY_LIM_MAGS = {'VHS': 19.5, 'VIKING': 21.2, '2MASS': 15.5, 'Skymapper': 
                        }
 
 # chip avg zp (for bulge field astrom)
-
-CHIP_ZPS = {'J': [21.836, 21.2375, 21.4251, 21.4063], 'H': [24.111, 24.111, 24.111, 24.111]}
+# 23.88
+# 21.836
+CHIP_ZPS = {'J': [23.88, 21.2375, 21.4251, 21.4063], 'H': [24.111, 24.111, 24.111, 24.111]}
 
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')

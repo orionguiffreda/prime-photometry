@@ -72,14 +72,16 @@ def sexback(imgdir,outdir):
     sx = gen_config_file_name('bulge_new.config')
     ap = gen_config_file_name('tempsource.param')
 
-    def sxbackcmd(imgpath, sx, catpath, ap, outpath, first=False):
+    def sxbackcmd(imgpath, sx, catpath, ap, outpath, backpath, first=False):
         if first:
-            command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_NAME %s'
-                       % (imgpath, sx, catpath, ap, outpath))
+            command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE -BACKGROUND,BACKGROUND'
+                       ' -CHECKIMAGE_NAME %s,%s'
+                       % (imgpath, sx, catpath, ap, outpath, backpath))
             rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
-            command = ('sex %s -c %s -CATALOG_TYPE NONE -PARAMETERS_NAME %s -CHECKIMAGE_NAME %s'
-                       % (imgpath, sx, ap, outpath))
+            command = ('sex %s -c %s -CATALOG_TYPE NONE -PARAMETERS_NAME %s -CHECKIMAGE_TYPE -BACKGROUND,BACKGROUND'
+                       ' -CHECKIMAGE_NAME %s,%s'
+                       % (imgpath, sx, ap, outpath, backpath))
             rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     threads = []
@@ -90,16 +92,20 @@ def sexback(imgdir,outdir):
         imgpath = os.path.join(imgdir, files[0])
         catpath = os.path.join(outdir, pre+'.cat')
         outpath = os.path.join(outdir, output_fname)
-        sxbackcmd(imgpath, sx, catpath, ap, outpath, first=True)
+        backname = output_fname.replace('.sky.flat.fits', '.sky.flat.back.fits')
+        backpath = os.path.join(outdir, backname)
+        sxbackcmd(imgpath, sx, catpath, ap, outpath, backpath, first=True)
         for f in files[1:]:
             output_fname = f.replace('.flat.fits', '.sky.flat.fits')
             pre = os.path.splitext(output_fname)[0]
             imgpath = os.path.join(imgdir, f)
             catpath = os.path.join(outdir, pre+'.cat')
             outpath = os.path.join(outdir, output_fname)
+            backname = output_fname.replace('.sky.flat.fits', '.sky.flat.back.fits')
+            backpath = os.path.join(outdir, backname)
             first = False
 
-            thread = threading.Thread(target=sxbackcmd, args=(imgpath, sx, catpath, ap, outpath, first), name=f)
+            thread = threading.Thread(target=sxbackcmd, args=(imgpath, sx, catpath, ap, outpath, backpath, first), name=f)
             thread.start()
             threads.append(thread)
         for thread in threads:

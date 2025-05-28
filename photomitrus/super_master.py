@@ -26,7 +26,7 @@ def get_most_current_log_date():
 #%%
 
 
-def get_fields_from_log(date=None):
+def get_fields_from_log(date=None, no_bulge=True):
 
     # from given date, pull correct log file
     datetime = to_datetime(date)
@@ -96,6 +96,9 @@ def get_fields_from_log(date=None):
                                       and 'sky' not in k}
     structured_target_observations = {k: v for k, v in structured_target_observations.items() if 'CALIB'
                                       not in v['OBSERVER']}
+    if no_bulge:
+        structured_target_observations = {k: v for k, v in structured_target_observations.items() if
+                                          'GB' not in k}
 
     if structured_target_observations:
         print('Running automatically on all applicable fields on', logdate)
@@ -129,13 +132,15 @@ def full_processing_from_log(observations, date):
               input_ramp_lists=input_ramp_lists)
 
 
-def supermaster(date=None):
+def supermaster(date=None, incl_bulge=False):
     if not date:
         chosendate = get_most_current_log_date()
     else:
         chosendate = date
-
-    observations = get_fields_from_log(chosendate)
+    if incl_bulge:
+        observations = get_fields_from_log(chosendate, no_bulge=False)
+    else:
+        observations = get_fields_from_log(chosendate, no_bulge=True)
     full_processing_from_log(observations, chosendate)
 
 
@@ -144,9 +149,12 @@ def main():
                                                  'process all targets observed over the night')
     parser.add_argument('-date', type=str, help='[str] optional, date of observation in yyyymmdd or similar '
                                                 'format', default=None)
+    parser.add_argument('-bulge', action='store_true', help='Super-master currently prunes out the bulge '
+                                                            'fields by default, as we dont yet support stacking of bulge'
+                                                            'fields, if you want to include them anyway, use this flag')
     args, unknown = parser.parse_known_args()
 
-    supermaster(args.date)
+    supermaster(args.date, args.bulge)
 
 
 if __name__ == "__main__":

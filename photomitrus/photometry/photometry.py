@@ -588,6 +588,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr = hdul[0].header
         hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
+        hdr.set('N_CRSMCH', len(cleanPSFSources), 'Number of Crossmatched Sources', after='e_ZP')
         hdul.close()
 
     # catalog for just clean sources (no flags)
@@ -1269,7 +1270,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
                    edgecolor='r', facecolor='None') for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))]
     for c in circles:
         ax.add_artist(c)
-    plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=300)
+    plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=100)
     print('Saved source location check plot to dir!')
     plt.clf()
 

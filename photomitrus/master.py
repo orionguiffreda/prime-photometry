@@ -10,6 +10,7 @@ from photomitrus.settings import makedirsFF
 from photomitrus.settings import gen_pipeline_file_name
 from photomitrus.settings import gen_mflat_file_name
 from photomitrus.preprocess import astromangle_new
+from photomitrus.preprocess import astromangle_wcs
 from photomitrus.preprocess import gen_astrometry
 from photomitrus.preprocess import flatfield
 from photomitrus.sky import gen_sky
@@ -100,34 +101,23 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
     ramppath = os.path.join(parentdir,  'C%i' % chip)
     print('running initial astrometry on ramp imgs...')
 
-    if not rot_val:
-        placeholder = 48
-    else:
-        placeholder = rot_val
-
     print(
-        '\nEquivalent argparse cmd: python ./preprocess/astromangle_new.py -input %s -output %s -rot_val %s' % (ramppath,
-                                                                                                              astrompath,
-                                                                                                              placeholder))
+        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s -output %s' % (ramppath, astrompath))
 
-    astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
+    # astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
+    astromangle_wcs.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
     return ramppath
 
 
 def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
     os.chdir(gen_pipeline_file_name())
 
-    if not rot_val:
-        placeholder = None
-    else:
-        placeholder = rot_val
-
     print(
-        '\nEquivalent argparse cmd: python ./preprocess/astromangle_new.py -input %s... -output %s -rot_val %s' % (chipramplist[0],
-                                                                                                              astrompath,
-                                                                                                              placeholder))
+        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s... -output %s' % (chipramplist[0],
+                                                                                                              astrompath))
 
-    astromangle_new.astrom_angle(input_field=chipramplist, output_dir=astrompath, rot_val=rot_val)
+    # astromangle_new.astrom_angle(input_field=chipramplist, output_dir=astrompath, rot_val=rot_val)
+    astromangle_wcs.astrom_angle(input_field=chipramplist, output_dir=astrompath, rot_val=rot_val)
 
 # %% flat fielding
 

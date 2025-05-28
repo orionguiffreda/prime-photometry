@@ -73,14 +73,27 @@ def scamp(imgdir):
     # print(pre + ext + ' scamped!')
 
 
+def missfits(imgdir):
+    os.chdir(imgdir)
+    mc = gen_config_file_name('default.missfits')
+    img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.fits')]
+    img_list = [os.path.join(imgdir, f) for f in img_list]
+    img_list = ' '.join(img_list)
+    command = ('missfits -c %s %s' % (mc, img_list))
+    print('Executing command: %s' % command)
+    subprocess.run(command.split(), check=True)
+
+
 #%%
 
 
-def astrometry(path, run_sex=False, run_scamp=False):
+def astrometry(path, run_sex=False, run_scamp=False, run_miss=False):
     if run_sex:
         sex(path)
     elif run_scamp:
         scamp(path)
+    elif run_miss:
+        missfits(path)
     else:
         sex(path)
         scamp(path)
@@ -90,11 +103,12 @@ def main():
     parser = argparse.ArgumentParser(description='runs sextractor and scamp on input imgs; generates LDAC .cat and .head files')
     parser.add_argument('-sex', action='store_true', help='if you want to run JUST sextractor')
     parser.add_argument('-scamp', action='store_true', help='if you want to run JUST scamp')
+    parser.add_argument('-missfits', action='store_true', help='if you want to run JUST missfits')
     parser.add_argument('-path', type=str, help='[str] Images path (currently just dumps .cat '
                                                                        '& .head files in same path)')
     args, unknown = parser.parse_known_args()
 
-    astrometry(args.path, args.sex, args.scamp)
+    astrometry(args.path, args.sex, args.scamp, args.missfits)
 
 
 if __name__ == "__main__":

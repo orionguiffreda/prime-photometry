@@ -10,6 +10,7 @@ from astropy.table import Table
 import numpy as np
 from astropy.table import Column
 from itertools import combinations
+from collections import defaultdict
 import threading
 import math
 import sys
@@ -23,7 +24,7 @@ def get_zp(chip, band, vary=False):
 
     if vary:
         num = 5  # num of zp iterations
-        step = 0.25  # step size
+        step = 1  # step size
         start = chosen_zp - (num // 2) * step
         return np.arange(start, start + 5 * step, step)
 
@@ -118,7 +119,7 @@ def cat_query(raImage, decImage, band, boxsize, maglow=12.5, maghigh=14.5):
 
 def sex1(imageName):
     print('Running sextractor for psf...')
-    configFile = gen_config_file_name('sex_bulge.config')
+    configFile = gen_config_file_name('bulge_new.config')
     paramName = gen_config_file_name('tempsource.param')
     catname = imageName + '.cat'
     try:
@@ -128,7 +129,6 @@ def sex1(imageName):
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
     return catname
-
 
 # def psfex(catalogName):
 #     print('Getting psf...')
@@ -557,10 +557,10 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
     else:
         if all_fits_arr:
             all_fits = all_fits_arr
-            all_fits = all_fits[1:]
+            # all_fits = all_fits[1:]
         else:
             all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-            all_fits = all_fits[1:]     # all files but first one (first one is completed already)
+            # all_fits = all_fits[1:]     # all files but first one (first one is completed already)
 
         print('Rewriting all FITS images w/ new CRPIX vals...')
         for f in all_fits:
@@ -643,11 +643,11 @@ def boxchange(size):
 
 def shiftiteration(
         directory, imagename, filter_used, crop, boxsize, n_segs, acc_range, length, num, stdev,
-        segstd, maglow, maghigh
+        segstd, maglow, maghigh, chosen_zp
 ):
     data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename)
     Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
-    inner_primesources, inner_catsources, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
+    inner_primesources, inner_catsources, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, chosen_zp,
                                                                  maglow=maglow, maghigh=maghigh)
     segments = split_coordinates(n_segs, data, inner_primesources, inner_catsources, num, filter_used, colnames, directory)
     xfinal_shifts, yfinal_shifts = segmentshiftcalcs(segments, acc_range, length, directory, header, data, imagename,
@@ -668,7 +668,7 @@ def shift(
     n_segs = 4
 
     maglow = 12.5
-    maghigh = 13.5
+    # maghigh = 13.5
 
     data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename, vary)
     if vary:
@@ -676,6 +676,8 @@ def shift(
     else:
         zp_vals = [zp]
     for zp in zp_vals:
+        maghigh = 13.5
+        print('\nVarying ZP = ',zp)
         Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
         # catname = sex1(imagename)
         # psfex(catalogName)
@@ -688,111 +690,242 @@ def shift(
 
         # boxsize_arcmin = 3
         # boxsize, crop = boxchange(boxsize_arcmin)
-        maghigh = 13.25
-        print('\n Conducting 2nd iteration, mag range: %s - %s' % (maglow, maghigh))
-        xfinal_shifts, yfinal_shifts = shiftiteration(directory, imagename, filter_used, crop, boxsize, n_segs,
-                                                      acc_range, length, num, stdev, segstd, maglow, maghigh)
+        # maghigh = 13
+        # print('\n Conducting 2nd iteration, mag range: %s - %s' % (maglow, maghigh))
+        # xfinal_shifts, yfinal_shifts = shiftiteration(directory, imagename, filter_used, crop, boxsize, n_segs,
+        #                                               acc_range, length, num, stdev, segstd, maglow, maghigh)
 
         first_iter_shifts = np.column_stack((prev_xfinal_shifts, prev_yfinal_shifts))
-        sec_iter_shifts = np.column_stack((xfinal_shifts, yfinal_shifts))
+        # sec_iter_shifts = np.column_stack((xfinal_shifts, yfinal_shifts))
         master_shift_dict = {}
         master_shift_dict[0] = first_iter_shifts
-        master_shift_dict[1] = sec_iter_shifts
+        # master_shift_dict[1] = sec_iter_shifts
 
-        absdiff_xshifts = [abs(a - b) for a, b in zip(prev_xfinal_shifts, xfinal_shifts)]
-        absdiff_yshifts = [abs(a - b) for a, b in zip(prev_yfinal_shifts, yfinal_shifts)]
+        # absdiff_xshifts = [abs(a - b) for a, b in zip(prev_xfinal_shifts, xfinal_shifts)]
+        # absdiff_yshifts = [abs(a - b) for a, b in zip(prev_yfinal_shifts, yfinal_shifts)]
+        #
+        # like_shifts = [[], []]
+        # threshold = 3
+        #
+        # for idx, val in enumerate(absdiff_xshifts):
+        #     if val < threshold:
+        #         like_shifts[0].append((idx, val))
+        # for idx, val in enumerate(absdiff_yshifts):
+        #     if val < threshold:
+        #         like_shifts[1].append((idx, val))
 
-        like_shifts = [[], []]
-        threshold = 3
-
-        for idx, val in enumerate(absdiff_xshifts):
-            if val < threshold:
-                like_shifts[0].append((idx, val))
-        for idx, val in enumerate(absdiff_yshifts):
-            if val < threshold:
-                like_shifts[1].append((idx, val))
-
-        matches = []
+        # matches = []
         # Check for matching indices and print message and values
-        for idx_x, val_x in like_shifts[0]:
-            for idx_y, val_y in like_shifts[1]:
-                if idx_x == idx_y:
-                    print(f"\nLike index found! Index: {idx_x}, dx: {val_x:.3f}, dy: {val_y:.3f}")
-                    matches.append((idx_x, (val_x, val_y)))
+        # for idx_x, val_x in like_shifts[0]:
+        #     for idx_y, val_y in like_shifts[1]:
+        #         if idx_x == idx_y:
+        #             print(f"\nLike index found! Index: {idx_x}, dx: {val_x:.3f}, dy: {val_y:.3f}")
+        #             matches.append((idx_x, (val_x, val_y)))
 
-        master_idx_num = 2
-        if not matches:
+        master_idx_num = 1
+        stop_flag = False
+        chosen_final_shifts_x = []
+        chosen_final_shifts_y = []
+
+        while len(chosen_final_shifts_x) == 0:  # <- Continue looping until valid matches found
             all_matches = []
-            stop_flag = False
-            while not all_matches:
-                maghigh -= 0.25
-                # boxsize_arcmin += 1
-                # print('\nNo matches found, iterating with boxsize = %s arcmin!\n' % boxsize_arcmin)
-                print('\nNo matches found, iterating with mag range: 12.5 - %s\n' % maghigh)
-                # boxsize, crop = boxchange(boxsize_arcmin)
-                xiter_shifts, yiter_shifts = shiftiteration(directory, imagename, filter_used, crop, boxsize, n_segs,
-                                                              acc_range, length, num, stdev, segstd, maglow=maglow,
-                                                            maghigh=maghigh)
-                print(xiter_shifts)
-                master_shift_dict[master_idx_num] = np.column_stack((xiter_shifts, yiter_shifts))
 
-                threshold = 3
+            if maghigh <= 12.75:
+                print('High mag lim iteration has reached 12.5 mag, thus cannot continue with iterations!')
+                stop_flag = True
+                break
 
-                print(master_shift_dict)
+            maghigh -= 0.25
+            print('\nNo matches found, iterating with mag range: %s - %s\n' % (maglow, maghigh))
 
-                # Compare each unique pair of sets
-                for i, j in combinations(master_shift_dict.keys(), 2):
-                    set_i = master_shift_dict[i]
-                    set_j = master_shift_dict[j]
+            # shiftiteration function updates master_shift_dict[master_idx_num]
+            xiter_shifts, yiter_shifts = shiftiteration(
+                directory, imagename, filter_used, crop, boxsize, n_segs,
+                acc_range, length, num, stdev, segstd, maglow=maglow,
+                maghigh=maghigh, chosen_zp=zp
+            )
+            master_shift_dict[master_idx_num] = np.column_stack((xiter_shifts, yiter_shifts))
 
-                    for idx_i, (x_i, y_i) in enumerate(set_i):
-                        for idx_j, (x_j, y_j) in enumerate(set_j):
-                            abs_dx = abs(x_i - x_j)
-                            abs_dy = abs(y_i - y_j)
+            threshold = 3
 
-                            if abs_dx < threshold and abs_dy < threshold:
-                                match_info = {
-                                    'pair': (i, j),
-                                    'indices': (idx_i, idx_j),
-                                    'values_i': (x_i, y_i),
-                                    'values_j': (x_j, y_j),
-                                    'abs_dx': abs_dx,
-                                    'abs_dy': abs_dy
-                                }
-                                all_matches.append(match_info)
+            # Compare newest set with previous sets
+            for j in range(master_idx_num):
+                set_i = master_shift_dict[j]
+                set_j = master_shift_dict[master_idx_num]
 
-                    for match in all_matches:
-                        print(f"Match between sets {match['pair']} at indices {match['indices']}:")
-                        print(
-                            f"  Set {match['pair'][0]} [{match['indices'][0]}]: x = {match['values_i'][0]:.3f}, y = {match['values_i'][1]:.3f}")
-                        print(
-                            f"  Set {match['pair'][1]} [{match['indices'][1]}]: x = {match['values_j'][0]:.3f}, y = {match['values_j'][1]:.3f}")
-                        print(f"  abs_dx = {match['abs_dx']:.3f}, abs_dy = {match['abs_dy']:.3f}\n")
+                for idx_i, (x_i, y_i) in enumerate(set_i):
+                    for idx_j, (x_j, y_j) in enumerate(set_j):
+                        abs_dx = abs(x_i - x_j)
+                        abs_dy = abs(y_i - y_j)
 
-                master_idx_num += 1
-                stop_flag = False
+                        if abs_dx < threshold and abs_dy < threshold:
+                            match_info = {
+                                'pair': (j, master_idx_num),
+                                'indices': (idx_i, idx_j),
+                                'values_i': (x_i, y_i),
+                                'values_j': (x_j, y_j),
+                                'abs_dx': abs_dx,
+                                'abs_dy': abs_dy
+                            }
+                            all_matches.append(match_info)
+            for match in all_matches:
+                print(f"Match between sets {match['pair']} at indices {match['indices']}:")
+                print(
+                    f"  Set {match['pair'][0]} [{match['indices'][0]}]: x = {match['values_i'][0]:.3f}, y = {match['values_i'][1]:.3f}")
+                print(
+                    f"  Set {match['pair'][1]} [{match['indices'][1]}]: x = {match['values_j'][0]:.3f}, y = {match['values_j'][1]:.3f}")
+                print(f"  abs_dx = {match['abs_dx']:.3f}, abs_dy = {match['abs_dy']:.3f}\n")
 
-                if maghigh <= 12.75:
-                    print('High mag lim iteration has reached 12.5 mag, thus cannot continue with iterations!')
-                    stop_flag = True
-                    break
+            # Remove duplicate matches
+
+            print('Removing duplicate matches by pair & index')
+            match_counts = defaultdict(int)
+            coord_key_map = {}  # Map key back to original match
+            for m in all_matches:
+                coord_i = (round(m['values_i'][0], 5), round(m['values_i'][1], 5))
+                coord_j = (round(m['values_j'][0], 5), round(m['values_j'][1], 5))
+
+                # Create order-independent key
+                key = tuple(sorted([coord_i, coord_j]))
+
+                match_counts[key] += 1
+                coord_key_map[key] = m  # Save one copy of match for retrieval
+
+            # Second pass: collect only truly unique matches
+            unique_matches = [coord_key_map[key] for key, count in match_counts.items() if count == 1]
+            # print(unique_matches)
+
+            # extract values
+            x_vals = []
+            y_vals = []
+            for match in unique_matches:
+                x_vals.append(match['values_i'][0])
+                y_vals.append(match['values_i'][1])
+                x_vals.append(match['values_j'][0])
+                y_vals.append(match['values_j'][1])
+
+            # Median prune
+            print('Pruning remaining matches outside of 3 pix from x and y medians...')
+            if x_vals and y_vals:  # Check to avoid np.median([]) error
+
+                # conglomerate all coord pairs
+                all_coords = [(round(m['values_i'][0], 5), round(m['values_i'][1], 5)) for m in unique_matches] + \
+                             [(round(m['values_j'][0], 5), round(m['values_j'][1], 5)) for m in unique_matches]
+
+                # remove duplicates using a set
+                unique_coords = list(set(all_coords))
+
+                # split into separate x and y lists
+                all_xs = [coord[0] for coord in unique_coords]
+                all_ys = [coord[1] for coord in unique_coords]
+
+                x_median = np.median(all_xs)
+                print('X med: %.4f' % x_median)
+                y_median = np.median(all_ys)
+                print('Y med: %.4f' % y_median)
+
+                chosen_final_shifts_x = []
+                chosen_final_shifts_y = []
+
+                # filter values w/in 3 pixels of median
+                for x, y in zip(all_xs, all_ys):
+                    if abs(x - x_median) <= 3 and abs(y - y_median) <= 3:
+                        chosen_final_shifts_x.append(x)
+                        chosen_final_shifts_y.append(y)
+
+            if not chosen_final_shifts_x:
+                print('No shifts satisfy criteria, continuing with loop...')
+            else:
+                print('Selected final shifts: ')
+                for shiftx, shifty in zip(chosen_final_shifts_x, chosen_final_shifts_y):
+                    print(' x: %.3f, y: %.3f' % (shiftx, shifty))
+                ultimate_shift_x = np.median(chosen_final_shifts_x)
+                ultimate_shift_y = np.median(chosen_final_shifts_y)
+                print('\nUltimate final shift = X: %.3f, Y: %.3f' % (ultimate_shift_x, ultimate_shift_y))
+
+            master_idx_num += 1
+
+            # if len(all_matches) == 0:
+            #     print('No real matches found, abs_dx & abs_dy = 0 for all, continuing...')
+            # elif len(all_matches) > 1:
+            #     print('Multiple shifts found. Checking for duplicates...')
+            #     # Remove duplicates using a key of (pair, indices)
+            #     seen_keys = set()
+            #     unique_matches = []
+            #     for m in all_matches:
+            #         key = (m['pair'], m['indices'])
+            #         if key not in seen_keys:
+            #             seen_keys.add(key)
+            #             unique_matches.append(m)
+            #
+            #
+            #     # Extract all x and y values from the matches
+            #     x_vals = []
+            #     y_vals = []
+            #     for match in unique_matches:
+            #         x_vals.append(match['values_i'][0])
+            #         y_vals.append(match['values_i'][1])
+            #         x_vals.append(match['values_j'][0])
+            #         y_vals.append(match['values_j'][1])
+            #
+            #     x_median = np.median(x_vals)
+            #     y_median = np.median(y_vals)
+            #
+            #     # Filter matches based on proximity to median
+            #     chosen_final_shifts_x = []
+            #     chosen_final_shifts_y = []
+            #
+            #     for match in unique_matches:
+            #         for x, y in [match['values_i'], match['values_j']]:
+            #             if abs(x - x_median) <= 3 and abs(y - y_median) <= 3:
+            #                 chosen_final_shifts_x.append(x)
+            #                 chosen_final_shifts_y.append(y)
+            #
+            #     # Optional: Print final selections
+            #     print("\nFiltered matches based on median proximity:")
+            #     for x, y in zip(chosen_final_shifts_x, chosen_final_shifts_y):
+            #         print(f"  x = {x:.3f}, y = {y:.3f}")
+            #
+            #     ultimate_shift_x = np.median(chosen_final_shifts_x)
+            #     ultimate_shift_y = np.median(chosen_final_shifts_y)
+            #     print('\nUltimate final shift = X: %.3f, Y: %.3f' % (ultimate_shift_x, ultimate_shift_y))
+            # elif len(all_matches) == 1:
+            #     print('Candidate matches found for below values!')
+            #     # print(all_matches)
+            #     chosen_pairs = [match for match in all_matches if match['abs_dx'] != 0]
+            #     chosen_final_shifts_x = []
+            #     chosen_final_shifts_y = []
+            #     print(chosen_pairs)
+            #     print(' x: %.3f, y: %.3f' % (chosen_pairs[0]['values_i'][0], chosen_pairs[0]['values_i'][1]))
+            #     chosen_final_shifts_x.append(chosen_pairs[0]['values_i'][0])
+            #     chosen_final_shifts_y.append(chosen_pairs[0]['values_i'][1])
+            #
+            #     print(' x: %.3f, y: %.3f' % (chosen_pairs[0]['values_j'][0], chosen_pairs[0]['values_j'][1]))
+            #     chosen_final_shifts_x.append(chosen_pairs[0]['values_j'][0])
+            #     chosen_final_shifts_y.append(chosen_pairs[0]['values_j'][1])
+            #
+            #     ultimate_shift_x = np.median(chosen_final_shifts_x)
+            #     ultimate_shift_y = np.median(chosen_final_shifts_y)
+            #     print('\nUltimate final shift = X: %.3f, Y: %.3f' % (ultimate_shift_x, ultimate_shift_y))
+            #     break
+
             if stop_flag:
                 ultimate_shift_x = 0
                 ultimate_shift_y = 0
 
-        else:
-            print('Like shifts include:')
-            chosen_final_shifts_x = []
-            chosen_final_shifts_y = []
-            for set in master_shift_dict:
-                chosen_shift = master_shift_dict[set][matches[0][0]]
-                print(' x: %.3f, y: %.3f' % (chosen_shift[0], chosen_shift[1]))
-                chosen_final_shifts_x.append(chosen_shift[0])
-                chosen_final_shifts_y.append(chosen_shift[1])
-
-            ultimate_shift_x = np.median(chosen_final_shifts_x)
-            ultimate_shift_y = np.median(chosen_final_shifts_y)
-            print('\nUltimate final shift = X: %.3f, Y: %.3f' % (ultimate_shift_x, ultimate_shift_y))
+        # else:
+        #     print('Like shifts include:')
+        #     chosen_final_shifts_x = []
+        #     chosen_final_shifts_y = []
+        #     for chosen_set in master_shift_dict:
+        #         chosen_shift = master_shift_dict[chosen_set][matches[0][0]]
+        #         print(' x: %.3f, y: %.3f' % (chosen_shift[0], chosen_shift[1]))
+        #         chosen_final_shifts_x.append(chosen_shift[0])
+        #         chosen_final_shifts_y.append(chosen_shift[1])
+        #
+        #     ultimate_shift_x = np.median(chosen_final_shifts_x)
+        #     ultimate_shift_y = np.median(chosen_final_shifts_y)
+        #     print('\nUltimate final shift = X: %.3f, Y: %.3f' % (ultimate_shift_x, ultimate_shift_y))
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
@@ -804,6 +937,7 @@ def main():
                                                  '(so astrom.net doesnt need to be used)')
     parser.add_argument('-test', action='store_true', help='optional flag to test for a successful solve, '
                                                            'doesnt write out any fits files.')
+    parser.add_argument('-vary', action='store_true', help='optional flag to very zp')
     parser.add_argument('-dir', type=str, help='[str] path where input file is stored (should run on proc. image, '
                                                'so likely should be /C#_sub/)')
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
@@ -821,7 +955,8 @@ def main():
                                                     '(for use with the -segment flag), default = 2', default=defaults['segstd'])
     args, unknown = parser.parse_known_args()
 
-    shift(args.dir, args.imagename, args.band, args.range, args.length, args.num, args.stdev, args.segstd, args.test)
+    shift(args.dir, args.imagename, args.band, args.range, args.length, args.num, args.stdev, args.segstd, args.test,
+          args.vary)
 
 
 if __name__ == "__main__":
