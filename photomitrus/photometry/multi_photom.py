@@ -7,14 +7,15 @@ import argparse
 
 from photomitrus.photometry import photometry
 from photomitrus.photometry import ellipticity_logger
+from photomitrus.photometry.photometry import defaults
 
 #%%
-defaults = dict(chip=[1,2,3,4])
+multidefaults = dict(chip=[1,2,3,4])
 
 
 def fetchstacks(stackpath, chip=None):
     if not chip:
-        chips = defaults["chip"]
+        chips = multidefaults["chip"]
     else:
         if type(chip) is list:
             chips = chip
@@ -34,8 +35,8 @@ def fetchstacks(stackpath, chip=None):
     return matchingstacks
 
 
-def multiphotom(stackpath, matchingstacks, band, survey=None, grb_ra=None, grb_dec=None, grb_coordlist=None,
-                grb_radius=None):
+def multiphotom(stackpath, matchingstacks, band, survey=None, grb_ra=defaults['RA'], grb_dec=defaults['DEC'],
+                grb_coordlist=None, grb_radius=defaults['thresh']):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)

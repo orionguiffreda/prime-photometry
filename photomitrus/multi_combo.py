@@ -1,6 +1,7 @@
 from photomitrus import multi_master
 from photomitrus.photometry import multi_photom
 from photomitrus.photometry import ellipticity_logger
+from photomitrus.photometry.photometry import defaults
 from photomitrus.settings import PIPELINE_DEFAULT_DIR
 
 import os
@@ -12,7 +13,8 @@ import argparse
 
 def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=False, astromnet=False,
           sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, survey=None,
-          grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=None, auto_mode=False, input_ramp_lists=None
+          grb_ra=defaults['RA'], grb_dec=defaults['DEC'], grb_coordlist=None, grb_radius=defaults['thresh'],
+          auto_mode=False, input_ramp_lists=None
           ):
 
     if parentdir:

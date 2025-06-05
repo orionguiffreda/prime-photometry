@@ -1352,8 +1352,8 @@ def removal(directory):
 def photometry(
         full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
         mag_low_lim=None, mag_high_lim=None, no_plots=False,
-        keep=False, grb_only=False, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius=defaults['thresh'],
-        int_cal=False
+        keep=False, grb_only=False, grb_ra=defaults['RA'], grb_dec=defaults['DEC'], grb_coordlist=None,
+        grb_radius=defaults['thresh'], int_cal=False
 ):
     directory = os.path.dirname(full_filename)
     if directory == '':
