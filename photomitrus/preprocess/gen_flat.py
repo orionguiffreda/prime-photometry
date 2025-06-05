@@ -210,22 +210,40 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
     save_name_end = None
 
     if start_images_names_1:
-        header_start = fits.getheader(start_images_names_1[-1])
-        filter1_start = header_start.get('FILTER1', 'unknown')
-        filter2_start = header_start.get('FILTER2', 'unknown')
-        save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start, start_images_names_1[0][-20:-12],
-                                                        start_images_names_2[-1][-20:-12], start_images_names_1[0][-11])
+        if start_images_names_1[0].endswith('.fz'):
+            header_start = fits.getheader(start_images_names_1[-1], ext=1)
+            filter1_start = header_start.get('FILTER1', 'unknown')
+            filter2_start = header_start.get('FILTER2', 'unknown')
+            save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start,
+                                                                  start_images_names_1[0][-23:-15],
+                                                                  start_images_names_2[-1][-23:-15],
+                                                                  start_images_names_1[0][-14])
+        else:
+            header_start = fits.getheader(start_images_names_1[-1])
+            filter1_start = header_start.get('FILTER1', 'unknown')
+            filter2_start = header_start.get('FILTER2', 'unknown')
+            save_name_start = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_start, filter2_start, start_images_names_1[0][-20:-12],
+                                                            start_images_names_2[-1][-20:-12], start_images_names_1[0][-11])
         output_fname_start = os.path.join(direct, save_name_start)
         print(output_fname_start + ' created!')
 
         fits.HDUList(fits.PrimaryHDU(header=header_start, data=start_median_norm)).writeto(output_fname_start, overwrite=True)
 
     if end_images_names_1:
-        header_end = fits.getheader(end_images_names_1[-1])
-        filter1_end = header_end.get('FILTER1', 'unknown')
-        filter2_end = header_end.get('FILTER2', 'unknown')
-        save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end, end_images_names_1[0][-20:-12],
-                                                        end_images_names_2[-1][-20:-12], end_images_names_1[0][-11])
+        if end_images_names_1[0].endswith('.fz'):
+            header_end = fits.getheader(end_images_names_1[-1], ext=1)
+            filter1_end = header_end.get('FILTER1', 'unknown')
+            filter2_end = header_end.get('FILTER2', 'unknown')
+            save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end,
+                                                                end_images_names_1[0][-23:-15],
+                                                                end_images_names_2[-1][-23:-15],
+                                                                end_images_names_1[0][-14])
+        else:
+            header_end = fits.getheader(end_images_names_1[-1])
+            filter1_end = header_end.get('FILTER1', 'unknown')
+            filter2_end = header_end.get('FILTER2', 'unknown')
+            save_name_end = 'mflat.{}-{}.{}-{}.C{}.fits'.format(filter1_end, filter2_end, end_images_names_1[0][-20:-12],
+                                                            end_images_names_2[-1][-20:-12], end_images_names_1[0][-11])
         output_fname_end = os.path.join(direct, save_name_end)
         print(output_fname_end + ' created!')
 

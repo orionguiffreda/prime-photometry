@@ -57,7 +57,8 @@ def gen_mflat_file_name(band, chip, date=None):
     base_dir = os.path.dirname(os.path.realpath(__file__))
     flat_dir = os.path.join(base_dir, 'mflats')
     mflat_list = [
-        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f]
+        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f
+        if len(f) <= 24]
 
     if date:
         # get mflat closest to obs date, if there is a tie, it picks the earlier one to be safe

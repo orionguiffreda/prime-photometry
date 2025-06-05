@@ -7,6 +7,7 @@ from photomitrus import multi_master
 from photomitrus import master
 from photomitrus import multi_combo
 from photomitrus import super_master
+from photomitrus import archive_reducer
 from photomitrus.preprocess import astromangle_new
 from photomitrus.preprocess import astromangle_wcs
 from photomitrus.preprocess import gen_astrometry
@@ -39,6 +40,8 @@ elif len(sys.argv) >= 2:
         tds_reducer.main()
     elif sys.argv[1] == 'supermaster':
         super_master.main()
+    elif sys.argv[1] == 'archive':
+        archive_reducer.main()
 
     elif sys.argv[1] == '-h':
         print('Options:\n'
@@ -53,6 +56,7 @@ elif len(sys.argv) >= 2:
               '     utilities - to access other scripts, usually analysis-based\n'
               '     tds - to mass process all fields over a night specified by csv (developed for time domain survey)\n'
               '     supermaster - mass processes all fields in latest or specified date, for use w/ automation\n'
+              '     archive - to process archive images for a list of targets\n'
               )
 
     elif sys.argv[1] == 'astrom':

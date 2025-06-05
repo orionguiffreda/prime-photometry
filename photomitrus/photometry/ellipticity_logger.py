@@ -200,7 +200,7 @@ def plots(final_ells, final_psfs, fieldname, stackdir, single=False):
     plt.close('all')
     plt.clf()
     ar_list = [final_ells, final_psfs]
-    titles = ['Median Ellipticity across all chips', 'Median PSF Size across all chips']
+    titles = ['Median Ellipticity across all chips', 'Median PSF Size (arcsec) across all chips']
     z_labels = ['Ellipticity Value', 'PSF Size Value']
 
     plot_mins = [0, 1.25]
@@ -293,6 +293,8 @@ def logger(directory, single=False):
         stacklist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.ecsv') and f.startswith('coadd')]
         # imglist = [f for f in sorted(os.listdir(stackdir)) if f.endswith('.fits') and f.startswith('coadd')]
         print(stacklist)
+        if len(stacklist) < 4:
+            raise IndexError('.ecsv files for all 4 chips are not found!  Cannot continue!')
         master_ell = []
         master_psfs = []
         for catpath in stacklist:
@@ -308,8 +310,7 @@ def logger(directory, single=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Logs ellipticity for a single observation (checks start, middle, and '
-                                                 'end of observation along with stack')
+    parser = argparse.ArgumentParser(description='Logs ellipticity for stacks of a single observation')
     parser.add_argument('-dir', type=str, help='[str] parent path where observation is stored '
                                                '(likely "/stack"), or parent directory of observation (if you want to '
                                                'run on single images)')

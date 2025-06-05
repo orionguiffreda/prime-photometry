@@ -13,7 +13,7 @@ file_types_str = ','.join(file_types)
 defaults = dict(
     save_dir='.', redownload=False, overwrite=False, ftype='ramp',
     objname=None, objtype=None, observer=None, chip=(1,2,3,4), filter1=None, filter2=None,
-    funpack_fz=True
+    funpack_fz=False
 )
 filter_1_options = ','.join(['NB', 'Open', 'Z', 'Dark'])
 filter_2_options = ','.join(['Open', 'Y', 'J', 'H'])
@@ -74,7 +74,25 @@ remote_file_formats = {
 }
 
 replace_list = [
-    'all sky grid'
+    ('all sky grid', 'all_sky_grid'),
+    ('no_grid  ', 'no_grid '),
+    ('no_grid_test  ', 'no_grid_test '),
+    ('field10554_ test', 'field10554_test'),
+    ('fucus test', 'focus_test'),
+    ('galactic plane', 'galactic_plane'),
+    ('standard star', 'standard_star'),
+    ('rotator test', 'rotator_test'),
+    ('SKY M7', 'SKY_M7'),
+    ('LVC S230522n', 'LVC_S230522n'),
+    ('Dec test', 'Dec_test'),
+    ('Galctic plane', 'Galactic_plane'),
+    ('Glactic plane', 'Galactic_plane'),
+    ('Galactic plane', 'Galactic_plane'),
+    ('Galactic Plane', 'Galactic_plane'),
+    ('Vignetting Test', 'Vignetting_Test'),
+    ('SPIS J0539-0059', 'SPIS_J0539-0059'),
+    ('Frost Check', 'Frost_Check'),
+    ('GainTest LED', 'GainTest_LED'),
 ]
 
 
@@ -89,7 +107,7 @@ def replace_bad_string(lines):
     for line in lines:
         fixed_line = line
         for replacement in replace_list:
-            fixed_line = fixed_line.replace(replacement, replacement.replace(' ', '_'))
+            fixed_line = fixed_line.replace(replacement[0], replacement[1])
         replaced_lines.append(fixed_line)
     return replaced_lines
 
@@ -107,6 +125,11 @@ def get_log_file(date):
                 line.startswith('Warning') or line.startswith('ERROR') or line.startswith('#') or (line.find('!')!=-1)
         )
     ]
+    if not read_lines[0].startswith('#'):
+        read_lines.insert(
+            0,
+            '# DATEBEG, filename,OBJNAME,OBJTYPE,OBSERVER,CHIP,FILTER1,FILTER2,EXPTIME,EXPTIMEE,EXPTIMEC,NFRAMES,DITHTYP,DITHRAD,DITHPH,DITH_REP,TEMPDET,FOCUS,NINT,INT'
+         )
     first_line = ' '.join([field.strip() for field in read_lines[0][1:].split(',')]) + '\n'
     cleaned_lines = replace_bad_string(cleaned_lines)
     cleaned_lines = [first_line] + cleaned_lines
@@ -154,7 +177,7 @@ def get_file_name(file_number, ftype, camera, funpack_fz=defaults['funpack_fz'])
         file_name = remote_file_format.format(file_number, truncate_1000(file_number))
         if funpack_fz:
             if os.path.exists(file_name):
-                output_dir = funpack_output_dir.format(camera, truncate_1000(file_number))
+                output_dir = funpack_output_dir.format(camera+1, truncate_1000(file_number))
                 funpack_file_name = os.path.basename(file_name).replace('.fz', '')
                 funpack_file_name = os.path.join(output_dir, funpack_file_name)
                 funpack(file_name, funpack_file_name)

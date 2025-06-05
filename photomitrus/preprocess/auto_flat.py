@@ -2,6 +2,7 @@ import pandas as pd
 import os
 from photomitrus.settings import gen_pipeline_file_name
 from photomitrus.preprocess import gen_flat
+from pandas import to_datetime
 
 import argparse
 import sys
@@ -10,6 +11,9 @@ import sys
 
 
 def auto_flat_creation(date, band=None, chip=None):
+    datetime = to_datetime(date)
+    date = datetime.strftime('%Y%m%d')
+
     if not chip:
         chips = [1,2,3,4]
     else:

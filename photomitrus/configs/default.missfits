@@ -36,7 +36,7 @@ CHECKSUM_TYPE          NONE            # Checksum operations:
                                        # "UPDATE"
 #------------------------------- Output filename  -----------------------------
  
-SAVE_TYPE              BACKUP          # Behaviour towards output filename:
+SAVE_TYPE              REPLACE          # Behaviour towards output filename:
                                        # "NONE", "BACKUP", "NEW" or "REPLACE"
  
 NEW_SUFFIX             .miss           # suffix to add in SAVE_TYPE NEW mode

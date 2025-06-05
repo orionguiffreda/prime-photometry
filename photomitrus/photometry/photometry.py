@@ -162,13 +162,16 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
 
             coords = SkyCoord(ra=[raImage], dec=[decImage], unit=(u.deg, u.deg))
 
+            checkwidth = 28     # smaller radius of initial query, to better avoid cases of being on coverage edge
+            # checkwidth covers only cropped part of chip, reducing chance of catalog only being in cropped away area
+
             # current columns
             v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band,
                                 'e_%sap3' % band, '%smag' % band, 'e_%smag' % band, '%smag' % band.lower(),
                                 'e_%smag' % band.lower(), '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
                                 '%spmag' % band.lower(), 'e_%spmag' % band.lower()])
             try:
-                result = v.query_region(coords, width=str(width) + 'm', catalog=[f[1] for f in catalogs])
+                result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs])
                 test = result[0]
             except IndexError:
                 print('Sadly, no current surveys available in current area in %s band' % band)
@@ -179,7 +182,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
             match_keys = [(f[0], f[1]) for f in catalogs if f[1] in keys]
 
             print('RA: %.4f, DEC: %.4f, Box Width: %s arcmin... '
-                  '\n%s band initial query resulting in: \n%s' % (raImage, decImage, width, band, keys))
+                  '\n%s band initial query resulting in: \n%s' % (raImage, decImage, checkwidth, band, keys))
 
             keycheck = result.keys()
 

@@ -205,6 +205,11 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12.5, mag
     for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
         newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
 
+    Path = os.path.join(directory, 'primecoords_all.reg')
+    newtext = open(Path, 'w+')
+    for i,j in zip(sexcat['X_IMAGE'],sexcat['Y_IMAGE']):
+        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+
     return inner_primesources, inner_catsources, colnames
 
 
@@ -602,6 +607,12 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             oldpath = os.path.join(old_storage_dir, f)
             os.rename(currentpath, oldpath)
 
+        catfile = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.cat')]
+        if catfile:
+            currentpath = os.path.join(directory, catfile[0])
+            oldpath = os.path.join(old_storage_dir, catfile[0])
+            os.rename(currentpath, oldpath)
+
         for f in all_fits_shift:
             shiftpath = os.path.join(directory, f)
             imagerename = os.path.splitext(f)[0]
@@ -664,10 +675,10 @@ def shift(
     else:
         filter_used = band
 
-    boxsize, crop = boxchange(3)
+    boxsize, crop = boxchange(6)
     n_segs = 4
 
-    maglow = 12.5
+    maglow = 12
     # maghigh = 13.5
 
     data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename, vary)
@@ -676,7 +687,7 @@ def shift(
     else:
         zp_vals = [zp]
     for zp in zp_vals:
-        maghigh = 13.5
+        maghigh = 14
         print('\nVarying ZP = ',zp)
         Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
         # catname = sex1(imagename)
@@ -730,12 +741,12 @@ def shift(
         while len(chosen_final_shifts_x) == 0:  # <- Continue looping until valid matches found
             all_matches = []
 
-            if maghigh <= 12.75:
+            if maghigh <= 12.5:
                 print('High mag lim iteration has reached 12.5 mag, thus cannot continue with iterations!')
                 stop_flag = True
                 break
 
-            maghigh -= 0.25
+            maghigh -= 0.5
             print('\nNo matches found, iterating with mag range: %s - %s\n' % (maglow, maghigh))
 
             # shiftiteration function updates master_shift_dict[master_idx_num]

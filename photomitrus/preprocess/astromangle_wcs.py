@@ -20,8 +20,8 @@ _wcs_matrix_tranlation = {
     'PC2_1': 'CD2_1',
     'PC2_2': 'CD2_2',
 }
-_default_sip_degree = 2
-_default_downsample = 8
+_default_sip_degree = 4
+_default_downsample = 16
 
 
 def get_sep_rot_table(chip_number, mesh_file_dir=_mesh_file_dir):
@@ -87,6 +87,11 @@ def update_ra_dec(
 ):
     print(fits_file)
     start_time = dt.now()
+    hdr_check = fits.getheader(fits_file)
+    if 'CHECKSUM' in hdr_check and len(hdr_check) <= 10:
+        print('File is fpack compressed...')
+        os.system('funpack -F %s' % fits_file)
+        print('funpacked!')
     with fits.open(fits_file, 'update') as f:
         wcs = calculate_wcs_header(f[0].header, rot_val, mesh_file_dir, sip_degree, downsample=downsample)
         wcs_header = wcs.to_header(relax=True)
@@ -94,6 +99,7 @@ def update_ra_dec(
             wcs_header.set(v, wcs_header[k], comment=wcs_header.comments[k])  # , before='CDELT1')
             del wcs_header[k]
         f[0].header.update(wcs_header)
+        # print(fitsheader)
         # f[0].data = f[0].data[4:-4, 4:-4]
     end_time = dt.now()
     print('wcs gen time time:', (end_time - start_time).total_seconds())
@@ -119,7 +125,10 @@ def update_ra_dec_move_directory(input_dir, output_dir, rot_val, downsample=_def
     for f in sorted(os.listdir(input_dir)):
         if f.endswith('.ramp.fits'):
             origpath = os.path.join(input_dir, f)
-            fnewname = f.replace('.ramp.fits', '.ramp.new')
+            if f.endswith('ramp.fits.fz'):
+                fnewname = f.replace('.ramp.fits.fz', '.ramp.new')
+            else:
+                fnewname = f.replace('.ramp.fits', '.ramp.new')
             newpath = os.path.join(output_dir, fnewname)
             shutil.copyfile(origpath, newpath)
             update_ra_dec(newpath, rot_val, downsample=downsample)
@@ -128,8 +137,12 @@ def update_ra_dec_move_directory(input_dir, output_dir, rot_val, downsample=_def
 
 def update_ra_dec_list(input_list, output_dir, rot_val, downsample=_default_downsample):
     for filepath in input_list:
-        filename = filepath[-20:]
-        filenewname = filename.replace('.fits.ramp', '.ramp.new')
+        if filepath.endswith('.fz'):
+            filename = filepath[-23:]
+            filenewname = filename.replace('.fits.ramp.fz', '.ramp.new')
+        else:
+            filename = filepath[-20:]
+            filenewname = filename.replace('.fits.ramp', '.ramp.new')
         filenewpath = os.path.join(output_dir, filenewname)
         shutil.copyfile(filepath, filenewpath)
         update_ra_dec(filenewpath, rot_val, downsample=downsample)

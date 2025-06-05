@@ -34,9 +34,9 @@ def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=F
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius)
 
     if len(chips) == 4:
-        ellipticity_logger.logger(directory=stackpath)
-    else:
-        pass
+        catcheck = [f for f in sorted(os.listdir(stackpath)) if f.endswith('.ecsv') and f.startswith('coadd')]
+        if len(catcheck) == 4:
+            ellipticity_logger.logger(directory=stackpath)
 
 #%%
 
