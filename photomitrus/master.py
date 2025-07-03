@@ -16,6 +16,7 @@ from photomitrus.preprocess import flatfield
 from photomitrus.sky import gen_sky
 from photomitrus.sky import sky_sub
 from photomitrus.astrom import astrom_shift
+from photomitrus.astrom import astrom_shift_new
 from photomitrus.astrom import astrometry
 from photomitrus.stack import stack
 
@@ -158,7 +159,7 @@ def sky(astrompath, skypath, sigma, chip):
 # %% sky sub
 
 
-def skysub(astrompath, subpath, skypath, chip, sky_override_path=None):
+def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=False):
     os.chdir(gen_pipeline_file_name())
     if sky_override_path:
         skyfilepath = sky_override_path
@@ -174,42 +175,33 @@ def skysub(astrompath, subpath, skypath, chip, sky_override_path=None):
     else:
         no_flat = True
 
-    print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -in_path %s -out_path %s -sky_path %s' %
-          (astrompath, subpath, skyfilepath))
+    if sex:
+        print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -in_path %s -out_path %s' %
+              (astrompath, subpath))
 
-    sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
+        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, no_flat=no_flat, sex=True)
+    else:
+        print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -sex -in_path %s -out_path %s -sky_path %s' %
+              (astrompath, subpath, skypath))
 
-# %%sex sky sub
-
-
-def sexskysub(astrompath, subpath):
-    # currently w/o ff?
-    os.chdir(gen_pipeline_file_name())
-
-    print('Using sextractor sky sub...')
-    sky.sky_sub(in_path=astrompath, out_path=subpath, sex=True)
+        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
 
 
 # %% astrometry shift
 
 
-def shift(subpath, band):
+def shift(subpath, band, bulge=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
-    if len(all_fits) >= 100:
-        imgname = all_fits[0]
+    imgname = all_fits[0]
 
-        print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
-              (subpath, imgname, band))
+    print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+          (subpath, imgname, band))
 
-        astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
+    if bulge:
+        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
     else:
-        imgname = all_fits[0]
-
-        print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
-              (subpath, imgname, band))
-
         astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
 
 
@@ -228,9 +220,9 @@ def astromatic_astrometry(subpath, sex=None):
     #        print('Could not run with exit error %s' % err)
     # else:
 
-    print('\nEquivalent argparse cmd: python ./astrom/astrometry.py -path %s' % subpath)
+    print('\nEquivalent argparse cmd: python ./astrom/astrometry.py -double_solve -path %s' % subpath)
 
-    astrometry.astrometry(path=subpath)
+    astrometry.astrometry(path=subpath, double_solve=True)
 
 # %% stacking
 
@@ -308,40 +300,29 @@ defaults = dict(sigma=4)
 
 def master(
         parentdir, chip, band, sigma=4, date=None, fullramplist=None, rot_val=None, no_shift=False, sex=False, compress=False,
-        net_refine=False, sky_override=None, removal=False
+        net_refine=False, sky_override=None, removal=False, bulge=False
 ):
-    # if no_ff:
-    #     astromdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
-    #     rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
-    #     sky(astromdir, skydir, sigma, chip)
-    #     if sex:
-    #         sexskysub(astromdir, subdir)
-    #     else:
-    #         skysub(astromdir, subdir, skydir, chip, sky_override)
-    #     astromatic_astrometry(subdir)
-    #     stacking(subdir, stackdir, chip)
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
     if fullramplist:
-        # FFdir = makedirectoriesFF(parentdir, chip)
         chipramplist = getchiplist(fullramplist, chip)
         if chipramplist is None:
             raise ValueError('For some reason, given chip doesnt match to any sublist!  Are there missing files when '
                              'trying to retrieve?')
         astrom_angle_list(astromdir, chipramplist, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip, date)
-        if sex or sky_override:
+        if sex or sky_override or bulge:
             pass
         else:
             sky(FFdir, skydir, sigma, chip)
-        if sex:
-            sexskysub(FFdir, subdir)
+        if sex or bulge:
+            skysub(FFdir, subdir, chip, sky_override, sex=True)
         else:
-            skysub(FFdir, subdir, skydir, chip, sky_override)
+            skysub(FFdir, subdir, chip, skydir, sky_override)
         if net_refine:
             astromnet_refine(subdir)
         else:
             if not no_shift:
-                shift(subdir, band)
+                shift(subdir, band, bulge=bulge)
             else:
                 pass
         astromatic_astrometry(subdir)
@@ -354,14 +335,14 @@ def master(
         # FFdir = makedirectoriesFF(parentdir, chip)
         rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
         flatfielding(astromdir, FFdir, band, chip, date)
-        if sex or sky_override:
+        if sex or sky_override or bulge:
             pass
         else:
             sky(FFdir, skydir, sigma, chip)
-        if sex:
-            sexskysub(FFdir, subdir)
+        if sex or bulge:
+            skysub(FFdir, subdir, chip, sky_override, sex=sex)
         else:
-            skysub(FFdir, subdir, skydir, chip, sky_override)
+            skysub(FFdir, subdir, chip, skydir, sky_override)
         if net_refine:
             astromnet_refine(subdir)
         else:
@@ -415,10 +396,13 @@ def main():
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=None)
+    parser.add_argument('-bulge', action='store_true',
+                        help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
+                             ' automate this in the future')
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.no_shift, args.sex,
-           args.compress, args.net_refine, args.sky_override, args.removal)
+           args.compress, args.net_refine, args.sky_override, args.removal, args.bulge)
 
 
 if __name__ == "__main__":

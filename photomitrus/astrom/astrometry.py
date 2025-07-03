@@ -100,15 +100,15 @@ def rename_head(directory):
         for name in fnames:
             if f.endswith(name):
                 f_newname = os.path.splitext(f)[0]+'.2d.head'
-                path = os.path.join(directory + f)
-                newpath = os.path.join(directory + f_newname)
+                path = os.path.join(directory, f)
+                newpath = os.path.join(directory, f_newname)
                 try:
                     os.rename(path, newpath)
                 except Exception as e:
                     print(f"Error renaming file: {path} - {e}")
 
 
-def bulge_astrom(imgdir):
+def double_astrom(imgdir):
     # beginning from where astrom_shift_bulge solved
     start_time = dt.now()
     print('\nSextracting shift-corrected fits files!')
@@ -133,15 +133,15 @@ def bulge_astrom(imgdir):
 #%%
 
 
-def astrometry(path, run_sex=False, run_scamp=False, run_miss=False, bulge=False):
+def astrometry(path, run_sex=False, run_scamp=False, run_miss=False, double_solve=False):
     if run_sex:
         sex(path)
     elif run_scamp:
         scamp(path)
     elif run_miss:
         missfits(path)
-    elif bulge:
-        bulge_astrom(path)
+    elif double_solve:
+        double_astrom(path)
     else:
         start_time = dt.now()
         sex(path)
@@ -156,13 +156,13 @@ def main():
     parser.add_argument('-sex', action='store_true', help='if you want to run JUST sextractor')
     parser.add_argument('-scamp', action='store_true', help='if you want to run JUST scamp')
     parser.add_argument('-missfits', action='store_true', help='if you want to run JUST missfits')
-    parser.add_argument('-bulge', action='store_true', help='use on shift-corrected bulge fields, runs a 2d'
-                                                            ' then a 4d poly scamp solution for max accuracy')
+    parser.add_argument('-double_solve', action='store_true', help='uns a 2nd order'
+                                                            ' then a 4th order poly scamp solution for max accuracy')
     parser.add_argument('-path', type=str, help='[str] Images path (currently just dumps .cat '
                                                                        '& .head files in same path)')
     args, unknown = parser.parse_known_args()
 
-    astrometry(args.path, args.sex, args.scamp, args.missfits, args.bulge)
+    astrometry(args.path, args.sex, args.scamp, args.missfits, args.double_solve)
 
 
 if __name__ == "__main__":

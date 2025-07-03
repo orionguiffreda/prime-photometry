@@ -13,7 +13,7 @@ from datetime import datetime
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
-PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
+PIPELINE_DEFAULT_DIR = '/mnt/photometry/bulge_testing/'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -31,7 +31,7 @@ PHOTOMETRY_LIM_MAGS = {'VHS': 19.5, 'VIKING': 21.2, '2MASS': 15.5, 'Skymapper': 
 # chip avg zp (for bulge field astrom)
 # 23.88
 # 21.836
-CHIP_ZPS = {'J': [23.88, 21.2375, 21.4251, 21.4063], 'H': [24.111, 24.111, 24.111, 24.111]}
+CHIP_ZPS = {'J': [23.88, 23.88, 23.88, 23.88], 'H': [24.111, 24.111, 24.111, 24.111]}
 
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')

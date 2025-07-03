@@ -45,8 +45,13 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
         os.makedirs(output_data_dir)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('flat.fits')]
     image_fnames.sort()
-    sky = fits.getdata(sky)
-    cropsky = sky
+    cropsky = fits.getdata(sky)
+    hdr_sky = fits.getheader(sky)
+    try:
+        airmass_sky = hdr_sky['AIRMASS']
+    except KeyError:
+        print('No Airmass value in sky header')
+        airmass_sky = 0
     for f in image_fnames:
         with fits.open(f) as hdul:
             image = hdul[0].data
@@ -56,7 +61,18 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
             CRPIX2 = (header['CRPIX2'])
             header.set('CRPIX1', value=CRPIX1 - 4)
             header.set('CRPIX2', value=CRPIX2 - 4)
+            try:
+                airmass_sci = header['AIRMASS']
+            except KeyError:
+                print('No Airmass value in sci header')
+                airmass_sci = 0
         reduced_image = (cropimage-cropsky*np.nanmedian(cropimage))
+        # if not airmass_sky or not airmass_sci:
+        #     print('Airmasses not found in either sci or sky, defaulting to normal scaling')
+        # else:
+        #     airmass_ratio = airmass_sci / airmass_sky
+        #     print('Airmass ratio =',airmass_ratio)
+        #     reduced_image = (cropimage - (cropsky * np.nanmedian(cropimage) * airmass_ratio))
         output_fname = os.path.basename(f)
         output_fname = output_fname.replace('.flat.fits', '.sky.flat.fits')
         output_fname = os.path.join(output_data_dir, output_fname)
@@ -117,7 +133,7 @@ def sexback(imgdir,outdir):
 #%%
 
 
-def sky_sub(in_path, out_path, sky_path, no_flat=False, sex=False):
+def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False):
     if no_flat:
         subtract_sky_and_normalize(in_path,out_path,sky_path)
     elif sex:

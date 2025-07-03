@@ -592,6 +592,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
         hdr.set('N_CRSMCH', len(cleanPSFSources), 'Number of Crossmatched Sources', after='e_ZP')
+        hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_CRSMCH')
         hdul.close()
 
     # catalog for just clean sources (no flags)
@@ -1278,6 +1279,16 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     plt.close('all')
+
+    print('Writing relevant plot info to image header...')
+    with fits.open(imageName, mode='update') as hdul:
+        hdr = hdul[0].header
+        hdr.set('fit_m', m_sig, 'WLS %s sig fit slope' % sigma, after='Survey')
+        hdr.set('e_fit_m', m_sigerr, 'Error in WLS %s sig fit slope' % sigma, after='fit_m')
+        hdr.set('fit_b', b_sig, 'WLS %s sig fit intercept' % sigma, after='e_fit_m')
+        hdr.set('e_fit_b', b_sigerr, 'Error in WLS %s sig fit intercept' % sigma, after='fit_b')
+        hdr.set('Lim_Mag', limmag, 'Source Histogram FWHM Limiting Mag', after='e_fit_b')
+        hdul.close()
 
     return m_sig, b_sig
 

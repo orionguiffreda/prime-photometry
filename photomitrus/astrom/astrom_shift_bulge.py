@@ -121,7 +121,10 @@ def sex1(imageName):
     print('Running sextractor for psf...')
     configFile = gen_config_file_name('bulge_new.config')
     paramName = gen_config_file_name('tempsource.param')
-    catname = imageName + '.cat'
+    if imageName.endswith('.fits'):
+        catname = imageName[:-5] + '.cat'
+    else:
+        catname = imageName + '.cat'
     try:
         command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE NONE' % (imageName, configFile, catname, paramName)
         #print('Executing command: %s' % command)
@@ -682,12 +685,13 @@ def shift(
     # maghigh = 13.5
 
     data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename, vary)
+    sex1(imagename)
     if vary:
         zp_vals = zp
     else:
         zp_vals = [zp]
     for zp in zp_vals:
-        maghigh = 14
+        maghigh = 14.5
         print('\nVarying ZP = ',zp)
         Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
         # catname = sex1(imagename)

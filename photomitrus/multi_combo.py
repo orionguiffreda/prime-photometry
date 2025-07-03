@@ -12,8 +12,8 @@ import argparse
 
 
 def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=False, astromnet=False,
-          sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, survey=None,
-          grb_ra=defaults['RA'], grb_dec=defaults['DEC'], grb_coordlist=None, grb_radius=defaults['thresh'],
+          sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, bulge=False,
+          survey=None, grb_ra=defaults['RA'], grb_dec=defaults['DEC'], grb_coordlist=None, grb_radius=defaults['thresh'],
           auto_mode=False, input_ramp_lists=None
           ):
 
@@ -31,7 +31,7 @@ def combo(target, date, band, chip=None, parentdir=False, rot_val=48, no_shift=F
 
     for f in chips:
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
-                                  sky_override_path, removal, no_get_files, no_mflat, auto_mode=auto_mode,
+                                  sky_override_path, removal, no_get_files, no_mflat, bulge, auto_mode=auto_mode,
                                   input_ramp_lists=input_ramp_lists)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius)
 
@@ -77,6 +77,9 @@ def main():
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
                                                                ' exist')
+    parser.add_argument('-bulge', action='store_true',
+                        help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
+                             ' automate this in the future')
     parser.add_argument('-survey', type=str, help='Specify specific survey to query for photometry (default'
                                                   ' picks for you), see photometrus single_photometry -h for list of '
                                                   'available surveys')
@@ -100,8 +103,8 @@ def main():
     args, unknown = parser.parse_known_args()
 
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-          args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.survey, args.grb_ra,
-          args.grb_dec, args.grb_coordlist, args.grb_radius)
+          args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,
+          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius)
 
 
 if __name__ == "__main__":
