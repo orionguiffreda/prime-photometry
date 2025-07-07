@@ -25,7 +25,8 @@ from scipy.stats import skew
 import warnings
 
 from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
-                                  PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS)
+                                  PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
+                                  AB_OFFSET_DICT)
 
 # %%
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -76,7 +77,7 @@ def ab_convert(mag, band, survey=None):
         ab_mag = mag
     else:
         # for vista (AB-Vega offsets): https://www.aanda.org/articles/aa/full_html/2015/03/aa24973-14/T3.html
-        offset_dict = {'J': 0.94, 'H': 1.38, 'Y': 0.62, 'Z': 0.52}
+        offset_dict = AB_OFFSET_DICT
 
         for k, v in offset_dict.items():
             if k == band:
@@ -109,14 +110,20 @@ def img(directory, imageName, crop):
     height = (decTop - decBot) * 60
     width = (raLEdge - raREdge) * 60
 
-    return data, header, w, raImage, decImage
+    # detect if GB field
+    if 'GB' in header['OBSERVER']:
+        bulge = True
+    else:
+        bulge = False
+
+    return data, header, w, raImage, decImage, bulge
 
 
 # %%
 # Use astroquery to get catalog search
 
 
-def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None):
+def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None, bulge=False):
     # query box width
     width = PHOTOMETRY_QUERY_WIDTH
 
@@ -137,6 +144,25 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
         Q = Q[Q['%sMAG_PSF' % band] > mag_low_cutoff]
         chosen_survey = 'PRIME'
     else:
+
+        if bulge:           # if bulge field, change to galactic coords for query
+            print('Galactic bulge field detected!  Adjusting query parameters accordingly...')
+            coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+            coords = coords.galactic  # galactic conversion for bulge fields
+            chosen_frame = 'galactic'
+            frame_long = coords.l.deg
+            frame_long_str = 'l = %.4f' % frame_long
+            frame_lat = coords.b.deg
+            frame_lat_str = 'b = %.4f' % frame_lat
+            print('Converting coords to galactic: %s, %s' % (frame_long_str, frame_lat_str))
+
+        else:
+            coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+            chosen_frame = 'fk5'
+            frame_long = raImage
+            frame_long_str = 'RA: %.4f' % frame_long
+            frame_lat = decImage
+            frame_lat_str = 'DEC: %.4f' % frame_lat
 
         # new automatic survey picking
         if not survey:
@@ -160,15 +186,15 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
             else:
                 print('Only J, H, Y, and Z band are supported!')
 
-            coords = SkyCoord(ra=[raImage], dec=[decImage], unit=(u.deg, u.deg))
+            # coords = SkyCoord(ra=[raImage], dec=[decImage], unit=(u.deg, u.deg))
 
             checkwidth = 28     # smaller radius of initial query, to better avoid cases of being on coverage edge
             # checkwidth covers only cropped part of chip, reducing chance of catalog only being in cropped away area
 
             # current columns
             v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band,
-                                'e_%sap3' % band, '%smag' % band, 'e_%smag' % band, '%smag' % band.lower(),
-                                'e_%smag' % band.lower(), '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
+                                'e_%sap3' % band, '%smag' % band, '%smag3' % band, 'e_%smag' % band, 'e_%smag3' % band,
+                                '%smag' % band.lower(),'e_%smag' % band.lower(), '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
                                 '%spmag' % band.lower(), 'e_%spmag' % band.lower()])
             try:
                 result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs])
@@ -179,58 +205,51 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
 
             keys = result.format_table_list()
 
-            match_keys = [(f[0], f[1]) for f in catalogs if f[1] in keys]
-
-            print('RA: %.4f, DEC: %.4f, Box Width: %s arcmin... '
-                  '\n%s band initial query resulting in: \n%s' % (raImage, decImage, checkwidth, band, keys))
+            print('%s, %s, Box Width: %s arcmin... '
+                  '\n%s band initial query resulting in: \n%s' % (
+                  frame_long_str, frame_lat_str, checkwidth, band, keys))
 
             keycheck = result.keys()
 
-            for f in catalogs:
+            for chosen_survey, catNum in catalogs:
                 for k in keycheck:
-                    if f[1] in k:
+                    if catNum in k:
                         print('%s catalog found!' % k)
                         vhs_table = result[''.join(k)]
                         cols = vhs_table.colnames
-                        vhs_band_col = vhs_table[cols[3]]
+                        vhs_band_col = vhs_table[cols[2]]
+
                         if not np.all(vhs_band_col.mask):
-                            print('survey has coverage in %s band!' % band)
-                            catNum = ''.join(k)
-                            chosen_survey = f[0]
-                            print('Survey = %s' % chosen_survey)
-                            if chosen_survey == 'DES_Y' or chosen_survey == 'DES_Z' or chosen_survey == 'Skymapper':
+                            print('Survey has coverage in %s band!' % band)
+                            print('Survey = %s' % k)
+
+                            if chosen_survey in ['DES_Y', 'DES_Z', 'Skymapper']:
                                 print('\nMag upper limit active due to survey choice: %s' % mag_high_cutoff)
-                                print(
-                                    '\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.2f arcmin' % (
-                                        catNum, raImage, decImage, width))
-                                try:
-                                    v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
-                                               column_filters={"%s" % cols[3]: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
-                                                               "%sFlag" % band.lower(): "<4"
-                                                               }, row_limit=-1)
-                                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)),
-                                                       width=str(width) + 'm'
-                                                       , catalog=catNum, cache=False)
-                                    print('Queried source total = ', len(Q[0]))
-                                except Exception as e:
-                                    print(
-                                        'Error in Vizier query.')
+                                mag_lims = f"{mag_low_cutoff:f}..{mag_high_cutoff:f}"
                             else:
-                                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box of width %.2f arcmin' % (
-                                    catNum, raImage, decImage, width))
-                                try:
-                                    v = Vizier(columns=['%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]],
-                                               column_filters={"%s" % cols[3]: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                                       , catalog=catNum, cache=False)
+                                mag_lims = f">{mag_low_cutoff:f}"
+
+                            print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s'
+                                  % (catNum, frame_long_str, frame_lat_str, width, mag_lims))
+                            try:
+                                v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3]],
+                                           column_filters={"%s" % cols[2]: mag_lims, "%sFlag" % band.lower(): "<4"
+                                                           }, row_limit=-1)
+                                Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
+                                                   width=str(width) + 'm'
+                                                   , catalog=k, cache=False, frame=chosen_frame)
+                                if Q and len(Q[0]) > 0:
                                     print('Queried source total = ', len(Q[0]))
-                                except Exception as e:
-                                    print(
-                                        'Error in Vizier query.')
-                                    print(f"Error details: {e}")
-                            break
+                                    break  # success
+                                else:
+                                    # in case survey provides no sources for some reason, try next available
+                                    print(f"No sources found in {catNum}, trying fallback if available...")
+                            except Exception as e:
+                                print('Error in Vizier query.')
+                                print(f"Error details: {e}")
+                                continue
                         else:
-                            print('no %s mag sources found, defaulting to next survey...' % band)
+                            print('Query unsuccessful, defaulting to next fallback catalog...')
                     else:
                         continue
                 else:
@@ -242,15 +261,15 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
             chosen_survey = survey
             if survey == '2MASS':
                 catNum = 'II/246'  # changing to 2mass
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin'
+                      % (catNum, frame_long_str, frame_lat_str, width))
                 try:
                     # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
                                column_filters={"%smag" % band: f">{mag_low_cutoff:f}", "Nd": ">6"},
                                row_limit=-1)
-                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                       , catalog=catNum, cache=False)
+                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                       , catalog=catNum, cache=False, frame=chosen_frame)
                     # query vizier around (ra, dec) with a radius of boxsize
                     # print(Q[0])
                     print('Queried source total = ', len(Q[0]))
@@ -258,14 +277,14 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                     print('I cannnot reach the Vizier database. Is the internet working?')
             elif survey == 'VHS':
                 catNum = 'II/367'  # changing to vista
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin'
+                      % (catNum, frame_long_str, frame_lat_str, width))
                 try:
                     # You can set the bands for the individual columns (magnitude range, number of detections) inside the Vizier query
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
                                column_filters={"%sap3" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                       , catalog=catNum, cache=False)
+                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                       , catalog=catNum, cache=False, frame=chosen_frame)
                     # query vizier around (ra, dec) with a radius of boxsize
                     # print(Q[0])
                     print('Queried source total = ', len(Q[0]))
@@ -274,13 +293,13 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  H band is also not well covered!')
             elif survey == 'VIKING':
                 catNum = 'II/343/viking2'
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin'
+                      % (catNum, frame_long_str, frame_lat_str, width))
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
                                column_filters={"%sap3" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
-                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                       , catalog=catNum, cache=False)
+                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                       , catalog=catNum, cache=False, frame=chosen_frame)
                     print('Queried source total = ', len(Q[0]))
                 except:
                     print(
@@ -288,13 +307,15 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         ' If you are in S.H., VIKING is only in a relatively smaller strip!')
             elif survey == 'Skymapper':
                 catNum = 'II/379/smssdr4'
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                      % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
                 try:
                     v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
-                               column_filters={"%sPSF" % band.lower(): f">{mag_low_cutoff:f}"}, row_limit=-1)
-                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                       , catalog=catNum, cache=False)
+                               column_filters={"%sPSF" % band.lower(): f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                               "%sFlag" % band.lower(): "<4"
+                                               }, row_limit=-1)
+                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                       , catalog=catNum, cache=False, frame=chosen_frame)
                     print('Queried source total = ', len(Q[0]))
                 except:
                     print(
@@ -302,14 +323,14 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         '\n perhaps check skymapper coverage maps?')
             elif survey == 'SDSS':
                 catNum = 'V/154/sdss16'
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                      % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
                 try:
                     v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
-                               column_filters={"%spmag" % band.lower(): f">{mag_low_cutoff:f}"
-                                   , "clean": "=1"}, row_limit=-1)
-                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                                       , catalog=catNum, cache=False)
+                               column_filters={"%spmag" % band.lower(): f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                               "%sFlag" % band.lower(): "<4", "clean": "=1"}, row_limit=-1)
+                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                                       , catalog=catNum, cache=False, frame=chosen_frame)
                     print('Queried source total = ', len(Q[0]))
                 except:
                     print(
@@ -317,13 +338,13 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                         '\n perhaps check SDSS coverage maps?')
             elif survey == 'UKIDSS':
                 catNum = 'II/319/las9'
-                print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                    catNum, raImage, decImage, width))
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin'
+                      % (catNum, frame_long_str, frame_lat_str, width))
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
                                column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
-                                       catalog=catNum, cache=False)
+                                       catalog=catNum, cache=False, frame=chosen_frame)
                     print('Queried source total = ', len(Q[0]))
                 except:
                     print(
@@ -332,13 +353,14 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
             elif survey == 'DES':
                 if band == 'Y':
                     catNum = 'II/371/des_dr2'
-                    print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                        catNum, raImage, decImage, width))
+                    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
-                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}"}, row_limit=-1)
-                        Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
-                                           catalog=catNum, cache=False)
+                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                                   "%sFlag" % band.lower(): "<4"}, row_limit=-1)
+                        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                           catalog=catNum, cache=False, frame=chosen_frame)
                         print('Queried source total = ', len(Q[0]))
                     except:
                         print(
@@ -346,13 +368,14 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                             '\n perhaps check DES coverage maps?')
                 elif band == 'Z':
                     catNum = 'II/371/des_dr2'
-                    print('\nQuerying Vizier %s around RA %.4f, Dec %.4f with a box width %.3f arcmin' % (
-                        catNum, raImage, decImage, width))
+                    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
                     try:
                         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band.lower(), 'e_%smag' % band.lower()],
-                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}"}, row_limit=-1)
-                        Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
-                                           catalog=catNum, cache=False)
+                                   column_filters={"%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                                   "%sFlag" % band.lower(): "<4"}, row_limit=-1)
+                        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                           catalog=catNum, cache=False, frame=chosen_frame)
                         print('Queried source total = ', len(Q[0]))
                     except:
                         print(
@@ -1078,7 +1101,13 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     # res plot y int, histogram
-    if len(idx_psfimage) >= 5000:
+    if len(idx_psfimage) >= 75000:
+        bin_num_int = round(len(idx_psfimage) / 500)
+    elif 50000 <= len(idx_psfimage) <= 75000:
+        bin_num_int = round(len(idx_psfimage) / 400)
+    elif 25000 <= len(idx_psfimage) <= 50000:
+        bin_num_int = round(len(idx_psfimage) / 200)
+    elif 5000 <= len(idx_psfimage) <= 25000:
         bin_num_int = round(len(idx_psfimage) / 75)
     elif 1000 <= len(idx_psfimage) <= 5000:
         bin_num_int = round(len(idx_psfimage) / 50)
@@ -1132,7 +1161,13 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     # plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS hist density plot
-    if len(idx_psfimage) >= 5000:
+    if len(idx_psfimage) >= 75000:
+        bin_num = round(len(idx_psfimage) / 500)
+    elif 50000 <= len(idx_psfimage) <= 75000:
+        bin_num = round(len(idx_psfimage) / 350)
+    elif 25000 <= len(idx_psfimage) <= 50000:
+        bin_num = round(len(idx_psfimage) / 150)
+    elif 5000 <= len(idx_psfimage) <= 25000:
         bin_num = round(len(idx_psfimage) / 50)
     elif 1000 <= len(idx_psfimage) <= 5000:
         bin_num = round(len(idx_psfimage) / 20)
@@ -1247,6 +1282,8 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.grid()
     if len(PSFsources) < 3500:
         plt.ylim(0, 250)
+    elif len(PSFsources) > 50000:
+        plt.ylim(0, 5000)
     else:
         plt.ylim(0, 2000)
     # plt.yscale('log')
@@ -1320,9 +1357,9 @@ def int_calibration(
         grb_coordlist=None, grb_radius=4.0
 ):
     print('3 sigma fit y-intercept > 0.5! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
-    data, header, w, raImage, decImage = img(directory, name, crop)
-    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_lower_lim=mag_low_lim,
-                                             mag_upper_lim=mag_high_lim)
+    data, header, w, raImage, decImage, bulge = img(directory, name, crop)
+    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
+                                             mag_high_lim, bulge)
     psfcatalogName = []
     for f in os.listdir(directory):
         if f.endswith('.psf.cat'):
@@ -1377,9 +1414,9 @@ def photometry(
 
     if grb_only:
         os.chdir(directory)
-        data, header, w, raImage, decImage = img(directory, name, crop)
+        data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
-                                                 mag_high_lim)
+                                                 mag_high_lim, bulge)
         if grb_coordlist:
             GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
         else:
@@ -1389,8 +1426,9 @@ def photometry(
             else:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
     else:
-        data, header, w, raImage, decImage = img(directory, name, crop)
-        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim, mag_high_lim)
+        data, header, w, raImage, decImage, bulge = img(directory, name, crop)
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
+                                                 mag_high_lim, bulge)
         catalogName = sex1(name)
         psfex(catalogName)
         psfcatalogName = sex2(name)

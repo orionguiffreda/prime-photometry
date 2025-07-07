@@ -18,18 +18,13 @@ from collections import defaultdict
 import math
 import sys
 
-from photomitrus.settings import (gen_config_file_name, CHIP_ZPS)
+from photomitrus.settings import (gen_config_file_name, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
+                                  GB_QUERY_CATALOGS)
 
 
-def get_zp(chip, band, vary=False):
+def get_zp(band):
     zps = [v for k, v in CHIP_ZPS.items() if k == band]
-    chosen_zp = zps[0][chip-1]
-
-    if vary:
-        num = 5  # num of zp iterations
-        step = 1  # step size
-        start = chosen_zp - (num // 2) * step
-        return np.arange(start, start + 5 * step, step)
+    chosen_zp = zps[0]
 
     return chosen_zp
 
@@ -52,7 +47,7 @@ def timed_input(prompt, timeout=60, default='Y'):
 #%% image info
 
 
-def imaging(directory, imageName, vary=False):
+def imaging(directory, imageName):
     os.chdir(directory)
     f = fits.open(os.path.join(directory, imageName))
     data = f[0].data  # This is the image array
@@ -71,49 +66,179 @@ def imaging(directory, imageName, vary=False):
     else:
         band = header['FILTER2']
 
-    zp = get_zp(chip, band, vary)
+    zp = get_zp(band)
+
+    # detect if GB field
+    if 'GB' in header['OBSERVER']:
+        bulge = True
+    else:
+        bulge = False
 
     # cat name
     pre = os.path.splitext(imageName)[0]
     catname = pre+'.cat'
-    return data, header, w, raImage, decImage, zp, catname
+    return data, header, w, raImage, decImage, zp, catname, bulge
 
 
 #%% catalog query
 
 
-def cat_query(raImage, decImage, band, boxsize, maglow=12.5, maghigh=14.5):
-    columns = ['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', "%sPSF" % band.lower(), "%smag" % band, "%smag3" % band,
-               'srcid']
-    coords = SkyCoord(ra=raImage*u.degree, dec=decImage*u.degree, frame='fk5')
-    galcoords = coords.galactic
-    print('Using bulge field query, converting coords to galactic: l = %s, b = %s' % (galcoords.l.deg, galcoords.b.deg))
-    catNum = 'II/348/vvv2'  # changing to VVV
-    print('Querying Vizier %s around l %.4f, b %.4f, w/ box size %.2f, mag lim of %s - %s' % (catNum,
-        galcoords.l.deg, galcoords.b.deg, boxsize, maglow, maghigh))
-    v = Vizier(columns=columns, column_filters={"%smag3" % band: "%s .. %s" % (maglow, maghigh),
+def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, bulge=False):
+    columns = ['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, 'e_%sap3' % band,
+               '%smag' % band, "%smag3" % band, 'e_%smag' % band, '%smag' % band.lower()]
+
+    # chosen coords
+    if bulge:
+        chosencoords = coords
+        coords = chosencoords.galactic    # galactic conversion for bulge fields
+        chosen_frame = 'galactic'
+        frame_long = coords.l.deg
+        frame_long_str = 'l = %.4f' % frame_long
+        frame_lat = coords.b.deg
+        frame_lat_str = 'b = %.4f' % frame_lat
+    else:
+        chosen_frame = 'fk5'
+        frame_long = coords.ra.deg
+        frame_long_str = 'RA: %.4f' % frame_long
+        frame_lat = coords.dec.deg
+        frame_lat_str = 'DEC: %.4f' % frame_lat
+
+    print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh))
+    v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
                                                 "%sperrbits" % band: "<=16", "Nd": ">6"}, row_limit=-1)
-    Q = v.query_region(SkyCoord(galcoords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
-                       catalog=catNum, cache=False, frame='galactic')
+    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
+                       catalog=catNum, cache=False, frame=chosen_frame)
     print('Queried source total = ', len(Q[0]))
     return Q
 
-# Q = cat_query(266, -29, 'J', 15, bulge=True)
-# print(Q[0])
-# data, header, w, raImage, decImage = (
-#     imaging('/mnt/photometry/supermaster_test/GB63_dither_20250406/J/C1_sub/','02284022C1.sky.flat.fits'))
-# Q = cat_query(raImage, decImage, 'J', 15, bulge=True)
-# f = fits.open('/mnt/photometry/supermaster_test/GB63_dither_20250406/J/C1_sub/02284022C1.sky.flat.fits')
-# hdr = f[0].header
-#
-# # strong the image WCS into an object
-# w = WCS(hdr)
-# Coords = w.all_world2pix(Q[0]['RAJ2000'], Q[0]['DEJ2000'], 1)
-# Path = '/mnt/photometry/supermaster_test/GB63_dither_20250406/J/C1_sub/catcoords.reg'
-# #coords_prime = coords_prime.T
-# newtext = open(Path, 'w+')
-# for i,j in zip(Coords[0],Coords[1]):
-#     newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+
+def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge=False):
+    # new automatic survey picking
+
+    # current catalogs
+    if bulge:
+        print('Galactic bulge field detected!  Adjusting query parameters accordingly...')
+        catalog_dict = GB_QUERY_CATALOGS
+        catalogs = []
+        if band == 'J' or band == 'H' or band == 'Y':
+            for k, v in catalog_dict.items():
+                if v[0] == 'J':
+                    catalogs.append((k, v[1]))
+        elif band == 'Z':
+            for k, v in catalog_dict.items():
+                if v[0] == 'Z':
+                    catalogs.append((k, v[1]))
+        else:
+            print('Only J, H, Y, and Z band are supported!')
+        coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+        coords = coords.galactic    # galactic conversion for bulge fields
+        chosen_frame = 'galactic'
+        frame_long = coords.l.deg
+        frame_long_str = 'l = %.4f' % frame_long
+        frame_lat = coords.b.deg
+        frame_lat_str = 'b = %.4f' % frame_lat
+        print('Converting coords to galactic: %s, %s' % (frame_long_str, frame_lat_str))
+
+        mag_high_cutoff = maghigh
+        mag_low_cutoff = maglow
+    else:
+        catalog_dict = PHOTOMETRY_QUERY_CATALOGS
+        catalogs = []
+        if band == 'J' or band == 'H':
+            for k, v in catalog_dict.items():
+                if v[0] == 'J':
+                    catalogs.append((k, v[1]))
+        elif band == 'Z':
+            for k, v in catalog_dict.items():
+                if v[0] == 'Z':
+                    catalogs.append((k, v[1]))
+        elif band == 'Y':
+            for k, v in catalog_dict.items():
+                if v[0] == 'Y':
+                    catalogs.append((k, v[1]))
+        else:
+            print('Only J, H, Y, and Z band are supported!')
+        coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+        chosen_frame = 'fk5'
+        frame_long = raImage
+        frame_long_str = 'RA: %.4f' % frame_long
+        frame_lat = decImage
+        frame_lat_str = 'DEC: %.4f' % frame_lat
+
+        print('Non-bulge field, implementing wide mag range...')
+        mag_high_cutoff = 16
+        mag_low_cutoff = maglow
+
+    checkwidth = boxsize
+
+    # current columns
+    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%smag' % band,
+                        "%smag3" % band, 'e_%smag' % band, '%smag' % band.lower(),
+                        '%sPSF' % band.lower(), '%spmag' % band.lower()])
+    try:
+        result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs], frame=chosen_frame)
+        test = result[0]
+    except IndexError:
+        print('Sadly, no current surveys available in current area in %s band' % band)
+        sys.exit('No surveys available.')
+
+    keys = result.format_table_list()
+
+    print('%s, %s, Box Width: %s arcmin... '
+          '\n%s band initial query resulting in: \n%s' % (frame_long_str, frame_lat_str, checkwidth, band, keys))
+
+    keycheck = result.keys()
+
+    for chosen_survey, catNum in catalogs:
+        for k in keycheck:
+            if catNum in k:
+                print('%s catalog found!' % k)
+                vhs_table = result[''.join(k)]
+                cols = vhs_table.colnames
+                vhs_band_col = vhs_table[cols[2]]
+
+                if not np.all(vhs_band_col.mask):
+                    print('Survey has coverage in %s band!' % band)
+                    print('Survey = %s' % k)
+
+                    # AB surveys
+                    if chosen_survey in ['DES_Y', 'DES_Z', 'Skymapper']:
+                        print('Adjusting AB mags to VEGA...')
+                        offset = AB_OFFSET_DICT.get(band, 0.0)
+                        mag_high_cutoff -= offset
+
+                    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                          % (catNum, frame_long_str, frame_lat_str, boxsize, mag_low_cutoff, mag_high_cutoff))
+                    try:
+                        v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2]],
+                                   column_filters={"%s" % cols[2]: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                                   "%sFlag" % band.lower(): "<4", "%sperrbits" % band: "<=16",
+                                                   "Nd": ">6"
+                                                   }, row_limit=-1)
+                        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
+                                           width=str(boxsize) + 'm', catalog=catNum, cache=False, frame=chosen_frame)
+
+                        if Q and len(Q[0]) > 0:
+                            print('Queried source total = ', len(Q[0]))
+                            break  # success
+                        else:
+                            # in case survey provides no sources for some reason, try next available
+                            print(f"No sources found in {catNum}, trying fallback if available...")
+                    except Exception as e:
+                        print('Error in Vizier query.')
+                        print(f"Error details: {e}")
+                        continue
+                else:
+                    print('Query unsuccessful, defaulting to next fallback catalog...')
+            else:
+                continue
+        else:
+            continue
+        break
+
+    return Q, coords, catNum, cols[2], mag_low_cutoff, mag_high_cutoff
+
 #%% sextraction / psfex
 
 
@@ -186,7 +311,7 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
     print('applying zp correction to PRIME mags: %s' % zp)
     inner_primesources['MAG_AUTO'] = inner_primesources['MAG_AUTO'] + zp
 
-    # inner_primesources.write('prime_all.ecsv', overwrite=True)
+    inner_primesources.write('prime_all.ecsv', overwrite=True)
     inner_primesources = inner_primesources[(inner_primesources['MAG_AUTO'] >= maglow) &
                                             (inner_primesources['MAG_AUTO'] <= maghigh)]
 
@@ -201,15 +326,15 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
 
     # inner_catsources.write('cat_all.ecsv', overwrite=True)
 
-    Path = os.path.join(directory, 'catcoords_crop.reg')
-    newtext = open(Path, 'w+')
-    for i,j in zip(xs,ys):
-        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
-    #
-    Path = os.path.join(directory, 'primecoords_crop.reg')
-    newtext = open(Path, 'w+')
-    for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
-        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+    # Path = os.path.join(directory, 'catcoords_crop.reg')
+    # newtext = open(Path, 'w+')
+    # for i,j in zip(xs,ys):
+    #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+    # #
+    # Path = os.path.join(directory, 'primecoords_crop.reg')
+    # newtext = open(Path, 'w+')
+    # for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
+    #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
     #
     # Path = os.path.join(directory, 'primecoords_all.reg')
     # newtext = open(Path, 'w+')
@@ -381,11 +506,11 @@ def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
 
 
 #%%  Rerunning sextractor and astroquery for new source positions
-def shiftiteration(directory, imagename, Q, filter_used, maglow, maghigh, boxsize, crop, x_shift, y_shift):
-    data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename)
+def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, boxsize, crop, catNum, magcol):
+    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
     sex1(imagename)
-    Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
-    # shifted_primecat = apply_shifts_to_cat(directory, catname, x_shift, y_shift)
+    Q = cat_query(coords, filter_used, boxsize, catNum, magcol, maglow, maghigh, bulge=bulge)
+    # Q = complex_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh, bulge=bulge)
     inner_primesources_iter, inner_catsources_iter, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
                                                                  maglow=maglow, maghigh=maghigh)
 
@@ -395,8 +520,8 @@ def shiftiteration(directory, imagename, Q, filter_used, maglow, maghigh, boxsiz
 #%% iterate through most likely binned shifts and check correctness w/ crossmatch
 
 def iterate_and_test(
-        xy_shifts, directory, header, data, imageName, Q, filter_used, boxsize, crop, crsmtch_thresh_low,
-        crsmtch_thresh_high, crsmtch_iters
+        xy_shifts, directory, header, data, imageName, filter_used, boxsize, crop, coords, catNum, magcol,
+        crsmtch_thresh_low, crsmtch_thresh_high, crsmtch_iters, maglow, maghigh
 ):
     print('Beginning iterative testing of sorted shifts...')
     best_completion = -1
@@ -417,13 +542,9 @@ def iterate_and_test(
         print(f'\nTesting shift [{idx + 1}/{crsmtch_iters}]: Writing temporary new FITS file w/ updated CRPIX...')
         fits.writeto(newpath, data, header_copy, overwrite=True)
 
-        maglow = 12
-        maghigh = 14
         # Rerunning sextractor and astroquery for new source positions
-        inner_primesources_iter, inner_catsources_iter, colnames, wcs = shiftiteration(directory, imageshiftname, Q,
-                                                                                       filter_used, maglow, maghigh,
-                                                                                       boxsize, crop, x_shift, y_shift)
-
+        inner_primesources_iter, inner_catsources_iter, colnames, wcs = (
+            shiftiteration(directory, imageshiftname, filter_used, coords, maglow, maghigh, boxsize, crop, catNum, magcol))
         # Run crossmatch to determine successful solve
         SourceCatCoords = SkyCoord(ra=inner_catsources_iter[colnames[0]], dec=inner_catsources_iter[colnames[1]],
                                    frame='icrs', unit='degree')
@@ -547,7 +668,7 @@ def removal(directory):
 #%%
 
 
-defaults = dict(length=100,num=400,thresh_high=0.5,thresh_low=0.1,iters=10)
+defaults = dict(length=100,num=400,thresh_high=0.4,thresh_low=0.1,iters=10)
 
 #%%
 
@@ -562,28 +683,36 @@ def shift(
         directory, imagename, band, length=defaults['length'], num=defaults['num'], thresh_low=defaults['thresh_low'],
         thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False
 ):
+
     if band == 'Y':
+        print('Switching Y band to J for ease of astrometry...')
         filter_used = 'J'
     else:
         filter_used = band
 
     start_time = dt.now()
-    boxsize, crop = boxchange(5)
 
     maglow = 12
     maghigh = 14
 
-    data, header, w, raImage, decImage, zp, catname = imaging(directory, imagename)
+    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
+    if bulge:
+        boxsize, crop = boxchange(4)
+    else:
+        boxsize, crop = boxchange(8)
     sex1(imagename)
-    Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
+    # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
+    Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff = complex_query(raImage, decImage, filter_used, boxsize,
+                                                                         maglow=maglow, maghigh=maghigh, bulge=bulge)
     inner_primesources, inner_catsources, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
-                                                                 maglow=maglow, maghigh=maghigh)
+                                                                 maglow=mag_low_cutoff, maghigh=mag_high_cutoff)
     first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
     agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, length)
     xy_shifts = xyshifts(agreeing_pairs, inner_primesources, inner_catsources, iters)
 
-    ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, Q, filter_used,
-                                                          boxsize, crop, thresh_low, thresh_high, iters)
+    ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, filter_used,
+                                                          boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
+                                                          iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff)
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
