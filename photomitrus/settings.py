@@ -38,6 +38,17 @@ GB_QUERY_CATALOGS = {'VVV': ['J', 'II/348/vvv2'], 'Skymapper': ['Z', 'II/379/sms
 
 CHIP_ZPS = {'Z': [23.88], 'Y': [23.88], 'J': [23.88], 'H': [24.111]}
 
+
+def bulge_checker(case):
+    bulge_list = ['bulge', 'gb', 'gp', 'plane']
+
+    bulge_check = [name for name in bulge_list if name in case.lower()]
+    if bulge_check:
+        return True
+    else:
+        return False
+
+
 def gen_config_file_name(filename):
     base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
     return os.path.join(base_dir, 'configs', filename)

@@ -4,6 +4,7 @@ import subprocess
 import argparse
 import fnmatch
 import shutil
+from astropy.io import fits
 
 from photomitrus.settings import makedirs
 from photomitrus.settings import makedirsFF
@@ -99,15 +100,16 @@ def initastrom(astrompath, parentdir, chip=None):
 
 def astrom_angle(astrompath, parentdir, chip, rot_val=48):
     os.chdir(gen_pipeline_file_name())
-    ramppath = os.path.join(parentdir,  'C%i' % chip)
-    print('running initial astrometry on ramp imgs...')
+    print('running initial astrometry on input imgs...')
+    inputpath = parentdir
 
+    outputpath = astrompath
     print(
-        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s -output %s' % (ramppath, astrompath))
+        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s -output %s' % (
+            inputpath, outputpath))
 
     # astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
-    astromangle_wcs.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
-    return ramppath
+    astromangle_wcs.astrom_angle(input_field=inputpath, output_dir=outputpath, rot_val=rot_val)
 
 
 def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
@@ -193,7 +195,7 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
 def shift(subpath, band, bulge=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
-    all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits')]
+    all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     imgname = all_fits[0]
 
     print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
@@ -202,7 +204,7 @@ def shift(subpath, band, bulge=False):
     if bulge:
         astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
     else:
-        astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
+        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
 
 
 # %% better astrometry
@@ -234,6 +236,54 @@ def stacking(subpath, stackpath, chip):
     print('\nEquivalent argparse cmd: python ./stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
 
     stack.stack(subpath=subpath, stackpath=stackpath, chip=chip)
+
+# %% astrometric verification
+
+
+def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
+    initial_rot_val = rot_val
+    chosen_rot_val = initial_rot_val
+    attempted_angles = set()
+
+    while True:
+        # run initial astrometry, if no ROTOFF, shift should fail
+        astrom_angle(astromdir, subdir, chip, chosen_rot_val)
+        shift(astromdir, band, bulge=bulge)
+
+        # checks for .shift.fits file, should only remain if shift agreement is not found
+        shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
+
+        if not shift_fail_check:
+            break
+
+        print('\nShift astrometry failed! Verifying ROTOFF val in an image FITS header...')
+        all_fits = [f for f in sorted(os.listdir(astromdir)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
+        if not all_fits:
+            print('No suitable FITS files found in dir!')
+            break
+        imgpath = os.path.join(astromdir, all_fits[0])
+
+        try:
+            img = fits.open(imgpath)
+            imghdr = img[0].header
+            # verify ROTOFF value is real and not nonsense
+            rotoff_check = int(imghdr['ROTOFF'])
+            print('ROTOFF value is real: %i... Moving on, but astrometry is likely to fail, so examine images further!'
+                  % rotoff_check)
+        except (ValueError, KeyError):
+            print('ROTOFF value is not real!, Varying ROTOFF value by +90 deg...')
+
+        # record attempted rotation
+        attempted_angles.add(chosen_rot_val)
+
+        # compute next angle, modulo 360
+        chosen_rot_val = (chosen_rot_val + 90) % 360
+        print('New ROTOFF value: %i' % chosen_rot_val)
+
+        if chosen_rot_val in attempted_angles:
+            print("All rotations failed. Moving on, but astrometry is likely to fail, so examine images further!")
+            break
+
 
 
 # %% packing compression
@@ -299,8 +349,8 @@ defaults = dict(sigma=4)
 
 
 def master(
-        parentdir, chip, band, sigma=4, date=None, fullramplist=None, rot_val=None, no_shift=False, sex=False, compress=False,
-        net_refine=False, sky_override=None, removal=False, bulge=False
+        parentdir, chip, band, sigma=4, date=None, fullramplist=None, rot_val=None, sex=False, compress=False,
+        sky_override=None, removal=False, bulge=False
 ):
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
     if fullramplist:
@@ -308,8 +358,8 @@ def master(
         if chipramplist is None:
             raise ValueError('For some reason, given chip doesnt match to any sublist!  Do you have the right target and date? '
                              'Are there missing files when trying to retrieve?')
-        astrom_angle_list(astromdir, chipramplist, chip, rot_val)
-        flatfielding(astromdir, FFdir, band, chip, date)
+        # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
+        flatfielding(chipramplist, FFdir, band, chip, date)
         if sex or sky_override or bulge:
             pass
         else:
@@ -318,40 +368,30 @@ def master(
             skysub(FFdir, subdir, chip, sky_override, sex=True)
         else:
             skysub(FFdir, subdir, chip, skydir, sky_override)
-        if net_refine:
-            astromnet_refine(subdir)
-        else:
-            if not no_shift:
-                shift(subdir, band, bulge=bulge)
-            else:
-                pass
-        astromatic_astrometry(subdir)
-        stacking(subdir, stackdir, chip)
+        astrom_angle(astromdir, subdir, chip, rot_val)
+        shift(astromdir, band, bulge=bulge)
+        astromatic_astrometry(astromdir)
+        stacking(astromdir, stackdir, chip)
         if compress:
             fpack(stackdir, chip)
         if removal:
             intermediate_removal(astromdir, FFdir, subdir)
     else:
-        # FFdir = makedirectoriesFF(parentdir, chip)
-        rampdir = astrom_angle(astromdir, parentdir, chip, rot_val)
-        flatfielding(astromdir, FFdir, band, chip, date)
+        rampdir = os.path.join(parentdir,  'C%i' % chip)
+        flatfielding(rampdir, FFdir, band, chip, date)
         if sex or sky_override or bulge:
             pass
         else:
             sky(FFdir, skydir, sigma, chip)
         if sex or bulge:
-            skysub(FFdir, subdir, chip, sky_override, sex=sex)
+            skysub(FFdir, subdir, chip, sky_override, sex=True)
         else:
             skysub(FFdir, subdir, chip, skydir, sky_override)
-        if net_refine:
-            astromnet_refine(subdir)
-        else:
-            if not no_shift:
-                shift(subdir, band)
-            else:
-                pass
-        astromatic_astrometry(subdir)
-        stacking(subdir, stackdir, chip)
+        verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
+        # astrom_angle(astromdir, subdir, chip, rot_val)
+        # shift(astromdir, band, bulge=bulge)
+        astromatic_astrometry(astromdir)
+        stacking(astromdir, stackdir, chip)
         if compress:
             fpack(stackdir, chip)
         if removal:
@@ -381,15 +421,12 @@ def main():
     parser.add_argument('-sex', action='store_true',
                         help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
     parser.add_argument('-compress', action='store_true', help='optional flag, use fpack to compress stacked images')
-    parser.add_argument('-no_shift', action='store_true',
-                        help='optional flag, STOPS use of astrometric shifting script')
+    # parser.add_argument('-no_shift', action='store_true',help='optional flag, STOPS use of astrometric shifting script')
     # parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
     # parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
     # parser.add_argument('-astrom_start', action='store_true', help='optional flag, starts pipeline at sxtrctr / scamp step')
     # parser.add_argument('-stack_start', action='store_true',help='optional flag, starts pipeline at swarp step')
-    parser.add_argument('-net_refine', action='store_true',
-                        help='optional flag, used to automatically refine astrometry using '
-                             'astrometry.net')
+    # parser.add_argument('-net_refine', action='store_true',help='optional flag, used to automatically refine astrometry using astrometry.net')
     parser.add_argument('-removal', action='store_true',
                         help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
                              'stacks; intended for space saving in large nights of observation')
@@ -401,8 +438,8 @@ def main():
                              ' automate this in the future')
     args, unknown = parser.parse_known_args()
 
-    master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.no_shift, args.sex,
-           args.compress, args.net_refine, args.sky_override, args.removal, args.bulge)
+    master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.sex,
+           args.compress, args.sky_override, args.removal, args.bulge)
 
 
 if __name__ == "__main__":

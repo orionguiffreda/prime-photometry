@@ -260,7 +260,8 @@ def main():
                                                                      'through old method (scp), new method passes file '
                                                                      'paths (new saves space and time)')
     parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
-                                                                  'downloaded, *NOT* to use new file path method')
+                                                                  'downloaded, *NOT* to use new file path method.  Use w/ '
+                                                                  '-no_get_files!')
     parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
                                             ' script in place of astrom.net, will not use either (shift is default)')
     parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry')

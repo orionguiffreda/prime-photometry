@@ -18,7 +18,7 @@ from collections import defaultdict
 import math
 import sys
 
-from photomitrus.settings import (gen_config_file_name, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
+from photomitrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
                                   GB_QUERY_CATALOGS)
 
 
@@ -60,7 +60,7 @@ def imaging(directory, imageName):
     [raImage, decImage] = w.all_pix2world(data.shape[0] / 2, data.shape[1] / 2, 1)
 
     # Get zero point for image
-    chip = header['CHIP']
+    # chip = header['CHIP']
     if header['FILTER2'] == 'Open':
         band = 'Z'
     else:
@@ -69,10 +69,13 @@ def imaging(directory, imageName):
     zp = get_zp(band)
 
     # detect if GB field
-    if 'GB' in header['OBSERVER']:
-        bulge = True
-    else:
-        bulge = False
+    case = header['OBJTYPE']
+    bulge = bulge_checker(case)
+
+    # if 'Bulge' in header['OBJTYPE']:
+    #     bulge = True
+    # else:
+    #     bulge = False
 
     # cat name
     pre = os.path.splitext(imageName)[0]
@@ -248,6 +251,8 @@ def sex1(imageName):
     paramName = gen_config_file_name('tempsource.param')
     if imageName.endswith('.fits'):
         catname = imageName[:-5] + '.cat'
+    elif imageName.endswith('.new'):
+        catname = imageName[:-4] + '.cat'
     else:
         catname = imageName + '.cat'
     try:
@@ -311,7 +316,7 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
     print('applying zp correction to PRIME mags: %s' % zp)
     inner_primesources['MAG_AUTO'] = inner_primesources['MAG_AUTO'] + zp
 
-    inner_primesources.write('prime_all.ecsv', overwrite=True)
+    # inner_primesources.write('prime_all.ecsv', overwrite=True)
     inner_primesources = inner_primesources[(inner_primesources['MAG_AUTO'] >= maglow) &
                                             (inner_primesources['MAG_AUTO'] <= maghigh)]
 
@@ -326,15 +331,15 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
 
     # inner_catsources.write('cat_all.ecsv', overwrite=True)
 
-    # Path = os.path.join(directory, 'catcoords_crop.reg')
-    # newtext = open(Path, 'w+')
-    # for i,j in zip(xs,ys):
-    #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+    Path = os.path.join(directory, 'catcoords_crop.reg')
+    newtext = open(Path, 'w+')
+    for i,j in zip(xs,ys):
+        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
     # #
-    # Path = os.path.join(directory, 'primecoords_crop.reg')
-    # newtext = open(Path, 'w+')
-    # for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
-    #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+    Path = os.path.join(directory, 'primecoords_crop.reg')
+    newtext = open(Path, 'w+')
+    for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
+        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
     #
     # Path = os.path.join(directory, 'primecoords_all.reg')
     # newtext = open(Path, 'w+')
@@ -581,16 +586,12 @@ def iterate_and_test(
 
 
 
-def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
+def change_all_files(xfinal_shift, yfinal_shift, directory):
     if xfinal_shift == 0 or yfinal_shift == 0:
         print('No agreement, thus cannot move forward with rewriting all files!')
     else:
-        if all_fits_arr:
-            all_fits = all_fits_arr
-            # all_fits = all_fits[1:]
-        else:
-            all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-            # all_fits = all_fits[1:]     # all files but first one (first one is completed already)
+        all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.new')]
+        # all_fits = all_fits[1:]     # all files but first one (first one is completed already)
 
         print('Rewriting all FITS images w/ new CRPIX vals...')
         for f in all_fits:
@@ -605,7 +606,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             header['CRPIX2'] = crpix2 + yfinal_shift
 
             imageshiftname = os.path.splitext(f)[0]
-            imageshiftname = imageshiftname + '.shift.fits'
+            imageshiftname = imageshiftname + '.shift.new'
             newpath = os.path.join(directory, imageshiftname)
 
             fits.writeto(newpath, data, header, overwrite=True)
@@ -614,18 +615,9 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
         old_storage_dir = os.path.join(directory, 'old')
         if not os.path.exists(old_storage_dir):
             os.mkdir(old_storage_dir)
-        else:
-            pass
-        if all_fits_arr:
-            all_fits_again = all_fits_arr
-            all_fits_shift = []
-            for f in all_fits_again:
-                imageshiftname = os.path.splitext(f)[0]
-                imageshiftname = imageshiftname + '.shift.fits'
-                all_fits_shift.append(imageshiftname)
-        else:
-            all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-            all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.fits')]
+
+        all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.new')]
+        all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.new')]
 
         for f in all_fits_again:
             currentpath = os.path.join(directory, f)
@@ -651,7 +643,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
 
 
 def removal(directory):
-    fnames = ['.shift.cat','.psf', '.reg']
+    fnames = ['.shift.cat','.shift.fits','.psf','.reg']
     print('Removing intermediate files')
     try:
         for f in os.listdir(directory):
@@ -699,7 +691,7 @@ def shift(
     if bulge:
         boxsize, crop = boxchange(4)
     else:
-        boxsize, crop = boxchange(8)
+        boxsize, crop = boxchange(10)
     sex1(imagename)
     # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
     Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff = complex_query(raImage, decImage, filter_used, boxsize,
@@ -716,7 +708,8 @@ def shift(
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
-        removal(directory)
+        if ultimate_shift_x != 0:
+            removal(directory)
 
     end_time = dt.now()
     print('astrometric shift correction time:', (end_time - start_time).total_seconds())

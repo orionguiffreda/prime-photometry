@@ -24,7 +24,7 @@ import subprocess
 from scipy.stats import skew
 import warnings
 
-from photomitrus.settings import (gen_config_file_name, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
+from photomitrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
                                   AB_OFFSET_DICT)
 
@@ -111,10 +111,8 @@ def img(directory, imageName, crop):
     width = (raLEdge - raREdge) * 60
 
     # detect if GB field
-    if 'GB' in header['OBSERVER']:
-        bulge = True
-    else:
-        bulge = False
+    case = header['OBJTYPE']
+    bulge = bulge_checker(case)
 
     return data, header, w, raImage, decImage, bulge
 

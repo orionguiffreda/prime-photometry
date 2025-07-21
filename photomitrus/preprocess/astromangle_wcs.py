@@ -111,28 +111,31 @@ def get_files(directory):
     fits_files = [f for f in ls if fnmatch(f, '????????C?.fits') or fnmatch(f, '????????C?.fits.ramp') or
                   fnmatch(f, '????????C?.ramp.new') or fnmatch(f, '????????C?.ramp.fits')
                   or fnmatch(f, '????????C?.sky.flat.fits')]
-    print(fits_files)
+    # print(fits_files)
     return fits_files
 
 
 def update_ra_dec_directory(directory, rot_val, downsample=_default_downsample):
     fits_files = [os.path.join(directory, f) for f in get_files(directory)]
-    for fits_file in fits_files:
-        update_ra_dec(fits_file, rot_val, downsample=downsample)
+    for f in fits_files:
+        fnewpath = f.replace('.flat.fits', '.flat.new')
+        os.rename(f, fnewpath)
+        update_ra_dec(fnewpath, rot_val, downsample=downsample)
+        # print('%s updated and renamed!' % fnewname)
 
 
 def update_ra_dec_move_directory(input_dir, output_dir, rot_val, downsample=_default_downsample):
     for f in sorted(os.listdir(input_dir)):
-        if f.endswith('.ramp.fits'):
+        if f.endswith('.flat.fits'):
             origpath = os.path.join(input_dir, f)
-            if f.endswith('ramp.fits.fz'):
-                fnewname = f.replace('.ramp.fits.fz', '.ramp.new')
+            if f.endswith('.fz'):
+                fnewname = f.replace('.fz', '.new')
             else:
-                fnewname = f.replace('.ramp.fits', '.ramp.new')
+                fnewname = f.replace('.flat.fits', '.flat.new')
             newpath = os.path.join(output_dir, fnewname)
             shutil.copyfile(origpath, newpath)
             update_ra_dec(newpath, rot_val, downsample=downsample)
-            print('%s updated, renamed, and moved!' % fnewname)
+            # print('%s updated, renamed, and moved!' % fnewname)
 
 
 def update_ra_dec_list(input_list, output_dir, rot_val, downsample=_default_downsample):

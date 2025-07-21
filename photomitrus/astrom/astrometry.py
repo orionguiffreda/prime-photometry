@@ -39,7 +39,7 @@ def sex(imgdir, bulge=False):
     threads = []
     print('Sextracting all images in %s' % imgdir)
     for f in sorted(os.listdir(imgdir)):
-        if f.endswith('flat.fits') or f.endswith('.new'):
+        if f.endswith('flat.fits') or f.endswith('.flat.new'):
             thread = threading.Thread(target=sextract, args=(imgdir, f, sx, ap), name=f)
             thread.start()
             threads.append(thread)
@@ -84,7 +84,7 @@ def scamp(imgdir, distortdeg=None):
 def missfits(imgdir):
     os.chdir(imgdir)
     mc = gen_config_file_name('default.missfits')
-    img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('flat.fits')]
+    img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('flat.fits') or f.endswith('flat.new')]
     img_list = [os.path.join(imgdir, f) for f in img_list]
     img_list = ' '.join(img_list)
     command = ('missfits -c %s %s' % (mc, img_list))
