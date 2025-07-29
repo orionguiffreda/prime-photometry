@@ -89,7 +89,7 @@ def refineprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=Non
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, net_refine=True,
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
            sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge)
 
 
@@ -113,7 +113,7 @@ def baseprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None,
         sigma = 6
     else:
         sigma = None
-    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, no_shift=True,
+    master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
            sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge)
 
 

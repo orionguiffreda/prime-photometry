@@ -21,6 +21,8 @@ from photomitrus.astrom import astrom_shift_new
 from photomitrus.astrom import astrometry
 from photomitrus.stack import stack
 
+from photomitrus.settings import bulge_checker
+
 
 # %% directory creation
 def makedirectories(parentdir, chip):
@@ -270,6 +272,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             rotoff_check = int(imghdr['ROTOFF'])
             print('ROTOFF value is real: %i... Moving on, but astrometry is likely to fail, so examine images further!'
                   % rotoff_check)
+            break
         except (ValueError, KeyError):
             print('ROTOFF value is not real!, Varying ROTOFF value by +90 deg...')
 
@@ -345,6 +348,19 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 # %%
 
 
+def auto_bulge_detect(directory):
+    fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
+    first_fits = os.path.join(directory, fits_files[0])
+    hdr = fits.getheader(first_fits)
+
+    case = hdr['OBJTYPE']
+    bulge = bulge_checker(case)
+    if bulge:
+        print('Bulge field detected! Switching to bulge setup if not already specified!')
+
+    return bulge
+
+
 defaults = dict(sigma=4)
 
 
@@ -358,44 +374,53 @@ def master(
         if chipramplist is None:
             raise ValueError('For some reason, given chip doesnt match to any sublist!  Do you have the right target and date? '
                              'Are there missing files when trying to retrieve?')
-        # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
-        flatfielding(chipramplist, FFdir, band, chip, date)
-        if sex or sky_override or bulge:
-            pass
-        else:
-            sky(FFdir, skydir, sigma, chip)
-        if sex or bulge:
-            skysub(FFdir, subdir, chip, sky_override, sex=True)
-        else:
-            skysub(FFdir, subdir, chip, skydir, sky_override)
-        astrom_angle(astromdir, subdir, chip, rot_val)
-        shift(astromdir, band, bulge=bulge)
-        astromatic_astrometry(astromdir)
-        stacking(astromdir, stackdir, chip)
-        if compress:
-            fpack(stackdir, chip)
-        if removal:
-            intermediate_removal(astromdir, FFdir, subdir)
+        initial_ramps = chipramplist
+        rampdir = None
     else:
-        rampdir = os.path.join(parentdir,  'C%i' % chip)
-        flatfielding(rampdir, FFdir, band, chip, date)
-        if sex or sky_override or bulge:
-            pass
-        else:
-            sky(FFdir, skydir, sigma, chip)
-        if sex or bulge:
-            skysub(FFdir, subdir, chip, sky_override, sex=True)
-        else:
-            skysub(FFdir, subdir, chip, skydir, sky_override)
-        verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
-        # astrom_angle(astromdir, subdir, chip, rot_val)
-        # shift(astromdir, band, bulge=bulge)
-        astromatic_astrometry(astromdir)
-        stacking(astromdir, stackdir, chip)
-        if compress:
-            fpack(stackdir, chip)
-        if removal:
-            intermediate_removal(astromdir, FFdir, subdir, rampdir)
+        rampdir = os.path.join(parentdir, 'C%i' % chip)
+        initial_ramps = rampdir
+
+    # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
+    flatfielding(initial_ramps, FFdir, band, chip, date)
+    bulge = auto_bulge_detect(FFdir)
+    if sex or sky_override or bulge:
+        pass
+    else:
+        sky(FFdir, skydir, sigma, chip)
+    if sex or bulge:
+        skysub(FFdir, subdir, chip, sky_override, sex=True)
+    else:
+        skysub(FFdir, subdir, chip, skydir, sky_override)
+    verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
+    # astrom_angle(astromdir, subdir, chip, rot_val)
+    # shift(astromdir, band, bulge=bulge)
+    astromatic_astrometry(astromdir)
+    stacking(astromdir, stackdir, chip)
+    if compress:
+        fpack(stackdir, chip)
+    if removal:
+        intermediate_removal(astromdir, FFdir, subdir, rampdir)
+
+    # else:
+    #     rampdir = os.path.join(parentdir,  'C%i' % chip)
+    #     flatfielding(rampdir, FFdir, band, chip, date)
+    #     if sex or sky_override or bulge:
+    #         pass
+    #     else:
+    #         sky(FFdir, skydir, sigma, chip)
+    #     if sex or bulge:
+    #         skysub(FFdir, subdir, chip, sky_override, sex=True)
+    #     else:
+    #         skysub(FFdir, subdir, chip, skydir, sky_override)
+    #     verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
+    #     # astrom_angle(astromdir, subdir, chip, rot_val)
+    #     # shift(astromdir, band, bulge=bulge)
+    #     astromatic_astrometry(astromdir)
+    #     stacking(astromdir, stackdir, chip)
+    #     if compress:
+    #         fpack(stackdir, chip)
+    #     if removal:
+    #         intermediate_removal(astromdir, FFdir, subdir, rampdir)
 
 
 def main():

@@ -13,7 +13,7 @@ from datetime import datetime
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
-PIPELINE_DEFAULT_DIR = '/mnt/photometry/shift_new_testing/'
+PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -34,10 +34,11 @@ PHOTOMETRY_LIM_MAGS = {
 # chip avg zp (for bulge field astrom)
 # 23.88
 # 21.836
-GB_QUERY_CATALOGS = {'VVV': ['J', 'II/348/vvv2'], 'Skymapper': ['Z', 'II/379/smssdr4']}
+GB_QUERY_CATALOGS = {'VVV': ['J', 'II/348/vvv2'], '2MASS': ['J', 'II/246/'],
+                     'Skymapper': ['Z', 'II/379/smssdr4']}
 
 CHIP_ZPS = {'Z': [23.88], 'Y': [23.88], 'J': [23.88], 'H': [24.111]}
-
+# 24.111
 
 def bulge_checker(case):
     bulge_list = ['bulge', 'gb', 'gp', 'plane']

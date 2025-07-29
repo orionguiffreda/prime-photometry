@@ -1104,7 +1104,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     elif 50000 <= len(idx_psfimage) <= 75000:
         bin_num_int = round(len(idx_psfimage) / 400)
     elif 25000 <= len(idx_psfimage) <= 50000:
-        bin_num_int = round(len(idx_psfimage) / 200)
+        bin_num_int = round(len(idx_psfimage) / 300)
     elif 5000 <= len(idx_psfimage) <= 25000:
         bin_num_int = round(len(idx_psfimage) / 75)
     elif 1000 <= len(idx_psfimage) <= 5000:
@@ -1309,7 +1309,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
                    edgecolor='r', facecolor='None') for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))]
     for c in circles:
         ax.add_artist(c)
-    plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=100)
+    plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=200)
     print('Saved source location check plot to dir!')
     plt.clf()
 

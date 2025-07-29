@@ -113,18 +113,18 @@ def double_astrom(imgdir):
     start_time = dt.now()
     print('\nSextracting shift-corrected fits files!')
     sex(imgdir, bulge=True)                     # sextract shift-solved fits files
-    print('Running SCAMP w/ 2d distortion polynomial...')
+    print('Running SCAMP w/ 2nd order distortion polynomial...')
     scamp(imgdir, distortdeg=2)                 # scamp shift-solved cat files w/ 2d poly solve
     print('Adding .head files directly to fits hdrs...')
     missfits(imgdir)                            # add 2d-solved scamp hdrs to shifted fits files
     print('Renaming head files to .2d.head to differentiate from next scamp run...')
     rename_head(imgdir)                         # renames .head files to .2d.head to differentiate betw. later scamp run
 
-    print('\nSextracting 2d scamp-corrected fits files!')
+    print('\nSextracting 2nd order scamp-corrected fits files!')
     sex(imgdir, bulge=True)                     # sextract 2d-solved fits files
-    print('Running SCAMP w/ 4d distortion polynomial...')
+    print('Running SCAMP w/ 4th order distortion polynomial...')
     scamp(imgdir)                               # scamp 2d-solved cat files w/ 4d poly solve
-    print('Adding 4d .head files directly to fits hdrs...')
+    print('Adding 4th order .head files directly to fits hdrs...')
     missfits(imgdir)                            # replace 2d-solved fits file scamp hdrs w/ 4d soln scamp hdrs
     end_time = dt.now()
     print('\ndouble scamp astrometry time:', (end_time - start_time).total_seconds())
