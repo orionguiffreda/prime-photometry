@@ -20,7 +20,7 @@ import sys
 
 from photomitrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
                                   GB_QUERY_CATALOGS)
-
+from photomitrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):
     zps = [v for k, v in CHIP_ZPS.items() if k == band]
@@ -707,8 +707,6 @@ def removal(directory):
         print('No intermediate files found to remove')
 #%%
 
-
-defaults = dict(length=125,num=400,thresh_high=0.4,thresh_low=0.1,iters=10)
 
 #%%
 

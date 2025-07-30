@@ -100,7 +100,7 @@ def main():
                              ' arcmin, or deg w/ an underscore.  Ex. "-grb_radius 3_arcmin" will specify an area of 3 '
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default='4.0')
-    args, unknown = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()  # TODO: get these default arguments from defaults dict
 
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,

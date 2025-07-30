@@ -152,7 +152,7 @@ def main():
     parser.add_argument('-bulge', action='store_true', help='Super-master currently prunes out the bulge '
                                                             'fields by default, as we dont yet support stacking of bulge'
                                                             'fields, if you want to include them anyway, use this flag')
-    args, unknown = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
 
     supermaster(args.date, args.bulge)
 

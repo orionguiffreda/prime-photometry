@@ -64,7 +64,7 @@ def main():
                                                                      ' W/O running photometry')
     parser.add_argument('-photometry_only', action='store_true', help='optional flag, use to run photometry '
                                                                       'on all fields when ALREADY reduced')
-    args, unknown = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
 
     reduce_and_photom_all(args.csvpath, args.date, args.bands, args.chips, args.reduction_only, args.photometry_only)
 

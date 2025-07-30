@@ -127,7 +127,7 @@ def mflat_checker(date):
 
 
 #%%
-
+"""
 # Settings for list of directory+filenames
 object = 'field4057'
 filter = 'H'
@@ -160,11 +160,10 @@ def flist(Object=object, Filter=filter, Chip=chip):
     if not fullnames:
         print('No files found for specified fields!')
     return fullnames
-
+"""
 
 # a = flist()
 # %% make directories
-from pathlib import Path
 
 # directory creation
 
@@ -202,42 +201,3 @@ def makedirsFF(dir, chip):
     # FFdir = [i for i in dirnames if i.endswith(FF)]
     # FFname = ' '.join(FFdir)
     return FF
-
-
-# %%
-# astrom, sky, sub, stack = makedirs('/mnt/d/PRIME_photometry_test_files/GRB240205B/J_Band/flats/',1)
-# FF = makedirsFF('/mnt/d/PRIME_photometry_test_files/xrf_3_20240318/J_Band/',2)
-
-# %% for multiple object fields
-"""
-object = ['field4037']
-filter = 'J'
-chip = 1
-def flist(Object=object, Filter=filter, Chip=chip):
-    log = pd.read_csv('/mnt/d/PRIME_photometry_test_files/ramp_fit_log_2023-12-10.clean.dat', delimiter=' ') #reads in csv
-    if Filter == 'Z':
-        fnames = []
-        for f in Object:
-            fobjnames = log['filename'][log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(Object)) & log['FILTER1'].str.contains('Z')
-            & log['Open'].str.contains(str(Filter))]
-            fobjnames = fobjnames.tolist()
-            fnames.extend(fobjnames)
-        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
-        fullnames = [dir + x for x in sorted(fnames)]
-    else:
-        #screening log w/ constraints
-        fnames = []
-        for f in Object:
-            fobjnames = log['filename'][log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(f)) & log['FILTER1'].str.contains('Open')
-                 & log['FILTER2'].str.contains(str(Filter))]
-            fobjnames = fobjnames.tolist()
-            fnames.extend(fobjnames)
-            #adding path
-        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
-        fullnames = [dir + x for x in sorted(fnames)]
-    if not fullnames:
-        print('No files found for specified fields!')
-    return fullnames
-
-a = flist()
-"""

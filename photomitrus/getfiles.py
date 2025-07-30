@@ -7,14 +7,11 @@ import io
 
 from pandas import read_csv, to_datetime
 
+from photomitrus.utils.defaults import FILE_DEFAULTS as defaults
+
 file_types = ['raw_fz', 'ramp', 'raw']
 file_types_str = ','.join(file_types)
 
-defaults = dict(
-    save_dir='.', redownload=False, overwrite=False, ftype='ramp',
-    objname=None, objtype=None, observer=None, chip=(1,2,3,4), filter1=None, filter2=None,
-    funpack_fz=False
-)
 filter_1_options = ','.join(['NB', 'Open', 'Z', 'Dark'])
 filter_2_options = ','.join(['Open', 'Y', 'J', 'H'])
 

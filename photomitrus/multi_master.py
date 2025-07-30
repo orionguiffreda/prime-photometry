@@ -280,7 +280,7 @@ def main():
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future')
-    args, unknown = parser.parse_known_args()
+    args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
 
     multi_master(target=args.target, date=args.date, band=args.band, chip=args.chip, parentdir=args.parent,
                  rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,

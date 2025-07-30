@@ -22,6 +22,7 @@ from photomitrus.astrom import astrometry
 from photomitrus.stack import stack
 
 from photomitrus.settings import (bulge_checker, auto_bulge_detect)
+from photomitrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 
 # %% directory creation
@@ -366,7 +367,6 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 #     return bulge
 
 
-defaults = dict(sigma=4)
 
 
 def master(

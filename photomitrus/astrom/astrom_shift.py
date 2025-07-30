@@ -13,6 +13,7 @@ import threading
 import math
 
 from photomitrus.settings import gen_config_file_name
+from photomitrus.utils.defaults import ASTROM_DEFAULTS as defaults
 
 
 def timed_input(prompt, timeout=60, default='Y'):
@@ -519,10 +520,6 @@ def removal(directory):
                         print(f"Error removing file: {path} - {e}")
     except None as e:
         print('No files found to remove')
-#%%
-
-
-defaults = dict(range=3,length=100,num=15,stdev=1,segstd=2)
 
 #%%
 
