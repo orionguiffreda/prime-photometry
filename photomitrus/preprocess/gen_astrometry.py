@@ -7,7 +7,6 @@ import argparse
 import sys
 from astropy.io import fits
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from photomitrus.settings import flist
 import os
 
 
