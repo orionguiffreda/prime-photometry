@@ -7,9 +7,13 @@ Settings for pipeline
 """
 # %% Config File Names
 import os
+from pathlib import Path
+
 import pandas as pd
 from datetime import datetime
 from astropy.io import fits
+import json5
+
 
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
@@ -88,14 +92,16 @@ def auto_bulge_detect(directory):
     return bulge
 
 
-def gen_config_file_name(filename):
-    base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
-    return os.path.join(base_dir, 'configs', filename)
+def gen_user_prime_dir():
+    home_dir = Path.home()
+    prime_dir = os.path.join(home_dir, '.prime')
+    if not os.path.isdir(prime_dir):
+        os.makedirs(prime_dir)
+    return prime_dir
 
 
-def gen_mask_file_name(filename):
-    base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
-    return os.path.join(base_dir, 'weightmaps', filename)
+def gen_config_dir():
+    return os.path.join(gen_user_prime_dir(), 'configs')
 
 
 def gen_pipeline_file_name():
@@ -103,14 +109,69 @@ def gen_pipeline_file_name():
     return base_dir
 
 
+def gen_config_file_name(filename):
+    # base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
+    # base_dir = gen_pipeline_file_name()
+    return os.path.join(gen_config_dir(), filename)
+
+
+def load_settings(settings_file='photometrus.json5'):
+    settings_file_abs = os.path.join(gen_config_dir(), settings_file)
+    if not os.path.isfile(settings_file_abs):
+        settings_file_abs = os.path.join(gen_pipeline_file_name(), 'configs', settings_file)
+    with open(settings_file_abs, 'r') as f:
+        json_data = json5.load(f)
+    return json_data
+
+
+def update_settings(settings_file='photometrus.json5'):
+    settings = load_settings(settings_file)
+    global PIPELINE_DEFAULT_DIR
+    global PHOTOMETRY_MAG_LOWER_LIMIT
+    global PHOTOMETRY_MAG_UPPER_LIMIT
+    global PHOTOMETRY_QUERY_WIDTH
+    global PHOTOMETRY_QUERY_CATALOGS
+    global AB_OFFSET_DICT
+    global PHOTOMETRY_LIM_MAGS
+    global GB_QUERY_CATALOGS
+    global CHIP_ZPS
+    global GET_DATA_SETTINGS
+
+    PIPELINE_DEFAULT_DIR = settings['PIPELINE_DEFAULT_DIR']
+    PHOTOMETRY_MAG_LOWER_LIMIT = settings['PHOTOMETRY_MAG_LOWER_LIMIT']
+    PHOTOMETRY_MAG_UPPER_LIMIT = settings['PHOTOMETRY_MAG_UPPER_LIMIT']
+    PHOTOMETRY_QUERY_WIDTH = settings['PHOTOMETRY_QUERY_WIDTH']
+    PHOTOMETRY_QUERY_CATALOGS = settings['PHOTOMETRY_QUERY_CATALOGS']
+    AB_OFFSET_DICT = settings['AB_OFFSET_DICT']
+    PHOTOMETRY_LIM_MAGS = settings['PHOTOMETRY_LIM_MAGS']
+    GB_QUERY_CATALOGS = settings['GB_QUERY_CATALOGS']
+    CHIP_ZPS = settings['CHIP_ZPS']
+    GET_DATA_SETTINGS = settings['GET_DATA_SETTINGS']
+
+
+update_settings()
+
+
+def gen_mask_file_name(filename):
+    base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
+    return os.path.join(base_dir, 'weightmaps', filename)
+
+
 def gen_master_name():
     base_dir = os.path.dirname(__file__)
     return os.path.join(base_dir, 'master.py')
 
 
-def gen_mflat_file_name(band, chip, date=None):
-    base_dir = os.path.dirname(os.path.realpath(__file__))
+def gen_flat_dir():
+    base_dir = gen_user_prime_dir()
     flat_dir = os.path.join(base_dir, 'mflats')
+    if not os.path.exists(flat_dir):
+        os.makedirs(flat_dir)
+    return flat_dir
+
+
+def gen_mflat_file_name(band, chip, date=None):
+    flat_dir = gen_flat_dir()
     mflat_list = [
         f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f
         if len(f) <= 24]
@@ -136,8 +197,8 @@ def gen_mflat_file_name(band, chip, date=None):
 
 
 def mflat_checker(date):
-    base_dir = os.path.dirname(os.path.realpath(__file__))
-    flat_dir = os.path.join(base_dir, 'mflats')
+    base_dir = gen_pipeline_file_name()
+    flat_dir = gen_flat_dir()
     # flat_dir = '/home/alex/PycharmProjects/prime-photometry/photometrus/mflats/'
     mflat_list = [
         f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
@@ -191,29 +252,15 @@ def flist(Object=object, Filter=filter, Chip=chip):
 # directory creation
 
 
-def makedirs(dir, chip):
-    os.chdir(dir)
-    sky = os.path.join(dir, 'sky')
-    stack = os.path.join(dir, 'stack')
-    a = os.path.join(dir, 'C%i_astrom' % chip)
-    FF = os.path.join(dir, 'C%i_FF' % chip)
-    sub = os.path.join(dir, 'C%i_sub' % chip)
-    directories = (a, FF, sky, sub, stack)
-    for directory in directories:
-        if os.path.exists(directory):
-            print(directory + ' already exists!')
-        else:
-            os.mkdir(directory)
-            print(directory)
-    return directories
+
 
 
 # flat field directory creation, probably outdated
 
-
-def makedirsFF(dir, chip):
-    # os.chdir(dir)
-    FF = os.path.join(dir, 'C%i_FF' % chip)
+"""
+def makedirsFF(basedir, chip):
+    # os.chdir(basedir)
+    FF = os.path.join(basedir, 'C%i_FF' % chip)
     skyexists = os.path.exists(FF)
     if not skyexists:
         os.mkdir(FF)
@@ -224,3 +271,4 @@ def makedirsFF(dir, chip):
     # FFdir = [i for i in dirnames if i.endswith(FF)]
     # FFname = ' '.join(FFdir)
     return FF
+"""

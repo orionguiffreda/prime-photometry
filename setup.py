@@ -11,6 +11,9 @@ setup(
     description='Photometrus is the photometry pipeline for the PRIME telescope',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/orionguiffreda/prime-photometry'
+    url='https://github.com/orionguiffreda/prime-photometry',
+    author='Orion Guiffreda',
+    author_email='oriogui@umd.edu',
+    keywords='photometry',
+    packages=find_packages('photometrus'),
 )
-

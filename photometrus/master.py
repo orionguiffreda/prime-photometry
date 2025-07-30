@@ -6,8 +6,7 @@ import fnmatch
 import shutil
 from astropy.io import fits
 
-from photometrus.settings import makedirs
-from photometrus.settings import makedirsFF
+# from photometrus.settings import makedirs
 from photometrus.settings import gen_pipeline_file_name
 from photometrus.settings import gen_mflat_file_name
 from photometrus.preprocess import astromangle_new
@@ -23,6 +22,23 @@ from photometrus.stack import stack
 
 from photometrus.settings import (bulge_checker, auto_bulge_detect)
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
+
+def makedirs(basedir, chip):
+    os.chdir(basedir)
+    sky = os.path.join(basedir, 'sky')
+    stack = os.path.join(basedir, 'stack')
+    a = os.path.join(basedir, 'C%i_astrom' % chip)
+    FF = os.path.join(basedir, 'C%i_FF' % chip)
+    sub = os.path.join(basedir, 'C%i_sub' % chip)
+    directories = (a, FF, sky, sub, stack)
+    for directory in directories:
+        if os.path.exists(directory):
+            print(directory + ' already exists!')
+        else:
+            os.mkdir(directory)
+            print(directory)
+    return directories
 
 
 # %% directory creation

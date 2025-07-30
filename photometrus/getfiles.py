@@ -7,8 +7,22 @@ import io
 
 from pandas import read_csv, to_datetime
 
-from photometrus.utils.defaults import FILE_DEFAULTS as defaults
+from photometrus.utils.defaults import FILE_DEFAULTS
 from photometrus.settings import GET_DATA_SETTINGS
+
+defaults = FILE_DEFAULTS.copy()
+
+
+def path_replace(path):
+    path_replace_format = (
+        ('%SERIAL%', '{0:08d}'),
+        ('%SERIAL_TRUNC%', '{1:08d}'),
+        ('%CHIP%', '{0}'),
+    )
+    for replace_format in path_replace_format:
+        path = path.replace(replace_format[0], replace_format[1])
+    return path
+
 
 file_types = ['raw_fz', 'ramp', 'raw']
 file_types_str = ','.join(file_types)
@@ -16,25 +30,9 @@ file_types_str = ','.join(file_types)
 filter_1_options = ','.join(['NB', 'Open', 'Z', 'Dark'])
 filter_2_options = ','.join(['Open', 'Y', 'J', 'H'])
 
-log_folder_location = '/nfs/prime01/work/LOG/Ramp_LOG/ramp_fit_log_{}.dat'
+log_folder_location = os.path.join(GET_DATA_SETTINGS['log_folder_location'], 'ramp_fit_log_{}.dat')
 
-cam_dirs = ['home', 'xion2', 'xion3', 'xion4']
-cam_dirs_dict_all = {(cam_num+1): cam_dir for cam_num, cam_dir in enumerate(cam_dirs)}
-download_directory_format = '/nfs/{}/prime/Data/{}'
 file_prefix = '{0:08d}'
-file_formats = {
-    'ramp': 'C{0}.fits.ramp',
-    'raw': 'C{0}.fits',
-    'raw_fz': 'C{0}.fits.fz',
-    'ramp_fz': 'C{0}.fits.ramp.fz',
-}
-
-file_type_dirs = {
-    'ramp': 'ramp',
-    'raw': 'raw',
-    'raw_fz': 'raw_fz',
-    'ramp_fz': 'ramp_fz',
-}
 
 backup_lists = {
     'ramp': ['ramp_fz', 'regen'],
@@ -43,33 +41,12 @@ backup_lists = {
     'ramp_fz': ['ramp', 'regen'],
 }
 
-raw_fz_subdir = '{1:08d}'
-funpack_output_dir = '/mnt/photometry/unarchived/C{0}/'+raw_fz_subdir
+funpack_output_dir = path_replace(GET_DATA_SETTINGS['funpack_output_dir'])
 
-remote_file_formats = {
-    'ramp': [
-        '/'.join(
-            (download_directory_format.format(_dir, 'ramp'), file_prefix+file_formats['ramp'].format(_i+1))
-        ) for _i, _dir in enumerate(cam_dirs)
-    ],
-    'raw': [
-        '/'.join(
-            (download_directory_format.format(_dir, 'raw'), file_prefix+file_formats['raw'].format(_i+1))
-        ) for _i, _dir in enumerate(cam_dirs)
-    ],
-    'raw_fz': [
-        '/'.join((
-            '/nfs/xion{}/prime/raw_fz/C{}'.format(_i%2+3, _i+1),
-            raw_fz_subdir,
-            file_prefix+file_formats['raw_fz'].format(_i+1)
-        )) for _i in range(len(cam_dirs))],
-    'ramp_fz': [
-        '/'.join((
-            '/nfs/xion{}/prime/ramp_fz/C{}'.format(_i % 2 + 3, _i + 1),
-            raw_fz_subdir,
-            file_prefix + file_formats['ramp_fz'].format(_i + 1)
-        )) for _i in range(len(cam_dirs))],
-}
+remote_file_formats = GET_DATA_SETTINGS['remote_file_formats']
+for k,v in remote_file_formats.items():
+    for i, fmt in enumerate(v):
+        remote_file_formats[k][i] = path_replace(fmt)
 
 replace_list = GET_DATA_SETTINGS['replace_list']
 

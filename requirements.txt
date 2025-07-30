@@ -1,0 +1,16 @@
+numpy
+scikit-image
+scipy
+pandas
+astropy
+statsmodels
+matplotlib
+astroquery
+astromatic-psfex
+astromatic-scamp
+astromatic-source-extractor
+astromatic-swarp
+astrometry
+pysftp
+six
+json5
