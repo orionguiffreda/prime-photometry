@@ -612,7 +612,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr = hdul[0].header
         hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
-        hdr.set('N_CRSMCH', len(cleanPSFSources), 'Number of Crossmatched Sources', after='e_ZP')
+        hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatched Sources', after='e_ZP')
         hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_CRSMCH')
         hdul.close()
 
@@ -1299,11 +1299,11 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     # Crossmatch location check plot
-    mean, median, sigma = sigma_clipped_stats(data)
+    mean, median, sigma_plot = sigma_clipped_stats(data)
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.gca()
-    plt.imshow(data, vmin=median - 1.5 * sigma, vmax=median + 1.5 * sigma, origin='lower')
+    plt.imshow(data, vmin=median - 1.5 * sigma_plot, vmax=median + 1.5 * sigma_plot, origin='lower')
     circles = [
         plt.Circle((cleanPSFsources['X_IMAGE'][idx_psfimage][i], cleanPSFsources['Y_IMAGE'][idx_psfimage][i]), radius=5,
                    edgecolor='r', facecolor='None') for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))]

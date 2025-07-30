@@ -280,10 +280,15 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 #%% sextraction / psfex
 
 
-def sex1(imageName):
+def sex1(imageName, bulge=False):
     print('Running sextractor for psf...')
-    configFile = gen_config_file_name('sex2.config')
+    if bulge:
+        configFile = gen_config_file_name('sex2.config')
+    else:
+        configFile = gen_config_file_name('bulge_new.config')
+
     paramName = gen_config_file_name('tempsource.param')
+
     if imageName.endswith('.fits'):
         catname = imageName[:-5] + '.cat'
     elif imageName.endswith('.new'):
@@ -548,7 +553,7 @@ def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
 #%%  Rerunning sextractor and astroquery for new source positions
 def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum, magcol, errbits):
     data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
-    sex1(imagename)
+    sex1(imagename, bulge=bulge)
     Q = cat_query(coords, filter_used, eff_boxsize, catNum, magcol, maglow, maghigh, errbits, bulge=bulge)
     # Q = complex_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh, bulge=bulge)
     inner_primesources_iter, inner_catsources_iter, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
@@ -600,6 +605,7 @@ def iterate_and_test(
 
         # print(len(inner_primesources_iter))
         # print(len(inner_catsources_iter))
+        # print(len(idx_prime))
         if len(inner_primesources_iter) > len(inner_catsources_iter):
             crsmtch_completion = len(idx_cat) / len(inner_catsources_iter)
         else:
@@ -702,7 +708,7 @@ def removal(directory):
 #%%
 
 
-defaults = dict(length=100,num=400,thresh_high=0.4,thresh_low=0.1,iters=10)
+defaults = dict(length=125,num=400,thresh_high=0.4,thresh_low=0.1,iters=10)
 
 #%%
 
@@ -735,7 +741,7 @@ def shift(
         thresh_high = 0.25
     else:
         boxsize, crop = boxchange(10)
-    sex1(imagename)
+    sex1(imagename, bulge=bulge)
     # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
     Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff, eff_boxsize, errbits = complex_query(raImage, decImage,
                                                                                                      filter_used, boxsize,

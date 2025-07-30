@@ -9,6 +9,7 @@ Settings for pipeline
 import os
 import pandas as pd
 from datetime import datetime
+from astropy.io import fits
 
 # base_dir = os.path.dirname(__file__)
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
@@ -40,6 +41,7 @@ GB_QUERY_CATALOGS = {'VVV': ['J', 'II/348/vvv2'], '2MASS': ['J', 'II/246/'],
 CHIP_ZPS = {'Z': [23.88], 'Y': [23.88], 'J': [23.88], 'H': [24.111]}
 # 24.111
 
+
 def bulge_checker(case):
     bulge_list = ['bulge', 'gb', 'gp', 'plane']
 
@@ -48,6 +50,19 @@ def bulge_checker(case):
         return True
     else:
         return False
+
+
+def auto_bulge_detect(directory):
+    fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
+    first_fits = os.path.join(directory, fits_files[0])
+    hdr = fits.getheader(first_fits)
+
+    case = hdr['OBJTYPE']
+    bulge = bulge_checker(case)
+    if bulge:
+        print('Bulge field detected! Switching to bulge setup if not already specified!')
+
+    return bulge
 
 
 def gen_config_file_name(filename):

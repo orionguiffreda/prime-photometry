@@ -431,7 +431,7 @@ def segmentshift(segments, acc_range, length, directory, header, data, imageName
         header['CRPIX2'] = crpix2 + yfinal_shift
 
         imageshiftname = os.path.splitext(imageName)[0]
-        imageshiftname = imageshiftname + '.shift.fits'
+        imageshiftname = imageshiftname + '.shift.new'
 
         print('Writing new FITS file w/ updated CRPIX: %s' % imageshiftname)
         newpath = os.path.join(directory, imageshiftname)
@@ -450,7 +450,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             all_fits = all_fits_arr
             all_fits = all_fits[1:]
         else:
-            all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
+            all_fits = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.new')]
             all_fits = all_fits[1:]     # all files but first one (first one is completed already)
 
         print('Rewriting all FITS images w/ new CRPIX vals...')
@@ -466,7 +466,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
             header['CRPIX2'] = crpix2 + yfinal_shift
 
             imageshiftname = os.path.splitext(f)[0]
-            imageshiftname = imageshiftname + '.shift.fits'
+            imageshiftname = imageshiftname + '.shift.new'
             newpath = os.path.join(directory, imageshiftname)
 
             fits.writeto(newpath, data, header, overwrite=True)
@@ -485,8 +485,8 @@ def change_all_files(xfinal_shift, yfinal_shift, directory, all_fits_arr=None):
                 imageshiftname = imageshiftname + '.shift.fits'
                 all_fits_shift.append(imageshiftname)
         else:
-            all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.fits')]
-            all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.fits')]
+            all_fits_again = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.new')]
+            all_fits_shift = [f for f in sorted(os.listdir(directory)) if f.endswith('.shift.new')]
 
         for f in all_fits_again:
             currentpath = os.path.join(directory, f)

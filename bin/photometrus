@@ -12,6 +12,7 @@ from photomitrus.preprocess import astromangle_new
 from photomitrus.preprocess import astromangle_wcs
 from photomitrus.preprocess import gen_astrometry
 from photomitrus.astrom import astrom_shift_new
+from photomitrus.astrom import astrom_shift
 from photomitrus.astrom import astrometry
 from photomitrus.preprocess import flatfield
 from photomitrus.preprocess import gen_flat
@@ -73,6 +74,8 @@ elif len(sys.argv) >= 2:
             astromangle_wcs.main()
         elif sys.argv[2] == 'shift':
             astrom_shift_new.main()
+        elif sys.argv[2] == 'old_shift':
+            astrom_shift.main()
         elif sys.argv[2] == 'astromatic':
             astrometry.main()
         elif sys.argv[2] == 'net':

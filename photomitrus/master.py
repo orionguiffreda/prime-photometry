@@ -21,7 +21,7 @@ from photomitrus.astrom import astrom_shift_new
 from photomitrus.astrom import astrometry
 from photomitrus.stack import stack
 
-from photomitrus.settings import bulge_checker
+from photomitrus.settings import (bulge_checker, auto_bulge_detect)
 
 
 # %% directory creation
@@ -107,7 +107,7 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
 
     outputpath = astrompath
     print(
-        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s -output %s' % (
+        '\nEquivalent argparse cmd: photometrus astrom angle -input %s -output %s' % (
             inputpath, outputpath))
 
     # astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
@@ -118,7 +118,7 @@ def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
     os.chdir(gen_pipeline_file_name())
 
     print(
-        '\nEquivalent argparse cmd: python ./preprocess/astromangle_wcs.py -input %s... -output %s' % (chipramplist[0],
+        '\nEquivalent argparse cmd: photometrus astrom angle -input %s... -output %s' % (chipramplist[0],
                                                                                                               astrompath))
 
     # astromangle_new.astrom_angle(input_field=chipramplist, output_dir=astrompath, rot_val=rot_val)
@@ -132,7 +132,7 @@ def flatfielding(astrompath, FFpath, band, chip, date=None):
     print('using master flat to flat field ramp imgs..')
     flatpath = gen_mflat_file_name(band, chip, date)
 
-    print('\nEquivalent argparse cmd: python ./preprocess/flatfield.py -in_path %s -out_path %s'
+    print('\nEquivalent argparse cmd: photometrus process flatfield -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
 
     flatfield.flat_field_cmd(in_path=astrompath, out_path=FFpath, flat_path=flatpath)
@@ -155,7 +155,7 @@ def sky(astrompath, skypath, sigma, chip):
         else:
             no_flat = True
 
-        print('\nEquivalent argparse cmd: python ./sky/gen_sky.py -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
+        print('\nEquivalent argparse cmd: photometrus process gensky -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
         gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
 
@@ -180,12 +180,12 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
         no_flat = True
 
     if sex:
-        print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -in_path %s -out_path %s' %
+        print('\nEquivalent argparse cmd: photometrus process skysub -sex -in_path %s -out_path %s' %
               (astrompath, subpath))
 
         sky_sub.sky_sub(in_path=astrompath, out_path=subpath, no_flat=no_flat, sex=True)
     else:
-        print('\nEquivalent argparse cmd: python ./sky/sky_sub.py -sex -in_path %s -out_path %s -sky_path %s' %
+        print('\nEquivalent argparse cmd: photometrus process skysub -in_path %s -out_path %s -sky_path %s' %
               (astrompath, subpath, skypath))
 
         sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
@@ -194,17 +194,19 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
 # %% astrometry shift
 
 
-def shift(subpath, band, bulge=False):
+def shift(subpath, band, bulge=False, old=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     imgname = all_fits[0]
 
-    print('\nEquivalent argparse cmd: python ./astrom/astrom_shift.py -dir %s -imagename %s -band %s' %
+    print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
           (subpath, imgname, band))
 
     if bulge:
         astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
+    elif old:
+        astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
     else:
         astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
 
@@ -224,7 +226,7 @@ def astromatic_astrometry(subpath, sex=None):
     #        print('Could not run with exit error %s' % err)
     # else:
 
-    print('\nEquivalent argparse cmd: python ./astrom/astrometry.py -double_solve -path %s' % subpath)
+    print('\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path %s' % subpath)
 
     astrometry.astrometry(path=subpath, double_solve=True)
 
@@ -235,7 +237,7 @@ def stacking(subpath, stackpath, chip):
     os.chdir(gen_pipeline_file_name())
     print('stacking all images using SWARP...')
 
-    print('\nEquivalent argparse cmd: python ./stack/stack.py -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
+    print('\nEquivalent argparse cmd: photometrus process stack -sub %s -stack %s -chip %i' % (subpath, stackpath, chip))
 
     stack.stack(subpath=subpath, stackpath=stackpath, chip=chip)
 
@@ -272,6 +274,9 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             rotoff_check = int(imghdr['ROTOFF'])
             print('ROTOFF value is real: %i... Moving on, but astrometry is likely to fail, so examine images further!'
                   % rotoff_check)
+            if not bulge:
+                print('Improved shift algorithm failed... Attempting old shift algorithm. *MAY HAVE INACCURACY*')
+                shift(astromdir, band, old=True)
             break
         except (ValueError, KeyError):
             print('ROTOFF value is not real!, Varying ROTOFF value by +90 deg...')
@@ -348,17 +353,17 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 # %%
 
 
-def auto_bulge_detect(directory):
-    fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
-    first_fits = os.path.join(directory, fits_files[0])
-    hdr = fits.getheader(first_fits)
-
-    case = hdr['OBJTYPE']
-    bulge = bulge_checker(case)
-    if bulge:
-        print('Bulge field detected! Switching to bulge setup if not already specified!')
-
-    return bulge
+# def auto_bulge_detect(directory):
+#     fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
+#     first_fits = os.path.join(directory, fits_files[0])
+#     hdr = fits.getheader(first_fits)
+#
+#     case = hdr['OBJTYPE']
+#     bulge = bulge_checker(case)
+#     if bulge:
+#         print('Bulge field detected! Switching to bulge setup if not already specified!')
+#
+#     return bulge
 
 
 defaults = dict(sigma=4)

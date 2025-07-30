@@ -12,7 +12,7 @@ import threading
 from datetime import datetime as dt
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photomitrus')
-from photomitrus.settings import gen_config_file_name
+from photomitrus.settings import (gen_config_file_name, auto_bulge_detect)
 
 #%%
 
@@ -28,9 +28,11 @@ def sextract(imgdir, f, sx, ap):
     # print(pre + ext + ' sextracted!')
 
 
-def sex(imgdir, bulge=False):
+def sex(imgdir):
     os.chdir(str(imgdir))
+    bulge = auto_bulge_detect(imgdir)
     if bulge:
+        print('Using bulge astromatic configs...')
         sx = gen_config_file_name('bulge_new.config')
         ap = gen_config_file_name('tempsource.param')
     else:
@@ -112,7 +114,7 @@ def double_astrom(imgdir):
     # beginning from where astrom_shift_bulge solved
     start_time = dt.now()
     print('\nSextracting shift-corrected fits files!')
-    sex(imgdir, bulge=True)                     # sextract shift-solved fits files
+    sex(imgdir)                     # sextract shift-solved fits files
     print('Running SCAMP w/ 2nd order distortion polynomial...')
     scamp(imgdir, distortdeg=2)                 # scamp shift-solved cat files w/ 2d poly solve
     print('Adding .head files directly to fits hdrs...')
@@ -121,7 +123,7 @@ def double_astrom(imgdir):
     rename_head(imgdir)                         # renames .head files to .2d.head to differentiate betw. later scamp run
 
     print('\nSextracting 2nd order scamp-corrected fits files!')
-    sex(imgdir, bulge=True)                     # sextract 2d-solved fits files
+    sex(imgdir)                     # sextract 2d-solved fits files
     print('Running SCAMP w/ 4th order distortion polynomial...')
     scamp(imgdir)                               # scamp 2d-solved cat files w/ 4d poly solve
     print('Adding 4th order .head files directly to fits hdrs...')
