@@ -33,6 +33,6 @@ def combine_header_and_fits(header_file, fits_file, remove_header_file=False):
 
 
 def combine_header_and_fits_list(fits_file_paths, remove_header_file=False, header_extension='.head'):
-    header_file_paths = [os.path.splitext(f)[0] for f in fits_file_paths]
+    header_file_paths = [os.path.splitext(f)[0]+header_extension for f in fits_file_paths]
     for header_file_path, fits_file_path in zip(header_file_paths, fits_file_paths):
         combine_header_and_fits(header_file_path, fits_file_path, remove_header_file)
