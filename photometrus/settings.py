@@ -166,7 +166,7 @@ def gen_flat_dir():
     base_dir = gen_user_prime_dir()
     flat_dir = os.path.join(base_dir, 'mflats')
     if not os.path.exists(flat_dir):
-        os.makedirs(flat_dir)
+        os.makedirs(os.path.join(flat_dir, 'auxiliary_mflats'))
     return flat_dir
 
 
