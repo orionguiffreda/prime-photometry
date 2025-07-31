@@ -370,8 +370,10 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 
 
 def master(
-        parentdir, chip, band, sigma=4, date=None, fullramplist=None, rot_val=None, sex=False, compress=False,
-        sky_override=None, removal=False, bulge=False
+        parentdir=defaults['parent'], chip=defaults['chip'], band=defaults['band'], sigma=defaults['sigma'],
+        date=defaults['date'], fullramplist=defaults['ramplist'], rot_val=defaults['rot_val'],
+        sky_override=defaults['sky_override_path'], removal=defaults['removal'], bulge=defaults['bulge'],
+        sex=defaults['sex'], compress=defaults['compress'],
 ):
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
     if fullramplist:
@@ -387,7 +389,7 @@ def master(
 
     # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
     flatfielding(initial_ramps, FFdir, band, chip, date)
-    bulge = auto_bulge_detect(FFdir)
+    # bulge = auto_bulge_detect(FFdir)
     if sex or sky_override or bulge:
         pass
     else:
@@ -432,25 +434,27 @@ def main():
     parser = argparse.ArgumentParser(
         description='Automation of the backbone of pipeline, currently processes 1 chip at a time')
     parser.add_argument('-parent', type=str,
-                        help='[str], parent directory of all outputs')
+                        help='[str], parent directory of all outputs', default=defaults['parent'])
     parser.add_argument('-ramplist', type=str,
                         help='[str], list of filepaths to ramp files to conduct processing on, in format: '
                              '"image1.fits,image2.fits,image3.fits,...".  For usage w/ '
                              'multi_master.py, better alternative to downloading ramp data')
     parser.add_argument('-chip', type=int, help='[int], number of detector')
-    parser.add_argument('-band', type=str, help='*NOT NECESSARY UNLESS USING -FF* [str], band of images, ex. "J"',
-                        default=None)
+    parser.add_argument('-band', type=str, help='band of images, ex. "J"',
+                        default=defaults['band'])
     parser.add_argument('-sigma', type=int, help='[int], sigma value for sky sub sigma clipping, default = 4',
                         default=defaults["sigma"])
     parser.add_argument('-date', type=str, help='date of observation (yyyymmdd), useful for chosing mflats',
-                        default=None)
+                        default=defaults['date'])
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
-                                                     ' (default = 48 deg or 172800")', default=None)
+                                                     ' (default = 48 deg or 172800")', default=defaults['rot_val'])
     # parser.add_argument('-no_FF', action='store_true', help='optional flag, does not use flat fielding in pipeline')
     parser.add_argument('-sex', action='store_true',
-                        help='optional flag, to utlize sextractor background subtraction instead, do not currently use!')
-    parser.add_argument('-compress', action='store_true', help='optional flag, use fpack to compress stacked images')
+                        help='optional flag, to utlize sextractor background subtraction instead, do not currently use!',
+                        default=defaults['sex'])
+    parser.add_argument('-compress', action='store_true', help='optional flag, use fpack to compress stacked images',
+                        default=defaults['compress'])
     # parser.add_argument('-no_shift', action='store_true',help='optional flag, STOPS use of astrometric shifting script')
     # parser.add_argument('-skygen_start',  action='store_true', help='optional flag, starts pipeline at sky gen step')
     # parser.add_argument('-skysub_start', action='store_true', help='optional flag, starts pipeline at sky sub step')
@@ -459,17 +463,17 @@ def main():
     # parser.add_argument('-net_refine', action='store_true',help='optional flag, used to automatically refine astrometry using astrometry.net')
     parser.add_argument('-removal', action='store_true',
                         help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
-                             'stacks; intended for space saving in large nights of observation')
+                             'stacks; intended for space saving in large nights of observation', default=defaults['removal'])
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
-                        default=None)
+                        default=defaults['sky_override_path'])
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future')
     args, unknown = parser.parse_known_args()
 
-    master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.sex,
-           args.compress, args.sky_override, args.removal, args.bulge)
+    master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.sky_override,
+           args.removal, args.bulge, args.sex, args.compress)
 
 
 if __name__ == "__main__":

@@ -96,19 +96,16 @@ def missfits(imgdir):
 
 #%%
 
-def rename_head(directory):
+def remove_head(directory):
     fnames = ['.head']
     for f in os.listdir(directory):
         for name in fnames:
             if f.endswith(name):
-                f_newname = os.path.splitext(f)[0]+'.2d.head'
                 path = os.path.join(directory, f)
-                newpath = os.path.join(directory, f_newname)
                 try:
-                    os.rename(path, newpath)
+                    os.remove(path)
                 except Exception as e:
-                    print(f"Error renaming file: {path} - {e}")
-
+                    print(f"Error removing file: {path} - {e}")
 
 def double_astrom(imgdir):
     # beginning from where astrom_shift_bulge solved
@@ -119,8 +116,8 @@ def double_astrom(imgdir):
     scamp(imgdir, distortdeg=2)                 # scamp shift-solved cat files w/ 2d poly solve
     print('Adding .head files directly to fits hdrs...')
     missfits(imgdir)                            # add 2d-solved scamp hdrs to shifted fits files
-    print('Renaming head files to .2d.head to differentiate from next scamp run...')
-    rename_head(imgdir)                         # renames .head files to .2d.head to differentiate betw. later scamp run
+    print('Removing 2nd order .head files...')
+    remove_head(imgdir)                         # renames .head files to .2d.head to differentiate betw. later scamp run
 
     print('\nSextracting 2nd order scamp-corrected fits files!')
     sex(imgdir)                     # sextract 2d-solved fits files

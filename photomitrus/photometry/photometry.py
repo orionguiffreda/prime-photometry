@@ -28,10 +28,11 @@ from photomitrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETR
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
                                   AB_OFFSET_DICT)
 
+from photomitrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
 # %%
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings(action="ignore", module="scipy", message="^One or more")
-defaults = dict(crop=300, RA=None, DEC=None, thresh='4.0', sigma=3)
 
 
 # Read LDAC tables
@@ -1350,11 +1351,11 @@ def grb_rad_convert(rad):
 
 
 def int_calibration(
-        name, directory, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
-        mag_low_lim=None, mag_high_lim=None, grb_ra=None, grb_dec=None,
-        grb_coordlist=None, grb_radius=4.0
+        name, directory, band, crop, sigma, given_catalog, survey,
+        mag_low_lim, mag_high_lim, grb_ra, grb_dec,
+        grb_coordlist, grb_radius
 ):
-    print('3 sigma fit y-intercept > 0.5! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
+    print('3 sigma fit y-intercept > 0.15! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
     data, header, w, raImage, decImage, bulge = img(directory, name, crop)
     Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                              mag_high_lim, bulge)
@@ -1396,10 +1397,10 @@ def removal(directory):
 
 
 def photometry(
-        full_filename, band, crop=defaults['crop'], sigma=defaults['sigma'], given_catalog=None, survey=None,
-        mag_low_lim=None, mag_high_lim=None, no_plots=False,
-        keep=False, grb_only=False, grb_ra=defaults['RA'], grb_dec=defaults['DEC'], grb_coordlist=None,
-        grb_radius=defaults['thresh'], int_cal=False
+        full_filename=defaults['filepath'], band=defaults['band'], crop=defaults['crop'], sigma=defaults['sigma_photom'], given_catalog=defaults['catalog'], survey=defaults['survey'],
+        mag_low_lim=defaults['mag_low'], mag_high_lim=defaults['mag_high'], no_plots=defaults['no_plots'],
+        keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
+        grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal']
 ):
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -1455,18 +1456,18 @@ def photometry(
             else:
                 prev_intercept = intercept
                 revert_flag = False
-                while intercept > 0.15:
+                while abs(intercept) > 0.15:
                     print('\nIntercept = %.4f\n' % intercept)
                     mag_low_cutoff += 0.5
                     new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
-                    if new_intercept > prev_intercept:
+                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_radius)
+                    if abs(new_intercept) > abs(prev_intercept):
                         print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                               "redoing...\n" % (new_intercept, prev_intercept))
                         intercept = prev_intercept
                         new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
                                                         mag_low_cutoff-0.5, mag_high_lim, grb_ra,
-                                                        grb_dec, grb_coordlist, grb_thresh)
+                                                        grb_dec, grb_coordlist, grb_radius)
                         revert_flag = True
                         break
                     else:
@@ -1485,59 +1486,62 @@ def main():
         description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
                     'outputs ecsv w/ corrected mags')
     parser.add_argument('-exp_query', action='store_true', help='optional flag, exports ecsv of astroquery results '
-                                                                'along with photometry')
-    parser.add_argument('-exp_query_only', action='store_true',
-                        help='optional flag, use if photom is run already to only generate query results')
+                                                                'along with photometry', default=defaults['exp_query'])
+    # parser.add_argument('-exp_query_only', action='store_true',
+    #                     help='optional flag, use if photom is run already to only generate query results')
     parser.add_argument('-no_plots', action='store_true',
                         help='optional flag, stops creation of mag comparison plot betw. PRIME and survey, '
-                             'along with residual plot w/ statistics, lim mag plot')
+                             'along with residual plot w/ statistics, lim mag plot', default=defaults['no_plots'])
     parser.add_argument('-keep', action='store_true',
                         help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
-                             ' i.e. the ".cat" and ".psf" files')
+                             ' i.e. the ".cat" and ".psf" files', default=defaults['keep'])
     parser.add_argument('-grb_only', action='store_true',
-                        help='optional flag, use if running -grb again on already created catalog')
+                        help='optional flag, use if running -grb again on already created catalog',
+                        default=defaults['grb_only'])
     parser.add_argument('-filepath', type=str, help='[str], full file path of stacked image, can also place just'
-                                                    'filename and it will default to current directory')
-    parser.add_argument('-band', type=str, help='[str], band, ex. "J"')
+                                                    'filename and it will default to current directory',
+                        default=defaults['filepath'])
+    parser.add_argument('-band', type=str, help='[str], band, ex. "J"', default=defaults['band'])
     parser.add_argument('-survey', type=str,
                         help='[str], *NOW OPTIONAL* manually specify which survey to query, choose from VHS, 2MASS'
                              ', VIKING, Skymapper, SDSS, UKIDSS, & DES.  If you leave out this arg, it will automatically'
                              'pick a survey from the above list depending on the area and coverage.',
-                        default=None)
+                        default=defaults['survey'])
     parser.add_argument('-crop', type=int, help='[int], # of pixels from edge of image to crop, default = 300',
                         default=defaults["crop"])
     parser.add_argument('-sigma', type=float, help='[float], # of sigma w/ which to sigma clip for '
                                                   'zero point calculation, default = 3',
-                        default=defaults["sigma"])
+                        default=defaults["sigma_photom"])
     parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated'
                                                    'catalog for photometry INSTEAD of querying, put in full file path.',
-                        default=None)
+                        default=defaults["catalog"])
     parser.add_argument('-mag_low', type=float, help='[float], Lower mag cutoff for survey query & crossmatch'
                                                         ' settings default = 12.5',
-                        default=None)
+                        default=defaults["mag_low"])
     parser.add_argument('-mag_high', type=float, help='[float], Higher mag cutoff for survey query & crossmatch'
                                                         ' settings default = 21, currently only applies to DES & Skymapper',
-                        default=None)
+                        default=defaults["mag_high"])
     parser.add_argument('-grb_ra', type=str, help='[str], RA for GRB source, either in hh:mm:ss or decimal'
                                                   '*NOTE* When using sexagesimal, use "-grb_ra=value_here" NOT "-grb_ra '
                                                   'value_here", as argparse doesnt like negative sexagesimals',
-                        default=defaults["RA"])
+                        default=defaults["grb_ra"])
     parser.add_argument('-grb_dec', type=str, help='[str], DEC for GRB source, either in dd:mm:ss or decimal'
                                                    '*NOTE* When using sexagesimal, use "-grb_dec=value_here" NOT "-grb_dec '
                                                   'value_here", as argparse doesnt like negative sexagesimals',
-                        default=defaults["DEC"])
+                        default=defaults["grb_dec"])
     parser.add_argument('-grb_coordlist', type=str, nargs='+',
                         help='[float] Used to check multiple GRB locations.  Input RA and DECs of locations '
                              'with the format: -coordlist 123,45 -123,-45 etc..  *DONT USE -RA '
-                             '& -DEC BUT INCLUDE -grb_radius*', default=None)
+                             '& -DEC BUT INCLUDE -grb_radius*', default=defaults["grb_coordlist"])
     parser.add_argument('-grb_radius', type=str,
                         help='[str], # of arcsec diameter to search for GRB, default = 4.0".  You can specify arcsec,'
                              ' arcmin, or deg w/ an underscore.  Ex. "-grb_radius 3_arcmin" will specify an area of 3 '
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
-                        default=defaults["thresh"])
+                        default=defaults["grb_radius"])
     parser.add_argument('-int_cal', action='store_true',
                         help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
-                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.')
+                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
+                        default=defaults["int_cal"])
     args, unknown = parser.parse_known_args()
     # print(args)
     # print(unknown)

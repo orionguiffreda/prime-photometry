@@ -10,6 +10,7 @@ from photomitrus.getdata import download_data
 from photomitrus.getfiles import get_data_files
 from photomitrus.master import master
 from photomitrus.settings import (PIPELINE_DEFAULT_DIR, mflat_checker)
+from photomitrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
 
@@ -81,8 +82,8 @@ def datadownload(parentdir, target, band, date, chip):
 #%%
 
 
-def refineprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None,
-                  bulge=False):
+def refineprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
+                  bulge):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -93,8 +94,8 @@ def refineprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=Non
            sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge)
 
 
-def shiftprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None,
-                 bulge=False):
+def shiftprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
+                 bulge):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -105,8 +106,8 @@ def shiftprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None
            removal=removal, fullramplist=fullramplist, bulge=bulge)
 
 
-def baseprocess(parentdir, chip, band, date, rot_val=48, sky_override_path=None, removal=False, fullramplist=None,
-                bulge=False):
+def baseprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
+                bulge):
     if chip == 1 or chip == 2:
         sigma = 4
     elif chip == 3 or chip == 4:
@@ -136,10 +137,11 @@ def processparallel(target, date, band, chips):
 
 
 def multi_master(
-        target, date, band, chip=None, parentdir=None, rot_val=48, no_shift=False, astromnet=False,
-        no_download=False, sky_override_path=None, removal=False, no_get_files=False, no_mflat=False, bulge=False,
-        auto_mode=False,
-        input_ramp_lists=None
+        target=defaults['target'], date=defaults['date'], band=defaults['band'], chip=defaults['chip'],
+        parentdir=defaults['parent'], rot_val=defaults['rot_val'], no_shift=defaults['no_shift'], astromnet=defaults['astromnet'],
+        no_download=defaults['no_download'], sky_override_path=defaults['sky_override_path'], removal=defaults['removal'],
+        no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'], auto_mode=defaults['automode'],
+        input_ramp_lists=defaults['ramplist']
 ):
     if not no_mflat:
         auto_mflat_gen(date)
@@ -250,42 +252,56 @@ def main():
     #                                                            ' only use on obs. w/ small amount of images!')
     parser.add_argument('-parent', type=str, help='[str] *NOW OPTIONAL* specify parent directory to '
                                                   'store all data products, otherwise it will automatically generate @ '
-                                                  'the default directory w/ the format "/target_date/band/"', default=None)
-    parser.add_argument('-target', type=str, help='[str] target field, objname in log, ex. "field1234"')
-    parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
-    parser.add_argument('-band', type=str, help='[str] filter, ex. "J"')
+                                                  'the default directory w/ the format "/target_date/band/"',
+                                            default=defaults['parent'])
+    parser.add_argument('-target', type=str, help='[str] target field, objname in log, ex. "field1234"',
+                        default=defaults['target'])
+    parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format',
+                        default=defaults['date'])
+    parser.add_argument('-band', type=str, help='[str] filter, ex. "J"', default=defaults['band'])
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
-                                                ' format.',default=None)
+                                                ' format.', default=defaults['chip'])
     parser.add_argument('-no_get_files', action='store_true', help='optional flag, use if you want to download '
                                                                      'through old method (scp), new method passes file '
-                                                                     'paths (new saves space and time)')
+                                                                     'paths (new saves space and time)',
+                        default=defaults['no_get_files'])
     parser.add_argument('-no_download', action='store_true', help='optional flag, use if you *ALREADY* have the data'
                                                                   'downloaded, *NOT* to use new file path method.  Use w/ '
-                                                                  '-no_get_files!')
+                                                                  '-no_get_files!',
+                        default=defaults['no_download'])
     parser.add_argument('-no_shift', action='store_true', help='optional flag, DO NOT use astrometric shift'
-                                            ' script in place of astrom.net, will not use either (shift is default)')
-    parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry')
+                                            ' script in place of astrom.net, will not use either (shift is default)',
+                        default=defaults['no_shift'])
+    parser.add_argument('-astromnet', action='store_true', help='optional flag, use astrom.net to reinforce astrometry',
+                        default=defaults['astromnet'])
     parser.add_argument('-removal', action='store_true',
                         help='optional flag, used to remove intermediate subdirectories and data, leaving only the '
-                             'stacks & skies; intended for space saving in large nights of observation')
+                             'stacks & skies; intended for space saving in large nights of observation',
+                        default=defaults['removal'])
     parser.add_argument('-rot_val', type=float, help='[float] optional, put in your rot angle in deg,'
                                                      ' if you had a non-default rotation angle in your obs'
-                                                     ' (default = 48 deg or 172800")', default=48)
+                                                     ' (default = 48 deg or 172800")', default=defaults['rot_val'])
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
-                        default=None)
+                        default=defaults['sky_override_path'])
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
-                                                               ' exist')
+                                                               ' exist', default=defaults['no_mflat'])
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
-                             ' automate this in the future')
+                             ' automate this in the future', default=defaults['bulge'])
+    parser.add_argument('-ramplist', type=str,
+                        help='[str], list of filepaths to ramp files to conduct processing on, in format: '
+                             '"image1.fits,image2.fits,image3.fits,...".  For usage w/ '
+                             'multi_master.py, better alternative to downloading ramp data', default=defaults['ramplist'])
+    parser.add_argument('-auto', action='store_true',
+                        help='use setup designed for full night automatic processing', default=defaults['automode'])
     args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
 
     multi_master(target=args.target, date=args.date, band=args.band, chip=args.chip, parentdir=args.parent,
                  rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,
                  sky_override_path=args.sky_override, removal=args.removal, no_get_files=args.no_get_files,
-                 no_mflat=args.no_mflat, bulge=args.bulge)
+                 no_mflat=args.no_mflat, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist)
 
 
 if __name__ == "__main__":

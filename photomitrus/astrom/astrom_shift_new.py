@@ -198,11 +198,11 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     keycheck = result.keys()
 
-    acc_source_num = 150    # total number of sources allowed in full query before trying smaller box
+    acc_source_num = 250    # total number of sources allowed in full query before trying smaller box
 
     # contains changes in bounds to iterate through if too many sources:
     # format: [boxsize multiplier, mag lim scalar change, errbits column constraint]
-    bounds_change_list = [[1.0, 0, '<=16'], [1.0, 0.5, '<=16'], [1.0, 0.5, '<16'], [0.5, 0.5, '<16']]
+    bounds_change_list = [[1.0, 0, '<=16'], [1.0, 0.5, '<=16'], [1.0, 0.5, '<16'], [0.75, 0.5, '<16']]
 
     for chosen_survey, catNum in catalogs:
         for k in keycheck:
@@ -566,7 +566,7 @@ def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, e
 
 def iterate_and_test(
         xy_shifts, directory, header, data, imageName, filter_used, eff_boxsize, crop, coords, catNum, magcol,
-        crsmtch_thresh_low, crsmtch_thresh_high, crsmtch_iters, maglow, maghigh, errbits
+        crsmtch_thresh_low, crsmtch_thresh_high, crsmtch_iters, maglow, maghigh, errbits, bulge=False
 ):
     print('Beginning iterative testing of sorted shifts...')
     best_completion = -1
@@ -598,7 +598,10 @@ def iterate_and_test(
                                                     wcs, origin=1)
         # SourcePrimeCoords = SkyCoord(ra=inner_primesources_iter['ALPHA_J2000'], dec=inner_primesources_iter['DELTA_J2000'],
         #                          frame='icrs', unit='degree')
-        photoDistThresh = 0.6 * u.arcsec
+        if bulge:
+            photoDistThresh = 0.6 * u.arcsec    # looser crossmatch dist for all_sky
+        else:
+            photoDistThresh = 1.0 * u.arcsec
         idx_prime, idx_cat, d2d, d3d = SourceCatCoords.search_around_sky(SourcePrimeCoords, photoDistThresh)
 
         # Value to measure crossmatch completion, if high enough, then should be a successful solve
@@ -755,7 +758,8 @@ def shift(
 
     ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, filter_used,
                                                           eff_boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
-                                                          iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits)
+                                                          iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits,
+                                                          bulge=bulge)
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
