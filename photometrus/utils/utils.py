@@ -32,11 +32,7 @@ def combine_header_and_fits(header_file, fits_file, remove_header_file=False):
         os.remove(header_file)
 
 
-def combine_header_and_fits_list(file_list, remove_header_file=False, fits_extension='.new', header_extension='.head'):
-    prefixes = [os.path.splitext(f)[0] for f in file_list]
-    prefixes = set(prefixes)
-    for prefix in prefixes:
-        header = prefix + header_extension
-        fits_file = prefix + fits_extension
-        if os.path.isfile(fits_file) and os.path.isfile(header):
-            combine_header_and_fits(header, fits_file, remove_header_file=remove_header_file)
+def combine_header_and_fits_list(fits_file_paths, remove_header_file=False, header_extension='.head'):
+    header_file_paths = [os.path.splitext(f)[0] for f in fits_file_paths]
+    for header_file_path, fits_file_path in zip(header_file_paths, fits_file_paths):
+        combine_header_and_fits(header_file_path, fits_file_path, remove_header_file)
