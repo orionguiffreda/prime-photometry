@@ -1,6 +1,6 @@
 import pandas as pd
 import os
-from photometrus.settings import gen_pipeline_file_name
+from photometrus.settings import gen_pipeline_file_name, gen_flat_dir
 from photometrus.preprocess import gen_flat
 from pandas import to_datetime
 
@@ -19,7 +19,8 @@ def auto_flat_creation(date, band=None, chip=None):
     else:
         chips = [chip]
 
-    mflat_storage_dir = gen_pipeline_file_name() + '/mflats/'
+    # mflat_storage_dir = gen_pipeline_file_name() + '/mflats/'
+    mflat_storage_dir = gen_flat_dir() + os.path.sep
 
     for f in chips:
 

@@ -13,6 +13,7 @@ from datetime import datetime as dt
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
 from photometrus.settings import (gen_config_file_name, auto_bulge_detect)
+from photometrus.utils.utils import combine_header_and_fits_list
 
 #%%
 
@@ -88,10 +89,11 @@ def missfits(imgdir):
     mc = gen_config_file_name('default.missfits')
     img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('flat.fits') or f.endswith('flat.new')]
     img_list = [os.path.join(imgdir, f) for f in img_list]
-    img_list = ' '.join(img_list)
+    # img_list = ' '.join(img_list)
+    combine_header_and_fits_list(img_list)
     command = ('missfits -c %s %s' % (mc, img_list))
     print('Executing command: %s' % command)
-    subprocess.run(command.split(), check=True)
+    # subprocess.run(command.split(), check=True)
 
 
 #%%

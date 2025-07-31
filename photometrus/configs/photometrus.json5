@@ -1,0 +1,214 @@
+{
+  "PIPELINE_DEFAULT_DIR": '/mnt/photometry/',
+  "PHOTOMETRY_MAG_LOWER_LIMIT": 12.5,
+  "PHOTOMETRY_MAG_UPPER_LIMIT": 23,
+  "PHOTOMETRY_QUERY_WIDTH": 48,
+  // in arcmin, should cover the whole chip even with 45 deg rotation
+  "PHOTOMETRY_QUERY_CATALOGS": {
+    'VHS': [
+      'J',
+      'II/367/'
+    ],
+    'VIKING': [
+      'J',
+      'II/343/viking2'
+    ],
+    'VVV_J': [
+      'J',
+      'II/348/vvv2'
+    ],
+    '2MASS': [
+      'J',
+      'II/246/'
+    ],
+    'VVV_Y': [
+      'Y',
+      'II/348/vvv2'
+    ],
+    'Skymapper': [
+      'Z',
+      'II/379/smssdr4'
+    ],
+    'SDSS': [
+      'Z',
+      'V/154/sdss16'
+    ],
+    'DES_Z': [
+      'Z',
+      'II/371/des_dr2'
+    ],
+    'VVV_Z': [
+      'Z',
+      'II/348/vvv2'
+    ],
+    'UKIDSS': [
+      'Y',
+      'II/319/las9'
+    ],
+    'PanSTARRS': [
+      'Y',
+      'II/349/ps1'
+    ],
+    'DES_Y': [
+      'Y',
+      'II/371/des_dr2'
+    ]
+  },
+  //AB mag surveys: DES, Skymapper, SDSS, & PSTARRS
+  "AB_OFFSET_DICT": {
+    'J': 0.94,
+    'H': 1.38,
+    'Y': 0.62,
+    'Z': 0.52
+  },
+  "PHOTOMETRY_LIM_MAGS": {
+    'VHS': 19.5,
+    'VIKING': 21.2,
+    'VVV': 20.2,
+    '2MASS': 15.5,
+    'Skymapper': 22,
+    'DES_Z': 23.1,
+    'SDSS': 23,
+    'UKIDSS': 20.2,
+    'DES_Y': 21.7,
+    'PanSTARRS': 21.4
+  },
+  //chip avg zp (for bulge field astrom)
+  //# 23.88
+  //# 21.836
+  "GB_QUERY_CATALOGS": {
+    'VVV': [
+      'J',
+      'II/348/vvv2'
+    ],
+    '2MASS': [
+      'J',
+      'II/246/'
+    ],
+    'Skymapper': [
+      'Z',
+      'II/379/smssdr4'
+    ]
+  },
+  "CHIP_ZPS": {
+    'Z': [
+      23.88
+    ],
+    'Y': [
+      23.88
+    ],
+    'J': [
+      23.88
+    ],
+    'H': [
+      24.111
+    ]
+  },
+  "GET_DATA_SETTINGS": {
+    'log_folder_location': '/nfs/prime01/work/LOG/Ramp_LOG',
+    'funpack_output_dir': '/mnt/photometry/unarchived/C%CHIP%/%SERIAL_TRUNC%',
+    'remote_file_formats': {
+      'ramp': [
+        '/nfs/home/prime/Data/ramp/%SERIAL%C1.fits.ramp',
+        '/nfs/xion2/prime/Data/ramp/%SERIAL%C2.fits.ramp',
+        '/nfs/xion3/prime/Data/ramp/%SERIAL%C3.fits.ramp',
+        '/nfs/xion4/prime/Data/ramp/%SERIAL%C4.fits.ramp'
+      ],
+      'raw': [
+        '/nfs/home/prime/Data/raw/%SERIAL%C1.fits',
+        '/nfs/xion2/prime/Data/raw/%SERIAL%C2.fits',
+        '/nfs/xion3/prime/Data/raw/%SERIAL%C3.fits',
+        '/nfs/xion4/prime/Data/raw/%SERIAL%C4.fits'
+      ],
+      'raw_fz': [
+        '/nfs/xion3/prime/raw_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.fz',
+        '/nfs/xion4/prime/raw_fz/C2/%SERIAL_TRUNC%/%SERIAL%C2.fits.fz',
+        '/nfs/xion3/prime/raw_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.fz',
+        '/nfs/xion4/prime/raw_fz/C4/%SERIAL_TRUNC%/%SERIAL%C4.fits.fz'],
+      'ramp_fz': [
+        '/nfs/xion3/prime/ramp_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.ramp.fz',
+        '/nfs/xion4/prime/ramp_fz/C2/%SERIAL_TRUNC%/%SERIAL%C2.fits.ramp.fz',
+        '/nfs/xion3/prime/ramp_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.ramp.fz',
+        '/nfs/xion4/prime/ramp_fz/C4/%SERIAL_TRUNC%/%SERIAL%C4.fits.ramp.fz'
+      ]
+    },
+    'replace_list': [
+      [
+        'all sky grid',
+        'all_sky_grid'
+      ],
+      [
+        'no_grid  ',
+        'no_grid '
+      ],
+      [
+        'no_grid_test  ',
+        'no_grid_test '
+      ],
+      [
+        'field10554_ test',
+        'field10554_test'
+      ],
+      [
+        'fucus test',
+        'focus_test'
+      ],
+      [
+        'galactic plane',
+        'galactic_plane'
+      ],
+      [
+        'standard star',
+        'standard_star'
+      ],
+      [
+        'rotator test',
+        'rotator_test'
+      ],
+      [
+        'SKY M7',
+        'SKY_M7'
+      ],
+      [
+        'LVC S230522n',
+        'LVC_S230522n'
+      ],
+      [
+        'Dec test',
+        'Dec_test'
+      ],
+      [
+        'Galctic plane',
+        'Galactic_plane'
+      ],
+      [
+        'Glactic plane',
+        'Galactic_plane'
+      ],
+      [
+        'Galactic plane',
+        'Galactic_plane'
+      ],
+      [
+        'Galactic Plane',
+        'Galactic_plane'
+      ],
+      [
+        'Vignetting Test',
+        'Vignetting_Test'
+      ],
+      [
+        'SPIS J0539-0059',
+        'SPIS_J0539-0059'
+      ],
+      [
+        'Frost Check',
+        'Frost_Check'
+      ],
+      [
+        'GainTest LED',
+        'GainTest_LED'
+      ],
+    ]
+  }
+}

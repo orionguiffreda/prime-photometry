@@ -25,6 +25,7 @@ import pysftp
 from pandas import read_csv, to_datetime
 
 from photometrus.utils.defaults import FILE_DEFAULTS
+from photometrus.settings import GET_DATA_SETTINGS
 
 file_types = ['raw_fz', 'ramp', 'raw']
 file_types_str = ','.join(file_types)
@@ -73,41 +74,7 @@ remote_file_formats = {
     ]
 }
 
-replace_list = [
-    ('all sky grid', 'all_sky_grid'),
-    ('no_grid  ', 'no_grid '),
-    ('no_grid_test  ', 'no_grid_test '),
-    ('field10554_ test', 'field10554_test'),
-    ('fucus test', 'focus_test'),
-    ('galactic plane', 'galactic_plane'),
-    ('standard star', 'standard_star'),
-    ('rotator test', 'rotator_test'),
-    ('SKY M7', 'SKY_M7'),
-    ('LVC S230522n', 'LVC_S230522n'),
-    ('Dec test', 'Dec_test'),
-    ('Galctic plane', 'Galactic_plane'),
-    ('Glactic plane', 'Galactic_plane'),
-    ('Galactic plane', 'Galactic_plane'),
-    ('Galactic Plane', 'Galactic_plane'),
-    ('Vignetting Test', 'Vignetting_Test'),
-    ('SPIS J0539-0059', 'SPIS_J0539-0059'),
-    ('Frost Check', 'Frost_Check'),
-    ('GainTest LED', 'GainTest_LED'),
-
-    # ('OH FilterTest', 'OH_FilterTest'),
-    # ('OY FilterTest', 'OY_FilterTest'),
-    # ('OJ FilterTest', 'OJ_FilterTest'),
-    # ('OO FilterTest', 'OO_FilterTest'),
-    # ('ZH FilterTest', 'ZH_FilterTest'),
-    # ('ZY FilterTest', 'ZY_FilterTest'),
-    # ('ZJ FilterTest', 'ZJ_FilterTest'),
-    # ('ZO FilterTest', 'ZO_FilterTest'),
-    # ('NBH FilterTest', 'NBH_FilterTest'),
-    # ('NBY FilterTest', 'NBY_FilterTest'),
-    # ('NBJ FilterTest', 'NBJ_FilterTest'),
-    # ('NBO FilterTest', 'NBO_FilterTest'),
-    # ('DO FilterTest', 'DO_FilterTest'),
-]
+replace_list = GET_DATA_SETTINGS['replace_list']
 
 
 def replace_bad_string(lines):

@@ -5,7 +5,6 @@ import argparse
 from photometrus import multi_master
 from photometrus.photometry import multi_photom
 from photometrus.photometry import ellipticity_logger
-from photometrus.photometry.photometry import defaults
 from photometrus.settings import PIPELINE_DEFAULT_DIR
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
