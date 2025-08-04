@@ -544,20 +544,23 @@ def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
     shifted_inner_primesources = primecat.copy()
     print(shifted_inner_primesources)
 
-    shifted_inner_primesources['X_IMAGE'] += x_shift
-    shifted_inner_primesources['Y_IMAGE'] += y_shift
+    shifted_inner_primesources['X_IMAGE'] += abs(x_shift)
+    shifted_inner_primesources['Y_IMAGE'] += abs(y_shift)
     print(shifted_inner_primesources)
     return shifted_inner_primesources
 
 
 #%%  Rerunning sextractor and astroquery for new source positions
-def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum, magcol, errbits):
+def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum, magcol, errbits,
+                   x_shift, y_shift
+                   ):
     data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
-    sex1(imagename, bulge=bulge)
+    # sex1(imagename, bulge=bulge)
     Q = cat_query(coords, filter_used, eff_boxsize, catNum, magcol, maglow, maghigh, errbits, bulge=bulge)
     # Q = complex_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh, bulge=bulge)
+    shifted_primecat = apply_shifts_to_cat(directory, catname, x_shift, y_shift)
     inner_primesources_iter, inner_catsources_iter, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
-                                                                 maglow=maglow, maghigh=maghigh)
+                                                                 maglow=maglow, maghigh=maghigh, shifted_cat=shifted_primecat)
 
     return inner_primesources_iter, inner_catsources_iter, colnames, w
 
