@@ -79,7 +79,10 @@ def imaging(directory, imageName):
 
     # cat name
     pre = os.path.splitext(imageName)[0]
-    catname = pre+'.cat'
+    if 'shift' in pre:
+        catname = pre[:-6] + '.cat'
+    else:
+        catname = pre+'.cat'
     return data, header, w, raImage, decImage, zp, catname, bulge
 
 
@@ -87,8 +90,8 @@ def imaging(directory, imageName):
 
 
 def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, errbits='<=16', bulge=False):
-    columns = ['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, 'e_%sap3' % band,
-               '%smag' % band, "%smag3" % band, 'e_%smag' % band, '%smag' % band.lower()]
+    columns = ['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%s1ap3' % band,
+               'e_%sap3' % band, '%smag' % band, "%smag3" % band, 'e_%smag' % band, '%smag' % band.lower()]
 
     # chosen coords
     if bulge:
@@ -106,10 +109,20 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
         frame_lat = coords.dec.deg
         frame_lat_str = 'DEC: %.4f' % frame_lat
 
+    if errbits != '<=16':
+        errbits_vvv = errbits[0]
+        errbits_2M = errbits[1]
+    else:
+        errbits_vvv = errbits
+        errbits_2M = '!= null'
     print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
           % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh))
     v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
-                                                "%sperrbits" % band: errbits, "Nd": ">6"}, row_limit=-1)
+                                                "%sperrbits" % band: errbits_vvv,
+                                                "%s1perrb" % band: errbits_vvv,
+                                                "%sflags" % band: errbits_vvv,
+                                                "Cflg": errbits_2M,
+                                                "Nd": ">6"}, row_limit=-1)
     Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
                        catalog=catNum, cache=False, frame=chosen_frame)
     print('Queried source total = ', len(Q[0]))
@@ -178,8 +191,8 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     not_null = '!=null'
 
     # current columns
-    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%smag' % band,
-                        "%smag3" % band, '%smag' % band.lower(),
+    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%s1ap3' % band,
+                        '%smag' % band, "%smag3" % band, '%smag' % band.lower(),
                         '%sPSF' % band.lower(), '%spmag' % band.lower()])
                # column_filters={'%sap3' % band: not_null, '%smag' % band: not_null, "%smag3" % band: not_null
                #     ,'%smag' % band.lower(): not_null, '%sPSF' % band.lower(): not_null, '%spmag' % band.lower(): not_null
@@ -198,17 +211,32 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     keycheck = result.keys()
 
-    acc_source_num = 250    # total number of sources allowed in full query before trying smaller box
+    errbitoptions_2mass = ['!= null','~0??', '~?0?']     # 2mass errbits column, 1st is for J and 2nd is for H
+    if band == 'J':
+        errbit_2mass = errbitoptions_2mass[1]
+    elif band == 'H':
+        errbit_2mass = errbitoptions_2mass[2]
+    else:
+        errbit_2mass = errbitoptions_2mass[0]
+
+    if bulge:
+        acc_source_num = 150    # total number of sources allowed in full query before trying smaller box
+    else:
+        acc_source_num = 400
 
     # contains changes in bounds to iterate through if too many sources:
     # format: [boxsize multiplier, mag lim scalar change, errbits column constraint]
-    bounds_change_list = [[1.0, 0, '<=16'], [1.0, 0.5, '<=16'], [1.0, 0.5, '<16'], [0.75, 0.5, '<16']]
+    bounds_change_list = [[1.0, 0, 0, '<=16', '!= null'], [1.0, 0.5, 0, '<=16', '!= null'],
+                          [1.0, 0.5, 0.5, '<16', errbit_2mass], [1.0, 0.5, 0.75, '<16', errbit_2mass],
+                          [1.0, 0.5, 1.0, '<16', errbit_2mass], [1.0, 0.5, 1.25, '<16', errbit_2mass],
+                          [0.85, 0.5, 1.25, '<16', errbit_2mass]]
 
     for chosen_survey, catNum in catalogs:
         for k in keycheck:
             if catNum in k:
                 print('%s catalog found!' % k)
                 vhs_table = result[''.join(k)]
+                # print(vhs_table)
                 cols = vhs_table.colnames
                 vhs_band_col = vhs_table[cols[2]]
 
@@ -224,21 +252,31 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
                     for bounds in bounds_change_list:  # Try full boxsize, then half if too many sources
                         boxscale = bounds[0]
-                        lim_scalar = bounds[1]
-                        errbits_constraint = bounds[2]
+                        low_lim_scalar = bounds[1]
+                        high_lim_scalar = bounds[2]
+                        errbits_constraint = bounds[3]
+                        errbits_2M = bounds[4]
+
+                        errbits = [errbits_constraint, errbits_2M]
+
 
                         effective_boxsize = boxsize * boxscale
-                        eff_mag_low_cutoff = mag_low_cutoff + lim_scalar
-                        eff_mag_high_cutoff = mag_high_cutoff - lim_scalar
-                        print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+                        eff_mag_low_cutoff = mag_low_cutoff + low_lim_scalar
+                        eff_mag_high_cutoff = mag_high_cutoff - high_lim_scalar
+                        print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, '
+                              'err constraints: %s, %s'
                               % (catNum, frame_long_str, frame_lat_str, effective_boxsize, eff_mag_low_cutoff,
-                                 eff_mag_high_cutoff))
+                                 eff_mag_high_cutoff, errbits_constraint, errbits_2M))
                         try:
                             v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2]],
                                        column_filters={
                                            "%s" % cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
                                            "%sFlag" % band.lower(): "<4",
                                            "%sperrbits" % band: errbits_constraint,
+                                           "%s1perrb" % band: errbits_constraint,
+                                           "%sflags" % band: errbits_constraint,
+                                           "Cflg": errbits_2M,
+                                           "Hclass": "== -1",
                                            "Nd": ">6"
                                        }, row_limit=-1)
 
@@ -275,7 +313,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
             continue
         break
 
-    return Q, coords, catNum, cols[2], eff_mag_low_cutoff, eff_mag_high_cutoff, effective_boxsize, errbits_constraint
+    return Q, coords, catNum, cols[2], eff_mag_low_cutoff, eff_mag_high_cutoff, effective_boxsize, errbits
 
 #%% sextraction / psfex
 
@@ -287,7 +325,7 @@ def sex1(imageName, bulge=False):
     else:
         configFile = gen_config_file_name('bulge_new.config')
 
-    paramName = gen_config_file_name('tempsource.param')
+    paramName = gen_config_file_name('astromshift_new.param')
 
     if imageName.endswith('.fits'):
         catname = imageName[:-5] + '.cat'
@@ -542,11 +580,11 @@ def xyshifts(pairs, inner_primesources, inner_catsources, iters):
 def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
     primecat = Table.read(os.path.join(directory, catname), hdu=2)
     shifted_inner_primesources = primecat.copy()
-    print(shifted_inner_primesources)
+    # print(shifted_inner_primesources)
 
-    shifted_inner_primesources['X_IMAGE'] += abs(x_shift)
-    shifted_inner_primesources['Y_IMAGE'] += abs(y_shift)
-    print(shifted_inner_primesources)
+    # shifted_inner_primesources['X_IMAGE'] += x_shift
+    # shifted_inner_primesources['Y_IMAGE'] += y_shift
+    # print(shifted_inner_primesources)
     return shifted_inner_primesources
 
 
@@ -593,7 +631,7 @@ def iterate_and_test(
         # Rerunning sextractor and astroquery for new source positions
         inner_primesources_iter, inner_catsources_iter, colnames, wcs = (
             shiftiteration(directory, imageshiftname, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum,
-                           magcol, errbits))
+                           magcol, errbits, x_shift=x_shift, y_shift=y_shift))
         # Run crossmatch to determine successful solve
         SourceCatCoords = SkyCoord(ra=inner_catsources_iter[colnames[0]], dec=inner_catsources_iter[colnames[1]],
                                    frame='icrs', unit='degree')
@@ -609,9 +647,9 @@ def iterate_and_test(
 
         # Value to measure crossmatch completion, if high enough, then should be a successful solve
 
-        # print(len(inner_primesources_iter))
-        # print(len(inner_catsources_iter))
-        # print(len(idx_prime))
+        print('PRIME Source Num = ',len(inner_primesources_iter))
+        print('Catalog Source Num = ',len(inner_catsources_iter))
+        print('Crossmatch Source Num = ',len(idx_prime))
         if len(inner_primesources_iter) > len(inner_catsources_iter):
             crsmtch_completion = len(idx_cat) / len(inner_catsources_iter)
         else:

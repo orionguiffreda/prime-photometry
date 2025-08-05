@@ -9,7 +9,7 @@ from photometrus.preprocess import auto_flat
 from photometrus.getdata import download_data
 from photometrus.getfiles import get_data_files
 from photometrus.master import master
-from photometrus.settings import (PIPELINE_DEFAULT_DIR, mflat_checker)
+from photometrus.settings import mflat_checker
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
@@ -26,7 +26,7 @@ def auto_mflat_gen(date):
 
 def parentcreation(target, date, band):
     field_dir_name = '%s_%s' % (target, date)
-    field_dir = os.path.join(PIPELINE_DEFAULT_DIR, field_dir_name)
+    field_dir = os.path.join(defaults['parent'], field_dir_name)
     parent_dir = os.path.join(field_dir, band)
     print('\nDefault parent dir: %s' % parent_dir)
     if not os.path.isdir(parent_dir):
@@ -146,7 +146,7 @@ def multi_master(
     if not no_mflat:
         auto_mflat_gen(date)
 
-    if parentdir:
+    if parentdir != defaults['parent']:
         chosen_parent = parentdir
     else:
         chosen_parent, field_dir = parentcreation(target, date, band)
@@ -182,7 +182,7 @@ def multi_master(
             else:
                 print('Removing default directory: %s' % field_dir)
                 try:
-                    os.chdir(PIPELINE_DEFAULT_DIR)
+                    os.chdir(defaults['parent'])
                     shutil.rmtree(field_dir, ignore_errors=True)
                 except FileNotFoundError:
                     print('Directory already no longer exists.')
@@ -216,7 +216,7 @@ def multi_master(
             else:
                 print('Removing default directory: %s' % field_dir)
                 try:
-                    os.chdir(PIPELINE_DEFAULT_DIR)
+                    os.chdir(defaults['parent'])
                     shutil.rmtree(field_dir, ignore_errors=True)
                 except FileNotFoundError:
                     print('Directory already no longer exists.')

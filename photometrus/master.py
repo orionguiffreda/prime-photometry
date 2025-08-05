@@ -5,6 +5,7 @@ import argparse
 import fnmatch
 import shutil
 from astropy.io import fits
+from datetime import datetime as dt
 
 # from photometrus.settings import makedirs
 from photometrus.settings import gen_pipeline_file_name
@@ -58,7 +59,7 @@ def getchiplist(full_ramp_list, chip):
     for ramplist in full_ramp_list:
         if ramplist and f'C{chip}.' in ramplist[0]:
             print(f'C{chip} images:', ramplist)
-            return ramplist
+            return ramplist[:6]
     return None
 
 # %% mflat creation
@@ -203,7 +204,7 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
         sky_sub.sky_sub(in_path=astrompath, out_path=subpath, no_flat=no_flat, sex=True)
     else:
         print('\nEquivalent argparse cmd: photometrus process skysub -in_path %s -out_path %s -sky_path %s' %
-              (astrompath, subpath, skypath))
+              (astrompath, subpath, skyfilepath))
 
         sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
 
@@ -391,6 +392,8 @@ def master(
         sky_override=defaults['sky_override_path'], removal=defaults['removal'], bulge=defaults['bulge'],
         sex=defaults['sex'], compress=defaults['compress'],
 ):
+    start_time = dt.now()
+
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
     if fullramplist:
         chipramplist = getchiplist(fullramplist, chip)
@@ -424,6 +427,8 @@ def master(
     if removal:
         intermediate_removal(astromdir, FFdir, subdir, rampdir)
 
+    end_time = dt.now()
+    print('\nFull C%s processing time:' % chip, (end_time - start_time).total_seconds())
     # else:
     #     rampdir = os.path.join(parentdir,  'C%i' % chip)
     #     flatfielding(rampdir, FFdir, band, chip, date)

@@ -68,19 +68,24 @@ def sexback(imgdir):
             print(pre + '.back.fits back subbed!')
 
 
-def scamp(imgdir, distortdeg=None):
+def scamp(imgdir, distortdeg=None, swarpcat=None):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
-    img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
-    img_list = [os.path.join(imgdir, f) for f in img_list]
-    img_list = ','.join(img_list)
-    if distortdeg:
-        command = ('scamp %s -c %s -DISTORT_DEGREES %s' % (img_list, sc, distortdeg))
-        print('Executing command: %s' % command)
+    if swarpcat:
+        command = ('scamp %s -c %s' % (swarpcat, sc))
+        # print('Executing command: %s' % command)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
-        command = ('scamp %s -c %s' % (img_list, sc))
-        print('Executing command: %s' % command)
-    subprocess.run(command.split(), check=True)
+        img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+        img_list = [os.path.join(imgdir, f) for f in img_list]
+        img_list = ','.join(img_list)
+        if distortdeg:
+            command = ('scamp %s -c %s -DISTORT_DEGREES %s' % (img_list, sc, distortdeg))
+            print('Executing command: %s' % command)
+        else:
+            command = ('scamp %s -c %s' % (img_list, sc))
+            print('Executing command: %s' % command)
+        subprocess.run(command.split(), check=True)
     # print(pre + ext + ' scamped!')
 
 
@@ -94,6 +99,7 @@ def missfits(imgdir):
     command = ('missfits -c %s %s' % (mc, img_list))
     print('Executing command: %s' % command)
     # subprocess.run(command.split(), check=True)
+    print('Complete!')
 
 
 #%%

@@ -151,7 +151,6 @@ def update_settings(settings_file='photometrus.json5'):
 
 update_settings()
 
-
 def gen_mask_file_name(filename):
     base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
     return os.path.join(base_dir, 'weightmaps', filename)
@@ -208,7 +207,6 @@ def mflat_checker(date):
     else:
         print('\nMaster flats exist for this date!')
     return True
-
 
 #%%
 """

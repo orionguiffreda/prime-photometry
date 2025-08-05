@@ -9,10 +9,12 @@ import subprocess
 import sys
 from astropy.io import fits
 import numpy as np
+import fnmatch
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
-from photometrus.settings import gen_config_file_name
-from photometrus.settings import gen_mask_file_name
+from photometrus.astrom.astrometry import sextract, scamp
+from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
+from photometrus.utils.utils import combine_header_and_fits
 
 #%%
 
@@ -174,32 +176,59 @@ def swarp_alt(imgdir, imout):
     print('2nd set co-added image created, all done!')
 
 
-def astromfin(directory,chip):
-    print('Re-running astrometry on swarped image!')
-    import fnmatch
-    instack = sorted(os.listdir(directory))
+def swarp_sx(imgdir, chip):
+    os.chdir(str(imgdir))
+    bulge = auto_bulge_detect(imgdir)
+    if bulge:
+        sx = gen_config_file_name('bulge_new.config')
+        ap = gen_config_file_name('tempsource.param')
+    else:
+        sx = gen_config_file_name('sex.config')
+        ap = gen_config_file_name('astrom.param')
     stackimg = []
-    for f in instack:
+    for f in sorted(os.listdir(imgdir)):
         if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip):
             stackimg.append(f)
-    for f in stackimg:
-        pre = os.path.splitext(f)[0]
-        try:
-            command = ('solve-field '
-                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
-                       '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --cpulimit 30 -U none --axy none '
-                       '-S none -M none -R none -B none -O -p -z 4 -D %s %s') % (
-                          directory, os.path.join(directory, f))
-            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except subprocess.CalledProcessError as err:
-            print('Could not run with exit error %s' % err)
-        # renaming
-        if os.path.isfile(os.path.join(directory, pre+'.wcs')):
-            os.remove(os.path.join(directory, f))
-            os.rename(os.path.join(directory, pre+'.new'), os.path.join(directory, f))
-            print('final image generated, original stack discarded!')
-        else:
-            print('New astrometry on stacked image failed, defaulting to original...')
+
+    coaddimg = stackimg[0]
+    catname = coaddimg.replace('.fits', '.cat')
+    weightname = 'weight' + coaddimg[5:]
+
+    if os.path.isfile(weightname):
+        print('Including weight map!')
+        command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
+                   (coaddimg, sx, catname, weightname, ap))
+        # print('Executing command: %s' % command)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' %
+                   (coaddimg, sx, catname, ap))
+        # print('Executing command: %s' % command)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    catname = os.path.join(imgdir, catname)
+    return catname
+
+
+def swarp_missfits(imgdir, chip):
+    stackimg = [f for f in sorted(os.listdir(imgdir)) if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip)]
+    stackhdr = [f for f in sorted(os.listdir(imgdir)) if fnmatch.fnmatch(f, 'coadd.*.C%i.head' % chip)]
+
+    combine_header_and_fits(stackhdr[0], stackimg[0], remove_header_file=True)
+
+
+def astromfin(directory, chip):
+    print('Re-running astrometry on swarped image! Running sextractor...')
+    catname = swarp_sx(directory, chip)
+    print('Applying 4th order scamp fit to stacked image...')
+    scamp(directory, swarpcat=catname)
+    print('Combining scamp .head and stacked image...')
+    swarp_missfits(directory, chip)
+    try:
+        os.remove(catname)
+    except Exception as e:
+        print(f"Error removing file: {catname} - {e}")
+    print('Absolute astrometry complete!')
 
 
 #%%

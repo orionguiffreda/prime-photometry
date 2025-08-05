@@ -33,25 +33,28 @@ def auto_flat_creation(date, band=None, chip=None):
         elif save_name_end:
             save_name = save_name_end
         else:
-            print('No flats on night!')
-            sys.exit(0)
+            print('Will take closest mflat during processing, continuing..')
+            save_name = 0
 
-        datename = 'mflat.%s.%s.C%s.fits' % (flat_filter, date, f)
-        datename_end = 'mflat.end.%s.%s.C%s.fits' % (flat_filter, date, f)
+        if save_name:
+            datename = 'mflat.%s.%s.C%s.fits' % (flat_filter, date, f)
+            datename_end = 'mflat.end.%s.%s.C%s.fits' % (flat_filter, date, f)
 
-        current_chosen_path = os.path.join(mflat_storage_dir, save_name)
-        renamed_chosen_path = os.path.join(mflat_storage_dir, datename)
-        os.rename(current_chosen_path, renamed_chosen_path)
-        print('Renamed to', renamed_chosen_path)
+            current_chosen_path = os.path.join(mflat_storage_dir, save_name)
+            renamed_chosen_path = os.path.join(mflat_storage_dir, datename)
+            os.rename(current_chosen_path, renamed_chosen_path)
+            print('Renamed to', renamed_chosen_path)
 
-        if save_name_start:
-            if save_name_end:
-                current_auxiliary_path = os.path.join(mflat_storage_dir, save_name_end)
-                renamed_auxiliary_path = os.path.join(mflat_storage_dir+'/auxiliary_mflats/', datename_end)
-                os.rename(current_auxiliary_path, renamed_auxiliary_path)
-                print('Auxiliary mflat:', renamed_auxiliary_path)
-            else:
-                print('No auxiliary mflat, no flat data at end of night.')
+            if save_name_start:
+                if save_name_end:
+                    current_auxiliary_path = os.path.join(mflat_storage_dir, save_name_end)
+                    renamed_auxiliary_path = os.path.join(mflat_storage_dir+'/auxiliary_mflats/', datename_end)
+                    os.rename(current_auxiliary_path, renamed_auxiliary_path)
+                    print('Auxiliary mflat:', renamed_auxiliary_path)
+                else:
+                    print('No auxiliary mflat, no flat data at end of night.')
+        else:
+            pass
 
 
 """

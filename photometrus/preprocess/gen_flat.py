@@ -255,10 +255,14 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
 
 def flatgen(directory, date, chip, band=None):
     flatlist = flatlistdownload(date, chip, band)
-    start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter = flatlists(
-        date, flatlist, chip)
-    save_name_start, save_name_end = flatprocessing(directory, start_images_names_1, start_images_names_2,
-                                                    end_images_names_1, end_images_names_2)
+    if flatlist:
+        start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter = flatlists(
+            date, flatlist, chip)
+        save_name_start, save_name_end = flatprocessing(directory, start_images_names_1, start_images_names_2,
+                                                        end_images_names_1, end_images_names_2)
+    else:
+        print('No mflat data taken during this night, halting mflat gen...')
+        save_name_start = save_name_end = flat_filter = 0
     return save_name_start, save_name_end, flat_filter
 
 
