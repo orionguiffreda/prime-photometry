@@ -115,8 +115,8 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
     else:
         errbits_vvv = errbits
         errbits_2M = '!= null'
-    print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
-          % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh))
+    print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
+          % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
     v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
                                                 "%sperrbits" % band: errbits_vvv,
                                                 "%s1perrb" % band: errbits_vvv,
@@ -226,7 +226,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     # contains changes in bounds to iterate through if too many sources:
     # format: [boxsize multiplier, mag lim scalar change, errbits column constraint]
-    bounds_change_list = [[1.0, 0, 0, '<=16', '!= null'], [1.0, 0.5, 0, '<=16', '!= null'],
+    bounds_change_list = [[1.0, 0, 0, '<=16', '!= null'], [1.0, 0.5, 0, '<=16', '!= null'], [1.0, 0.5, 0, '<16', errbit_2mass],
                           [1.0, 0.5, 0.5, '<16', errbit_2mass], [1.0, 0.5, 0.75, '<16', errbit_2mass],
                           [1.0, 0.5, 1.0, '<16', errbit_2mass], [1.0, 0.5, 1.25, '<16', errbit_2mass],
                           [0.85, 0.5, 1.25, '<16', errbit_2mass]]
@@ -327,10 +327,8 @@ def sex1(imageName, bulge=False):
 
     paramName = gen_config_file_name('astromshift_new.param')
 
-    if imageName.endswith('.fits'):
-        catname = imageName[:-5] + '.cat'
-    elif imageName.endswith('.new'):
-        catname = imageName[:-4] + '.cat'
+    if imageName.endswith('.fits') or imageName.endswith('.new'):
+        catname = os.path.splitext(imageName)[0] + '.cat'
     else:
         catname = imageName + '.cat'
     try:
@@ -340,6 +338,37 @@ def sex1(imageName, bulge=False):
     except subprocess.CalledProcessError as err:
         print('Could not run sextractor with exit error %s'%err)
     return catname
+
+
+def psfex(catalogName):
+    print('Running PSFex on sextrctr catalogue to generate psf for stars in the img...')
+    psfConfigFile = gen_config_file_name('default.psfex')
+    try:
+        command = 'psfex %s -c %s' % (catalogName, psfConfigFile)
+        # print('Executing command: %s' % command)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as err:
+        print('Could not run psfex with exit error %s' % err)
+
+
+def sex2(imageName):
+    print('Running sextractor for psf w/ psfex model fits...')
+    psfName = os.path.splitext(imageName)[0] + '.psf'
+    newcatalogName = os.path.splitext(imageName)[0] + '.psf.cat'
+
+    configFile = gen_config_file_name('sex2.config')
+    paramName = gen_config_file_name('photomPSF.param')
+
+    try:
+        # We are supplying SExtactor with the PSF model with the PSF_NAME option
+        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
+            imageName, configFile, newcatalogName, psfName, paramName)
+        # print("Executing command: %s" % command)
+        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError as err:
+        print('Could not run sextractor with exit error %s' % err)
+    return newcatalogName
+
 
 # def psfex(catalogName):
 #     print('Getting psf...')
@@ -370,7 +399,7 @@ def sex1(imageName, bulge=False):
 #%% creating & prepping tables for dist calc
 
 
-def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghigh=14, shifted_cat=None):
+def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghigh=14, shifted_cat=None, adv=False):
     print('Creating sorted catalog & prime tables...')
     if shifted_cat:
         sexcat = shifted_cat
@@ -385,10 +414,19 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
                                    & (mass_imCoords[1] < (max_y-crop)))]
     # inner_catsources = inner_catsources[(inner_catsources[colnames[2]] * 0.339 > 1)]
 
-    inner_primesources = sexcat[(sexcat['FLAGS'] == 0) &
-                                (sexcat['X_IMAGE'] < (max_x - crop)) & (sexcat['X_IMAGE'] > crop)
-                                & (sexcat['Y_IMAGE'] < (max_y) - crop) & (
-                                            sexcat['Y_IMAGE'] > crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)]
+    # print(sexcat.colnames)
+    if adv:
+        inner_primesources = sexcat[(sexcat['FLAGS'] < 2) &
+                                    (sexcat['X_IMAGE'] < (max_x - crop)) & (sexcat['X_IMAGE'] > crop)
+                                    & (sexcat['Y_IMAGE'] < (max_y) - crop) & (
+                                                sexcat['Y_IMAGE'] > crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
+                                    & (sexcat['CLASS_STAR'] > 0.5)]
+    else:
+        inner_primesources = sexcat[(sexcat['FLAGS'] < 2) &
+                                    (sexcat['X_IMAGE'] < (max_x - crop)) & (sexcat['X_IMAGE'] > crop)
+                                    & (sexcat['Y_IMAGE'] < (max_y) - crop) & (
+                                                sexcat['Y_IMAGE'] > crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
+                                    ]
 
     # zp correction
     print('applying zp correction to PRIME mags: %s' % zp)
@@ -590,15 +628,17 @@ def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
 
 #%%  Rerunning sextractor and astroquery for new source positions
 def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum, magcol, errbits,
-                   x_shift, y_shift
+                   x_shift, y_shift, catname, adv
                    ):
-    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
+    data, header, w, raImage, decImage, zp, catname_old, bulge = imaging(directory, imagename)
+
     # sex1(imagename, bulge=bulge)
     Q = cat_query(coords, filter_used, eff_boxsize, catNum, magcol, maglow, maghigh, errbits, bulge=bulge)
     # Q = complex_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh, bulge=bulge)
     shifted_primecat = apply_shifts_to_cat(directory, catname, x_shift, y_shift)
     inner_primesources_iter, inner_catsources_iter, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
-                                                                 maglow=maglow, maghigh=maghigh, shifted_cat=shifted_primecat)
+                                                                 maglow=maglow, maghigh=maghigh, shifted_cat=shifted_primecat,
+                                                                           adv=adv)
 
     return inner_primesources_iter, inner_catsources_iter, colnames, w
 
@@ -607,7 +647,7 @@ def shiftiteration(directory, imagename, filter_used, coords, maglow, maghigh, e
 
 def iterate_and_test(
         xy_shifts, directory, header, data, imageName, filter_used, eff_boxsize, crop, coords, catNum, magcol,
-        crsmtch_thresh_low, crsmtch_thresh_high, crsmtch_iters, maglow, maghigh, errbits, bulge=False
+        crsmtch_thresh_low, crsmtch_thresh_high, crsmtch_iters, maglow, maghigh, errbits, catname, bulge=False, adv=False
 ):
     print('Beginning iterative testing of sorted shifts...')
     best_completion = -1
@@ -631,7 +671,7 @@ def iterate_and_test(
         # Rerunning sextractor and astroquery for new source positions
         inner_primesources_iter, inner_catsources_iter, colnames, wcs = (
             shiftiteration(directory, imageshiftname, filter_used, coords, maglow, maghigh, eff_boxsize, crop, catNum,
-                           magcol, errbits, x_shift=x_shift, y_shift=y_shift))
+                           magcol, errbits, x_shift=x_shift, y_shift=y_shift, catname=catname, adv=adv))
         # Run crossmatch to determine successful solve
         SourceCatCoords = SkyCoord(ra=inner_catsources_iter[colnames[0]], dec=inner_catsources_iter[colnames[1]],
                                    frame='icrs', unit='degree')
@@ -716,10 +756,10 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             oldpath = os.path.join(old_storage_dir, f)
             os.rename(currentpath, oldpath)
 
-        catfile = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.cat')]
-        if catfile:
-            currentpath = os.path.join(directory, catfile[0])
-            oldpath = os.path.join(old_storage_dir, catfile[0])
+        catfiles = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.cat') or f.endswith('.psf.cat')]
+        for cat in catfiles:
+            currentpath = os.path.join(directory, cat)
+            oldpath = os.path.join(old_storage_dir, cat)
             os.rename(currentpath, oldpath)
 
         for f in all_fits_shift:
@@ -735,7 +775,7 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
 
 
 def removal(directory):
-    fnames = ['.shift.cat','.shift.fits','.psf','.reg']
+    fnames = ['.shift.cat','.shift.fits','.psf','.psf.cat','.reg']
     print('Removing intermediate files')
     try:
         for f in os.listdir(directory):
@@ -763,7 +803,7 @@ def boxchange(size):
 
 def shift(
         directory, imagename, band, length=defaults['length'], num=defaults['num'], thresh_low=defaults['thresh_low'],
-        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False
+        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=False
 ):
 
     if band == 'Y':
@@ -781,9 +821,21 @@ def shift(
     if bulge:
         boxsize, crop = boxchange(4)
         thresh_high = 0.25
+
+        if adv_solve:
+            if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
+                print('Previous psf cat detected, saving you some time and skipping all sextractor steps...')
+                catname = os.path.splitext(imagename)[0] + '.psf.cat'
+            else:
+                catname = sex1(imagename, bulge=bulge)
+                psfex(catname)
+                catname = sex2(imagename)
+        else:
+            sex1(imagename, bulge=bulge)
+
     else:
         boxsize, crop = boxchange(10)
-    sex1(imagename, bulge=bulge)
+        sex1(imagename, bulge=bulge)
     # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
     Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff, eff_boxsize, errbits = complex_query(raImage, decImage,
                                                                                                      filter_used, boxsize,
@@ -791,8 +843,9 @@ def shift(
     if eff_boxsize != boxsize:
         print('Adjusting crop for crossmatching with %.1f boxsize...' % eff_boxsize)
         eff_boxsize, crop = boxchange(eff_boxsize)
+
     inner_primesources, inner_catsources, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
-                                                                 maglow=mag_low_cutoff, maghigh=mag_high_cutoff)
+                                                                 maglow=mag_low_cutoff, maghigh=mag_high_cutoff, adv=adv_solve)
     first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
     agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, length)
     xy_shifts = xyshifts(agreeing_pairs, inner_primesources, inner_catsources, iters)
@@ -800,7 +853,7 @@ def shift(
     ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, filter_used,
                                                           eff_boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
                                                           iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits,
-                                                          bulge=bulge)
+                                                          catname=catname, bulge=bulge, adv=adv_solve)
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
@@ -815,7 +868,10 @@ def main():
     parser = argparse.ArgumentParser(description='Corrects for translation in initial astrometry '
                                                  '(so astrom.net doesnt need to be used)')
     parser.add_argument('-test', action='store_true', help='optional flag to test for a successful solve, '
-                                                           'doesnt apply to all files in directory.')
+                                                           'doesnt apply to all files in directory.', default=defaults['test'])
+    parser.add_argument('-adv_solve', action='store_true', help='optional flag to run psfex and sextractor again for max'
+                                                                ' astrometric & mag accuracy, designed for very dense '
+                                                                'fields, but takes a long time.', default=defaults['adv_solve'])
     parser.add_argument('-dir', type=str, help='[str] path where input file is stored (should run on proc. image, '
                                                'so likely should be /C#_sub/)')
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
@@ -833,7 +889,8 @@ def main():
                                                  ' defaulting to highest crossmatch percentage, default = 10', default=defaults['iters'])
     args, unknown = parser.parse_known_args()
 
-    shift(args.dir, args.imagename, args.band, args.length, args.num, args.thresh_low, args.thresh_high, args.iters, args.test)
+    shift(args.dir, args.imagename, args.band, args.length, args.num, args.thresh_low, args.thresh_high, args.iters,
+          args.test, args.adv_solve)
 
 
 if __name__ == "__main__":

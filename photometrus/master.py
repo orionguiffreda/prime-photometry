@@ -59,7 +59,7 @@ def getchiplist(full_ramp_list, chip):
     for ramplist in full_ramp_list:
         if ramplist and f'C{chip}.' in ramplist[0]:
             print(f'C{chip} images:', ramplist)
-            return ramplist[:6]
+            return ramplist#[:6]
     return None
 
 # %% mflat creation
@@ -212,7 +212,7 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
 # %% astrometry shift
 
 
-def shift(subpath, band, bulge=False, old=False):
+def shift(subpath, band, adv=False, old=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
@@ -221,12 +221,10 @@ def shift(subpath, band, bulge=False, old=False):
     print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
           (subpath, imgname, band))
 
-    if bulge:
-        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
-    elif old:
+    if old:
         astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
     else:
-        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band)
+        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
 
 
 # %% better astrometry
@@ -270,7 +268,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
     while True:
         # run initial astrometry, if no ROTOFF, shift should fail
         astrom_angle(astromdir, subdir, chip, chosen_rot_val)
-        shift(astromdir, band, bulge=bulge)
+        shift(astromdir, band)
 
         # checks for .shift.fits file, should only remain if shift agreement is not found
         shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
@@ -290,12 +288,22 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             imghdr = img[0].header
             # verify ROTOFF value is real and not nonsense
             rotoff_check = int(imghdr['ROTOFF'])
-            print('ROTOFF value is real: %i... Moving on, but astrometry is likely to fail, so examine images further!'
+            print('ROTOFF value is real: %i... Attempting more advanced shift algorithm (may take a while!)...'
                   % rotoff_check)
+
+            shift(astromdir, band, adv=True)
+
+            shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
+            if not shift_fail_check:
+                break
+
             if not bulge:
                 print('Improved shift algorithm failed... Attempting old shift algorithm. *MAY HAVE INACCURACY*')
                 shift(astromdir, band, old=True)
+
+            # print('Shift astrometry failed!  Stacking is likely to fail, so examine images further!')
             break
+
         except (ValueError, KeyError):
             print('ROTOFF value is not real!, Varying ROTOFF value by +90 deg...')
 
