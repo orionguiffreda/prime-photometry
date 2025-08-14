@@ -23,6 +23,7 @@ import statsmodels.api as sm
 import subprocess
 from scipy.stats import skew
 import warnings
+from datetime import datetime as dt
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
@@ -614,7 +615,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
         hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatched Sources', after='e_ZP')
-        hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_CRSMCH')
+        hdr.set('N_SOURCES', len(PSFSources), 'Number of Total PRIME Sources', after='N_CRSMCH')
+        hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SOURCES')
         hdul.close()
 
     # catalog for just clean sources (no flags)
@@ -623,13 +625,20 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     # ab mag conversion
     psfmag_clean = ab_convert(psfmag_clean, band=band, survey=survey)
 
-    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit='AB mag')
-    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit='AB mag')
+    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit=u.ABmag)
+    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit=u.ABmag)
     cleanPSFSources.add_column(psfmagcol_clean)
     cleanPSFSources.add_column(psfmagerrcol_clean)
     cleanPSFSources.remove_column('VIGNET')
     cleanPSFSources['FLUX_RADIUS'] = cleanPSFSources['FLUX_RADIUS'] * 0.498
     cleanPSFSources['FLUX_RADIUS'].unit = u.arcsec
+
+    cleanpsfflux = psfmagcol_clean.to(u.microjansky)
+    cleanpsffluxerr = psfmagerrcol_clean.to(u.microjansky)
+    cleanpsffluxcol = Column(cleanpsfflux, name='FLUX_DENSITY', unit=u.microjansky)
+    cleanpsffluxerrcol = Column(cleanpsffluxerr, name='e_FLUX_DENSITY', unit=u.microjansky)
+    cleanPSFSources.add_column(cleanpsffluxcol)
+    cleanPSFSources.add_column(cleanpsffluxerrcol)
 
     # catalog for all detected sources
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
@@ -638,8 +647,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     print('Converting mags from Vega to AB for all sources! (if not already in AB)')
     psfmag = ab_convert(psfmag, band=band, survey=survey)
 
-    psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit='AB mag')
-    psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit='AB mag')
+    psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit=u.ABmag)
+    psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit=u.ABmag)
     PSFSources.add_column(psfmagcol)
     PSFSources.add_column(psfmagerrcol)
     PSFSources.remove_column('VIGNET')
@@ -647,8 +656,34 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     PSFSources['FLUX_RADIUS'].unit = u.arcsec
     print('Total PRIME source # = ', len(PSFSources))
 
+    # real unit flux conversion
+    psfflux = psfmagcol.to(u.microjansky)
+    psffluxerr = psfmagerrcol.to(u.microjansky)
+    psffluxcol = Column(psfflux, name='FLUX_DENSITY', unit=u.microjansky)
+    psffluxerrcol = Column(psffluxerr, name='e_FLUX_DENSITY', unit=u.microjansky)
+    PSFSources.add_column(psffluxcol)
+    PSFSources.add_column(psffluxerrcol)
+
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
+
+    # image data conversion to uJy
+
+    conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']   # u = uJy / adu
+    conv_factor = np.nanmedian(conv_factor_all)
+
+    with fits.open(imageName, mode='update') as imagehdu:
+        imagehdr = imagehdu[0].header
+        if 'BUNIT' not in imagehdr:
+            imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
+
+            imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values', after='EXTEND')
+            imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor', after='BUNIT')
+            print('Conversion of ADU to uJy for flux and image data complete, med conversion factor: %.4f' % conv_factor)
+        else:
+            print('BUNIT found already in header, skipping conversion.')
+        imagehdu.close()
+
 
     return cleanPSFSources, PSFSources, psfweights_noclip, psf_clipped
 
@@ -1402,6 +1437,8 @@ def photometry(
         keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
         grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal']
 ):
+    start_time = dt.now()
+
     directory = os.path.dirname(full_filename)
     if directory == '':
         directory = '.'
@@ -1479,7 +1516,8 @@ def photometry(
                 else:
                     print(f"Final intercept below 0.15: %.4f" % intercept)
 
-
+    end_time = dt.now()
+    print('\nFull photometric processing time:', (end_time - start_time).total_seconds())
 def main():
 
     parser = argparse.ArgumentParser(

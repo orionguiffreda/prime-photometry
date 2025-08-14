@@ -220,7 +220,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
         errbit_2mass = errbitoptions_2mass[0]
 
     if bulge:
-        acc_source_num = 150    # total number of sources allowed in full query before trying smaller box
+        acc_source_num = 200    # total number of sources allowed in full query before trying smaller box
     else:
         acc_source_num = 400
 
@@ -277,6 +277,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                                            "%sflags" % band: errbits_constraint,
                                            "Cflg": errbits_2M,
                                            "Hclass": "== -1",
+                                           "Class": "== 0",
                                            "Nd": ">6"
                                        }, row_limit=-1)
 
@@ -756,7 +757,8 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             oldpath = os.path.join(old_storage_dir, f)
             os.rename(currentpath, oldpath)
 
-        catfiles = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.cat') or f.endswith('.psf.cat')]
+        catfiles = [f for f in sorted(os.listdir(directory)) if f.endswith('.flat.cat') or f.endswith('.psf.cat') or
+                    f.endswith('.reg')]
         for cat in catfiles:
             currentpath = os.path.join(directory, cat)
             oldpath = os.path.join(old_storage_dir, cat)
@@ -846,6 +848,8 @@ def shift(
 
     inner_primesources, inner_catsources, colnames = make_tables(directory, data, w, catname, Q, filter_used, crop, zp,
                                                                  maglow=mag_low_cutoff, maghigh=mag_high_cutoff, adv=adv_solve)
+    print('PRIME Source Num = ', len(inner_primesources))
+    print('Catalog Source Num = ', len(inner_catsources))
     first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
     agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, length)
     xy_shifts = xyshifts(agreeing_pairs, inner_primesources, inner_catsources, iters)

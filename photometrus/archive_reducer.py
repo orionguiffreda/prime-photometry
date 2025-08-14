@@ -24,7 +24,12 @@ _defaults = dict(
     survey=None
 )
 _defaults['grid_df'] = pd.read_csv(_defaults['grid_file'])
-
+chip_dict = {
+    '00': 3,
+    '01': 1,
+    '10': 4,
+    '11': 2,
+}
 
 def get_dates(start_date=datetime.date(day=11, month=10, year=2022), end_date=datetime.date.today()):
     num_days = (end_date-start_date).days
@@ -61,14 +66,9 @@ def find_objname_commands(objname, logs):
 def get_chip_df(df):
     ra_sign = df['ra_offsets'] >= 0
     dec_sign = df['dec_offsets'] >= 0
-    if not ra_sign and dec_sign:
-        return 1
-    elif ra_sign and dec_sign:
-        return 2
-    elif not ra_sign and not dec_sign:
-        return 3
-    else:
-        return 4
+    signs = ra_sign.astype(int).astype(str) + dec_sign.astype(int).astype(str)
+    chips = signs.map(chip_dict)
+    return chips
 
 
 def calculate_distance_all(target, grid=_defaults['grid_df']):
