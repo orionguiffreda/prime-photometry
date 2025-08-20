@@ -984,6 +984,9 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     else:
         num = imageName[-16:-8]
 
+    def predict_y_for(x, m, b):
+        return m * x + b
+
     plt.close('all')
     # mag comparison plot
     plt.figure(1, figsize=(8, 8))
@@ -997,7 +1000,46 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.grid()
     # plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
     plt.clf()
-    print('Saved mag comparison plot to dir!')
+    # print('Saved mag comparison plot to dir!')
+
+    # PRIME flux vs catalog AB mag for crossmatches
+    x_flx_lin = cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask]
+    x_flx = np.log(x_flx_lin)
+    y_flx = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    x_const_flx = sm.add_constant(x_flx)
+    model_flx = sm.WLS(y_flx, x_const_flx, weights=psfweights_noclip[~psf_clipped.mask]).fit()
+    # print(model_flx.params)
+    m_flx = model_flx.params[1]
+    m_flxerr = model_flx.bse[1]
+    b_flx = model_flx.params[0]
+    b_flxerr = model_flx.bse[0]
+
+    x_grid = np.linspace(x_flx_lin.min(), x_flx_lin.max(), 100)
+    log_x_grid = np.log(x_grid)
+    log_x_grid_const = sm.add_constant(log_x_grid)
+    y_pred = model_flx.predict(log_x_grid_const)
+
+    plt.figure(9, figsize=(8, 8))
+    plt.plot(cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask],
+             good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+             'r.', markersize=14, markeredgecolor='black')
+    plt.plot(x_grid, y_pred, c='b')
+
+    flx_txt = ('slope = %.4f' % m_flx + '\nslope err = %.4f' % m_flxerr +
+           '\nint = %.4f' % b_flx + '\nint err = %.4f' % b_flxerr)
+
+    plt.xlim(10, 50000)
+    plt.ylim(12, 20.5)
+    plt.title('PRIME Flux Density vs %s AB mag - %s Sigma Clip' % (survey, sigma))
+    plt.xlabel(r'PRIME Flux Density ($\mu$Jy)', fontsize=15)
+    plt.ylabel('%s %s AB Mags' % (survey, band), fontsize=15)
+    plt.grid()
+    plt.xscale('log')
+    flx_box = dict(facecolor='white')
+    plt.text(1000, 19, flx_txt, fontsize=12, bbox=flx_box)
+    plt.savefig('%s_C%s_flux_mag_plot_sig_%s.png' % (survey, chip, num))
+    plt.clf()
+    print('Saved flux v. mag plot to dir!')
 
     # residual fits
     x = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]
@@ -1175,8 +1217,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     print('Saved y-int residual plots to dir!')
 
     # WLS fit line over data plot
-    def predict_y_for(x, m, b):
-        return m * x + b
 
     txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err)
 
@@ -1268,6 +1308,22 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     print('Saved WLS 3 sig fit plots to dir!')
+
+    # flux vs mag plot - histogram vers.
+    plt.figure(10, figsize=(8, 8))
+    plt.hist2d(x=cleanPSFsources['FLUX_DENSITY'][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
+              bins=[bin_num, bin_num], range=[[100, 50000],[12, 20.5]], cmap='gist_heat_r')
+    plt.colorbar(label='Density')
+    plt.xlim(10, 50000)
+    plt.ylim(12, 20.5)
+    plt.title('PRIME Flux Density vs %s AB mag - Histogram' % survey)
+    plt.xlabel(r'PRIME Flux Density ($\mu$Jy)', fontsize=15)
+    plt.ylabel('%s %s AB Mags' % (survey, band), fontsize=15)
+    plt.grid()
+    plt.xscale('log')
+    # plt.savefig('%s_C%s_flux_mag_hist_plot_%s.png' % (survey, chip, num))
+    plt.clf()
+    # print('Saved flux v. mag hist plot to dir!')
 
     # Limiting Mag Plot
     # binning

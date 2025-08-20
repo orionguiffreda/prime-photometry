@@ -13,6 +13,9 @@ import os
 # TODO test this script on PC01 before full implementation (change stuff w/ cfg path)
 # %%
 
+astrometry_config = os.path.join(
+    os.sep, os.path.join(*os.__file__.split(os.sep)[:-3]), 'share', 'astrometry', 'astrometry.cfg'
+)  # finds the astrometry config file. There should be a more direct way of accomplishing this, but ¯\_(ツ)_/¯
 
 def astrom(outpath, inlist, rad, ds):
     for imgpath in inlist:
@@ -22,10 +25,10 @@ def astrom(outpath, inlist, rad, ds):
         dec = hdr['DEC-D']
         try:
             command = (('solve-field '
-                        '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
+                        '--backend-config %s '
                         '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
                         '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -t 4 -z %s -D %s %s') % (
-                           ra, dec, rad, ds, outpath, imgpath))
+                           astrometry_config, ra, dec, rad, ds, outpath, imgpath))
             print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True)
         except subprocess.CalledProcessError as err:
@@ -38,10 +41,10 @@ def astromdir(outpath, directory):
     for f in inpath:
         try:
             command = ('solve-field '
-                       '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
+                       '--backend-config %s '
                        '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --no-verify -U none --axy none '
                        '-S none -M none -R none -B none -O -p -t 4 -z 4 -D %s %s') % (
-                          outpath, directory + f)
+                          astrometry_config, outpath, directory + f)
             print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True)
         except subprocess.CalledProcessError as err:
@@ -62,10 +65,10 @@ def astromdirhard(outpath, directory, rad, ds):
             dec = hdr['DEC-D']
             try:
                 command = (('solve-field '
-                            '--backend-config /home/alex/miniconda3/pkgs/astrometry-0.97-py313h139ab80_2/share/astrometry/astrometry.cfg '
+                            '--backend-config %s '
                             '--scale-units arcsecperpix --scale-low 0.45 --scale-high 0.55 --ra %s --dec %s --radius %s '
                             '--cpulimit 60 -U none --axy list.axy -S none -M none -R none -B none -O -p -t 4 -z %s -D %s %s') % (
-                           ra, dec, rad, ds, outpath, directory+f))
+                           astrometry_config, ra, dec, rad, ds, outpath, directory+f))
                 print('Executing command: %s' % command)
                 subprocess.run(command.split(), check=True)
             except subprocess.CalledProcessError as err:
