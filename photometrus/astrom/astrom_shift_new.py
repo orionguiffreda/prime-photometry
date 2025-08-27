@@ -738,6 +738,11 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             header['CRPIX1'] = crpix1 + xfinal_shift
             header['CRPIX2'] = crpix2 + yfinal_shift
 
+            header.set('X_SHIFT', xfinal_shift, 'X Value CRPIX1 shift', after='WCSAXES')
+            header.set('Y_SHIFT', yfinal_shift, 'Y Value CRPIX2 shift', after='X_SHIFT')
+            header.set('CRPIX1_OLD', crpix1, 'Initial CRPIX1 Value', after='Y_SHIFT')
+            header.set('CRPIX2_OLD', crpix2, 'Initial CRPIX2 Value', after='CRPIX1_OLD')
+
             imageshiftname = os.path.splitext(f)[0]
             imageshiftname = imageshiftname + '.shift.new'
             newpath = os.path.join(directory, imageshiftname)
