@@ -94,7 +94,8 @@ def imaging(directory, imageName, x_guess=None, y_guess=None):
         guess_hdr['CRPIX1'] = x_init + x_guess
         guess_hdr['CRPIX2'] = y_init + y_guess
 
-        init_imagename = pre+'init'+ext
+        pre = pre.replace('flat','init.flat')
+        init_imagename = pre+ext
         fits.writeto(os.path.join(directory, init_imagename), data, header, overwrite=True)  # preserve original fits img
 
         fits.writeto(os.path.join(directory, imageName), data, guess_hdr, overwrite=True)
