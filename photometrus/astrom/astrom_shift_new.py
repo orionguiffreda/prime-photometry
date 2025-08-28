@@ -47,7 +47,7 @@ def timed_input(prompt, timeout=60, default='Y'):
 #%% image info
 
 
-def imaging(directory, imageName):
+def imaging(directory, imageName, x_guess=None, y_guess=None):
     os.chdir(directory)
     f = fits.open(os.path.join(directory, imageName))
     data = f[0].data  # This is the image array
@@ -79,10 +79,29 @@ def imaging(directory, imageName):
 
     # cat name
     pre = os.path.splitext(imageName)[0]
+    ext = os.path.splitext(imageName)[1]
     if 'shift' in pre:
         catname = pre[:-6] + '.cat'
     else:
         catname = pre+'.cat'
+
+    # optional initial shift guess
+    if x_guess and y_guess:
+        print('Applying initial shift guesses: x = %s, y = %s' % (x_guess, y_guess))
+        guess_hdr = header.copy()
+        x_init = guess_hdr['CRPIX1']
+        y_init = guess_hdr['CRPIX2']
+        guess_hdr['CRPIX1'] = x_init + x_guess
+        guess_hdr['CRPIX2'] = y_init + y_guess
+
+        init_imagename = pre+'init'+ext
+        fits.writeto(os.path.join(directory, init_imagename), data, header, overwrite=True)  # preserve original fits img
+
+        fits.writeto(os.path.join(directory, imageName), data, guess_hdr, overwrite=True)
+    elif x_guess or y_guess:
+        print('Please provide BOTH an X and Y guess! Proceeding with no initial guess...')
+
+
     return data, header, w, raImage, decImage, zp, catname, bulge
 
 
@@ -810,7 +829,8 @@ def boxchange(size):
 
 def shift(
         directory, imagename, band, length=defaults['length'], num=defaults['num'], thresh_low=defaults['thresh_low'],
-        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=False
+        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=False, x=defaults['x_guess'],
+        y=defaults['y_guess']
 ):
 
     if band == 'Y':
@@ -824,7 +844,7 @@ def shift(
     maglow = 12
     maghigh = 14
 
-    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename)
+    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename, x_guess=x, y_guess=y)
     if bulge:
         boxsize, crop = boxchange(4)
         thresh_high = 0.25
@@ -886,6 +906,10 @@ def main():
     parser.add_argument('-imagename', type=str, help='[str] input file name (should run on proc. image, '
                                                      'i.e. *.sky.flat.fits)')
     parser.add_argument('-band', type=str, help='[str] filter used, ex. "J"')
+    parser.add_argument('-x', type=float, help='[float] optional initial guess for X, '
+                                               '*PROVIDE BOTH AN X AND Y GUESS USING -x & -y*', default=defaults['x_guess'])
+    parser.add_argument('-y', type=float, help='[float] optional initial guess for Y, '
+                                               '*PROVIDE BOTH AN X AND Y GUESS USING -x & -y*', default=defaults['y_guess'])
     parser.add_argument('-length', type=float, help='[float] optional, value over which dists will not be '
                                                    'considered (pix), default = 100', default=defaults['length'])
     parser.add_argument('-num', type=int, help='[int] optional, # of sources, sorted by mag, to consider in '
@@ -899,7 +923,7 @@ def main():
     args, unknown = parser.parse_known_args()
 
     shift(args.dir, args.imagename, args.band, args.length, args.num, args.thresh_low, args.thresh_high, args.iters,
-          args.test, args.adv_solve)
+          args.test, args.adv_solve, args.x, args.y)
 
 
 if __name__ == "__main__":
