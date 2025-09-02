@@ -987,7 +987,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
             # survey crsmtch check
-            idx_both, idx_bothcleanpsf, d2d, d3d = massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
+            idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
                                                                                        grb_rad * u.arcsec)
             if len(idx_bothcleanpsf) > 0:
                 print(' Detected source crossmatched to existing %s source!' % survey)
@@ -1019,6 +1019,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             rad_ar = []
             snr_ar = []
             dist_ar = []
+            crsmtch_ar = []
             idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
             source_reg_gen()
             for i in idx_GRBcleanpsflist:
@@ -1038,6 +1039,16 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 dist = dist / u.arcsec
                 dist_ar.append(dist)
 
+                # survey crsmtch check
+                idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
+                    mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
+                    grb_rad * u.arcsec)
+                if len(idx_bothcleanpsf) > 0:
+                    survey_flg = 1
+                else:
+                    survey_flg = 0
+                crsmtch_ar.append(survey_flg)
+
                 source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
             grbdata = Table()
             grbdata['RA (deg)'] = np.array(ra_ar)
@@ -1047,6 +1058,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             grbdata['Radius (arcsec)'] = np.array(rad_ar)
             grbdata['SNR'] = np.array(snr_ar)
             grbdata['Distance (arcsec)'] = np.array(dist_ar)
+            grbdata['Survey Crsmtch'] = np.array(crsmtch_ar)
             grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             print(' Generated GRB data table & source DS9 regions!')
         else:
