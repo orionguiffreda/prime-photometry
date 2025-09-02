@@ -9,12 +9,14 @@ import sys
 import astropy.units as u
 from astroquery.vizier import Vizier
 from astroquery.ipac.ned import Ned
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import Angle, SkyCoord
 from astropy.wcs import WCS
 from astropy.wcs import utils
 from astropy.stats import sigma_clip, sigma_clipped_stats
 from astropy.io import fits
 from astropy.io import ascii
+from astropy.nddata import Cutout2D
+from regions import CircleSkyRegion
 import os
 from astropy.table import Column
 from astropy.table import Table
@@ -614,9 +616,9 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr = hdul[0].header
         hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
-        hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatched Sources', after='e_ZP')
-        hdr.set('N_SOURCES', len(PSFSources), 'Number of Total PRIME Sources', after='N_CRSMCH')
-        hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SOURCES')
+        hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatches', after='e_ZP')
+        hdr.set('N_SRCS', len(PSFSources), 'Total PRIME Sources Number', after='N_CRSMCH')
+        hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SRCS')
         hdul.close()
 
     # catalog for just clean sources (no flags)
@@ -779,13 +781,64 @@ def newsourcesearch(source_ra, source_dec, thresh, w, imageName, survey, band, Q
 # %% optional GRB-specific photom
 
 
-def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
+def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None):
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'],
                                        frame='icrs',
                                        unit='degree')
+
+    # postage stamp cutout fctn (png & fits)
+    def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None):
+        imgdata = fits.getdata(imageName)
+        img = fits.open(imageName)
+        head = img[0].header
+        w = WCS(head)
+
+        size = 4 * photoDistThresh * u.arcsec
+        cutout = Cutout2D(imgdata, GRBcoords, size, wcs=w, copy=True)
+        region = CircleSkyRegion(center=GRBcoords[0], radius=Angle(thresh, unit='arcsec'))
+        pix_region = region.to_pixel(cutout.wcs)
+
+        mean, median, sigma_cut = sigma_clipped_stats(cutout.data)
+        plt.figure(10, figsize=(8, 8))
+        plt.imshow(cutout.data, vmin=median - 3 * sigma_cut, vmax=median + 3 * sigma_cut, origin='lower')
+        pix_region.plot(color='red', ls='--', label='Input GRB threshold')
+        plt.legend()
+
+        if loc:
+            savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
+        else:
+            savename = 'GRB_%s_Cutout_%s' % (band, survey)
+        plt.savefig(savename + '.png', dpi=300)
+        plt.clf()
+
+        fits.writeto(savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
+
+        # ds9 regions
+        threshname = 'GRB_query_thresh.reg'  # input threshold
+        newtext = open(threshname, 'w+')
+        newtext.write('fk5')
+        newtext.write(f'\ncircle({ra}, {dec}, {photoDistThresh}") # color=cyan width=2 text={{Query Thresh}}')
+
+        print(' Exported cutouts & ds9 regions of GRB area!')
+
+    def source_reg_gen(src_ra=0, src_dec=0, rad=2, src_survey=None, append=False):
+        if not src_survey:
+            name = 'GRB_PRIME_srcs.reg'
+            color = 'red'
+        else:
+            name = 'GRB_%s_srcs.reg' % survey
+            color = 'blue'
+        if not append:
+            newtext = open(name, 'w+')
+            newtext.write('fk5')
+            if src_ra != 0 and src_dec != 0:
+                newtext.write(f'\ncircle({src_ra}, {src_dec}, {rad}") # color={color}')
+        else:
+            newtext = open(name, 'a')
+            newtext.write(f'\ncircle({src_ra}, {src_dec}, {rad}") # color={color}')
 
     # sexigesimal conversion
     try:
@@ -818,9 +871,25 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
         except NameError:
             print('No Sources found!')
     else:
+        print('Checking GRB location %s: %s' % (ra, dec))
         GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
+        # prime source crsmtch
         idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
                                                                                        photoDistThresh * u.arcsec)
+        # survey source crsmtch
+        idx_survey, idx_surveycleanpsf, d2d_surv, d3d_surv = massCatCoords.search_around_sky(GRBcoords,
+                                                                                       photoDistThresh * u.arcsec)
+        if len(idx_surveycleanpsf) > 0:
+            print(' %i %s existing sources found within GRB threshold! Writing to DS9 reg files...'
+                  % (len(idx_surveycleanpsf), survey))
+            source_reg_gen(src_survey=survey)
+            for idx in idx_surveycleanpsf:
+                src = massCatCoords[idx]
+                source_reg_gen(src.ra.deg, src.dec.deg, src_survey=survey, append=True)
+        else:
+            print(' No existing %s sources found within GRB threshold!' % survey)
+
+        grb_cutout(imageName, GRBcoords, photoDistThresh)
 
     if coordlist:
         for key in idx_GRBpsfdict:
@@ -828,9 +897,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             idx_GRBcleanpsf = values[0]
             ra = values[1][0]
             dec = values[1][1]
-            print('idx size = %d for location %d' % (len(idx_GRBcleanpsf), key))
+            print(' idx size = %d for location %d' % (len(idx_GRBcleanpsf), key))
             if len(idx_GRBcleanpsf) == 1:
-                print('GRB source at inputted coords %s and %s, rad = %s arcsec found!' % (ra, dec, photoDistThresh))
+                print(' GRB source at inputted coords %s and %s, rad = %s arcsec found!' % (ra, dec, photoDistThresh))
 
                 grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
                 grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
@@ -842,9 +911,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 grb_dist = d2d[0].to(u.arcsec)
                 grb_dist = grb_dist / u.arcsec
 
-                print('Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+                print(' Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
                     grb_ra, grb_dec, grb_rad, grb_snr))
-                print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
+                print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
                 grbdata = Table()
                 grbdata['RA (deg)'] = np.array([grb_ra])
@@ -856,9 +925,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 grbdata['Distance (arcsec)'] = np.array([grb_dist])
 
                 grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
-                print('Generated GRB data table!')
+                print(' Generated GRB data table!')
             elif len(idx_GRBcleanpsf) > 1:
-                print('Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
+                print(' Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
                       ', refer to .ecsv file for source info!' % (ra, dec, photoDistThresh))
                 mag_ar = []
                 mag_err_ar = []
@@ -894,14 +963,14 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 grbdata['SNR'] = np.array(snr_ar)
                 grbdata['Distance (arcsec)'] = np.array(dist_ar)
                 grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
-                print('Generated GRB data table!')
+                print(' Generated GRB data table!')
             else:
-                print(
-                    'GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra, dec))
+                print(' GRB source at inputted coords %s and %s not found in PRIME catalog, perhaps increase photoDistThresh or '
+                      'alter sextractor params?' % (ra, dec))
     else:
-        print('idx size = %d' % len(idx_GRBcleanpsf))
+        print(' idx size = %d' % len(idx_GRBcleanpsf))
         if len(idx_GRBcleanpsf) == 1:
-            print('GRB source at inputted coords %s and %s, rad = %s arcsec found!' % (ra, dec, photoDistThresh))
+            print(' GRB source at inputted coords %s and %s, rad = %s arcsec found!' % (ra, dec, photoDistThresh))
 
             grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
             grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
@@ -913,9 +982,18 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             grb_dist = d2d[0].to(u.arcsec)
             grb_dist = grb_dist / u.arcsec
 
-            print('Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+            print(' Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
                 grb_ra, grb_dec, grb_rad, grb_snr))
-            print('%s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
+            print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
+
+            # survey crsmtch check
+            idx_both, idx_bothcleanpsf, d2d, d3d = massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
+                                                                                       grb_rad * u.arcsec)
+            if len(idx_bothcleanpsf) > 0:
+                print(' Detected source crossmatched to existing %s source!' % survey)
+                survey_flg = 1
+            else:
+                survey_flg = 0
 
             grbdata = Table()
             grbdata['RA (deg)'] = np.array([grb_ra])
@@ -925,11 +1003,14 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             grbdata['Radius (arcsec)'] = np.array([grb_rad])
             grbdata['SNR'] = np.array([grb_snr])
             grbdata['Distance (arcsec)'] = np.array([grb_dist])
+            grbdata['Survey Crsmtch'] = survey_flg
 
             grbdata.write('GRB_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
-            print('Generated GRB data table!')
+
+            source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
+            print(' Generated GRB data table & source DS9 regions!')
         elif len(idx_GRBcleanpsf) > 1:
-            print('Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
+            print(' Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
                   ', refer to .ecsv file for source info!' % (ra, dec, photoDistThresh))
             mag_ar = []
             mag_err_ar = []
@@ -939,6 +1020,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             snr_ar = []
             dist_ar = []
             idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
+            source_reg_gen()
             for i in idx_GRBcleanpsflist:
                 grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
                 mag_ar.append(grb_mag)
@@ -955,6 +1037,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
                 dist = (d2d[idx_GRBcleanpsflist.index(i)]).to(u.arcsec)
                 dist = dist / u.arcsec
                 dist_ar.append(dist)
+
+                source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
             grbdata = Table()
             grbdata['RA (deg)'] = np.array(ra_ar)
             grbdata['DEC (deg)'] = np.array(dec_ar)
@@ -964,9 +1048,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, coordlist=None):
             grbdata['SNR'] = np.array(snr_ar)
             grbdata['Distance (arcsec)'] = np.array(dist_ar)
             grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
-            print('Generated GRB data table!')
+            print(' Generated GRB data table & source DS9 regions!')
         else:
-            print('GRB source at inputted coords %s and %s not found, perhaps increase photoDistThresh?' % (ra, dec))
+            print(' GRB source at inputted coords %s and %s not found in PRIME catalog, perhaps increase photoDistThresh or '
+                  'alter sextractor params?' % (ra, dec))
 
 
 # %% optional plots
@@ -1461,9 +1546,9 @@ def int_calibration(
                                                                          idx_psfmass, idx_psfimage,
                                                                          name, band, chosen_survey, sigma)
     if grb_ra:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius)
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords)
     elif grb_coordlist:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, grb_coordlist)
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, grb_coordlist)
     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
 
@@ -1509,14 +1594,17 @@ def photometry(
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
+        psfcatalogName = name.replace('.fits', '.psf.cat')
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
+                                                                                        crop, given_catalog)
         if grb_coordlist:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, grb_coordlist)
         else:
             if grb_thresh > 60:
                 # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
                 newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
             else:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords)
     else:
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
@@ -1537,9 +1625,9 @@ def photometry(
                 if grb_thresh > 60:
                     newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
                 else:
-                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh)
+                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords)
             elif grb_coordlist:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, grb_coordlist)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, grb_coordlist)
             if not no_plots:
                 slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma)
