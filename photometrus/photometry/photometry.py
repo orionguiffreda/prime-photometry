@@ -789,8 +789,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                                        frame='icrs',
                                        unit='degree')
 
+
     # postage stamp cutout fctn (png & fits)
-    def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None):
+    def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None, append=False):
         imgdata = fits.getdata(imageName)
         img = fits.open(imageName)
         head = img[0].header
@@ -809,21 +810,28 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
 
         if loc:
             savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
+            threshname = 'GRB_queries_thresh.reg'
         else:
             savename = 'GRB_%s_Cutout_%s' % (band, survey)
+            threshname = 'GRB_query_thresh.reg'
         plt.savefig(savename + '.png', dpi=300)
         plt.clf()
 
         fits.writeto(savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
 
         # ds9 regions
-        threshname = 'GRB_query_thresh.reg'  # input threshold
-        newtext = open(threshname, 'w+')
-        newtext.write('fk5')
-        newtext.write(f'\ncircle({ra}, {dec}, {photoDistThresh}") # color=cyan width=2 text={{Query Thresh}}')
+        if append:
+            newtext = open(threshname, 'a')  # input threshold
+            newtext.write(f'\ncircle({ra}, {dec}, {photoDistThresh}") # color=cyan width=2 text={{Query Thresh}}')
+        else:
+            newtext = open(threshname, 'w+')       # input threshold
+            newtext.write('fk5')
+            newtext.write(f'\ncircle({ra}, {dec}, {photoDistThresh}") # color=cyan width=2 text={{Query Thresh}}')
 
         print(' Exported cutouts & ds9 regions of GRB area!')
 
+
+    # source ds9 region writing
     def source_reg_gen(src_ra=0, src_dec=0, rad=2, src_survey=None, append=False):
         if not src_survey:
             name = 'GRB_PRIME_srcs.reg'
@@ -839,6 +847,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
         else:
             newtext = open(name, 'a')
             newtext.write(f'\ncircle({src_ra}, {src_dec}, {rad}") # color={color}')
+
 
     # sexigesimal conversion
     try:
@@ -867,9 +876,29 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 GRBcoords = SkyCoord(ra=[coordlist[i][0]], dec=[coordlist[i][1]], frame='icrs', unit='degree')
                 idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
                                                                                                photoDistThresh * u.arcsec)
+
+                # survey source crsmtch
+                idx_survey, idx_surveycleanpsf, d2d_surv, d3d_surv = massCatCoords.search_around_sky(GRBcoords,
+                                                                                                     photoDistThresh * u.arcsec)
+                if len(idx_surveycleanpsf) > 0:
+                    print(' %i %s existing sources found within GRB threshold! Writing to DS9 reg files...'
+                          % (len(idx_surveycleanpsf), survey))
+                    source_reg_gen(src_survey=survey)
+                    for idx in idx_surveycleanpsf:
+                        src = massCatCoords[idx]
+                        source_reg_gen(src.ra.deg, src.dec.deg, src_survey=survey, append=True)
+                else:
+                    print(' No existing %s sources found within GRB threshold!' % survey)
+
+                if i == 0:
+                    grb_cutout(imageName, GRBcoords, photoDistThresh, loc=i)
+                else:
+                    grb_cutout(imageName, GRBcoords, photoDistThresh, loc=i, append=True)
+
                 idx_GRBpsfdict[keys[i]] = idx_GRBcleanpsf, coordlist[i]
         except NameError:
             print('No Sources found!')
+
     else:
         print('Checking GRB location %s: %s' % (ra, dec))
         GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
@@ -892,6 +921,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
         grb_cutout(imageName, GRBcoords, photoDistThresh)
 
     if coordlist:
+        source_reg_gen()
         for key in idx_GRBpsfdict:
             values = idx_GRBpsfdict[key]
             idx_GRBcleanpsf = values[0]
@@ -915,6 +945,16 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                     grb_ra, grb_dec, grb_rad, grb_snr))
                 print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
+                # survey crsmtch check
+                idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
+                    mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
+                    grb_rad * u.arcsec)
+                if len(idx_bothcleanpsf) > 0:
+                    print(' Detected source crossmatched to existing %s source!' % survey)
+                    survey_flg = 1
+                else:
+                    survey_flg = 0
+
                 grbdata = Table()
                 grbdata['RA (deg)'] = np.array([grb_ra])
                 grbdata['DEC (deg)'] = np.array([grb_dec])
@@ -923,9 +963,13 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 grbdata['Radius (arcsec)'] = np.array([grb_rad])
                 grbdata['SNR'] = np.array([grb_snr])
                 grbdata['Distance (arcsec)'] = np.array([grb_dist])
+                grbdata['Survey Crsmtch'] = survey_flg
+
 
                 grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
-                print(' Generated GRB data table!')
+
+                source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
+                print(' Generated GRB data table & source DS9 regions!')
             elif len(idx_GRBcleanpsf) > 1:
                 print(' Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
                       ', refer to .ecsv file for source info!' % (ra, dec, photoDistThresh))
@@ -936,6 +980,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 rad_ar = []
                 snr_ar = []
                 dist_ar = []
+                crsmtch_ar = []
                 idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
                 for i in idx_GRBcleanpsflist:
                     grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
@@ -954,6 +999,20 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                     dist = (d2d[idx_GRBcleanpsflist.index(i)]).to(u.arcsec)
                     dist = dist / u.arcsec
                     dist_ar.append(dist)
+
+                    # survey crsmtch check
+                    idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
+                        mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
+                        grb_rad * u.arcsec)
+                    if len(idx_bothcleanpsf) > 0:
+                        print(' Detected source crossmatched to existing %s source!' % survey)
+                        survey_flg = 1
+                    else:
+                        survey_flg = 0
+                    crsmtch_ar.append(survey_flg)
+
+                    source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
+
                 grbdata = Table()
                 grbdata['RA (deg)'] = np.array(ra_ar)
                 grbdata['DEC (deg)'] = np.array(dec_ar)
@@ -962,8 +1021,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 grbdata['Radius (arcsec)'] = np.array(rad_ar)
                 grbdata['SNR'] = np.array(snr_ar)
                 grbdata['Distance (arcsec)'] = np.array(dist_ar)
+                grbdata['Survey Crsmtch'] = np.array(crsmtch_ar)
                 grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
-                print(' Generated GRB data table!')
+                print(' Generated GRB data table & source DS9 regions!')
             else:
                 print(' GRB source at inputted coords %s and %s not found in PRIME catalog, perhaps increase photoDistThresh or '
                       'alter sextractor params?' % (ra, dec))
