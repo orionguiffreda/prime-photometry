@@ -65,7 +65,16 @@ GET_DATA_SETTINGS = dict(
         ('SPIS J0539-0059', 'SPIS_J0539-0059'),
         ('Frost Check', 'Frost_Check'),
         ('GainTest LED', 'GainTest_LED'),
-    ]
+    ],
+    temperature_date_dict = {
+        '2023-06-15T23:00:00': {
+            '117': ['20240414', '20240904'],
+            '122': ['20250122'],
+            '111.5': ['20250220'],
+            '114': ['20250320']
+        }
+    },
+    ramp_cal_directory = '/nfs/home/prime/hamada/nlc_result/'
 )
 
 
