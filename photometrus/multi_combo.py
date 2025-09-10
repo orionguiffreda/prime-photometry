@@ -18,7 +18,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
           grb_radius=defaults['grb_radius'],auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist']
           ):
-
+    print('combo date', date)
     if parentdir:
         chosen_parent = parentdir
     else:

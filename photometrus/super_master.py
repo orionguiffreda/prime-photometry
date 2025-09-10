@@ -111,6 +111,7 @@ def get_fields_from_log(date=None, no_bulge=True):
 
 
 def full_processing_from_log(observations, date):
+    print('full_processing_from_log date:', date)
     datetime = to_datetime(date)
     logdate = datetime.strftime('%Y%m%d')
 

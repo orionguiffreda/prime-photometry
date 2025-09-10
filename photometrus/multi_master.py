@@ -16,6 +16,7 @@ from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 
 def auto_mflat_gen(date):
+    print("auto_mflat_gen date", date)
     check = mflat_checker(date)
     print('Running auto-MFLAT generation...')
     if check is False:
@@ -143,6 +144,7 @@ def multi_master(
         no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'], auto_mode=defaults['automode'],
         input_ramp_lists=defaults['ramplist']
 ):
+    print('multi_master date', date)
     if not no_mflat:
         auto_mflat_gen(date)
 

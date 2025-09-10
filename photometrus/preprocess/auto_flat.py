@@ -11,6 +11,7 @@ import sys
 
 
 def auto_flat_creation(date, band=None, chip=None):
+    print('auto_flat_creation date', date)
     datetime = to_datetime(date)
     date = datetime.strftime('%Y%m%d')
 
@@ -76,6 +77,7 @@ def auto_flat_creation(date, band=None, chip=None):
 
 
 def autoflatgen(date, band=None, chip=None):
+    print('autoflatgen date', date)
     auto_flat_creation(date, band, chip)
 
 
