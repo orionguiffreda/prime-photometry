@@ -209,9 +209,8 @@
         'GainTest LED',
         'GainTest_LED'
       ],
-    ]
-  },
-  'temperature_date_dict' : {
+    ],
+      'temperature_date_dict' : {
     '2023-06-15T23:00:00': {
       '117': ['20240414', '20240904'],
       '122': ['20250122'],
@@ -220,4 +219,5 @@
     }
   },
   'ramp_cal_directory': '/nfs/home/prime/hamada/nlc_result/'
+  }
 }

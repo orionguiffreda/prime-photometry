@@ -176,7 +176,7 @@ def get_temperature_date(datetime, temperature):
         return date_list[nearest_date]
 
 
-def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_dir']):
+def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
     """
     picks the appropriate calibration files based on the chip, temperature and date
     """
