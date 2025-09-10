@@ -109,7 +109,7 @@ def main():
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults['grb_radius'])
     args, unknown = parser.parse_known_args()  # TODO: get these default arguments from defaults dict
-
+    print('main', args.date)
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,
           args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'])
