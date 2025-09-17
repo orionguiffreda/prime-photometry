@@ -2,10 +2,11 @@
 Calibrates photometry for stacked image
 """
 
+import os
+import sys
 import numpy as np
 import numpy.ma as ma
 import argparse
-import sys
 import astropy.units as u
 from astroquery.vizier import Vizier
 from astroquery.ipac.ned import Ned
@@ -17,7 +18,7 @@ from astropy.io import fits
 from astropy.io import ascii
 from astropy.nddata import Cutout2D
 from regions import CircleSkyRegion
-import os
+import base64
 from astropy.table import Column
 from astropy.table import Table
 import matplotlib.pyplot as plt
@@ -235,7 +236,9 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                                   % (catNum, frame_long_str, frame_lat_str, width, mag_lims))
                             try:
                                 v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3]],
-                                           column_filters={"%s" % cols[2]: mag_lims, "%sFlag" % band.lower(): "<4"
+                                           column_filters={"%s" % cols[2]: mag_lims,
+                                                           "%sFlag" % band.lower(): "<4"
+                                                           # "%sperrbits" % band: '<=16',
                                                            }, row_limit=-1)
                                 Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
                                                    width=str(width) + 'm'
@@ -781,7 +784,7 @@ def newsourcesearch(source_ra, source_dec, thresh, w, imageName, survey, band, Q
 # %% optional GRB-specific photom
 
 
-def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None):
+def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars, directory, coordlist=None):
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
@@ -830,6 +833,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
 
         print(' Exported cutout & ds9 region of GRB search area!')
 
+        return savename, threshname
 
     # source ds9 region writing
     def source_reg_gen(src_ra=0, src_dec=0, rad=2, src_survey=None, append=False):
@@ -848,6 +852,78 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             newtext = open(name, 'a')
             newtext.write(f'\ncircle({src_ra}, {src_dec}, {rad}") # color={color}')
 
+        return name
+
+    # mag diff calc betw. survey and prime for existing source crsmtches
+    def mag_diff_calc(survey_cat, prime_cat, survey_idx, prime_idx, band):
+        colnames = survey_cat.colnames
+        magcolname = colnames[2]
+        magerrcolname = colnames[3]
+
+        if len(prime_idx) > 1:
+            mag_diff = float(survey_cat[magcolname][survey_idx]) - float(prime_cat['%sMAG_PSF' % band][prime_idx])
+
+            # errors in quad
+            comb_err = np.sqrt(survey_cat[magerrcolname][survey_idx] ** 2 +
+                               prime_cat['e_%sMAG_PSF' % band][prime_idx] ** 2)
+
+        else:
+            # survey mag - prime mag
+            mag_diff = float(survey_cat[magcolname][survey_idx]) - float(prime_cat['%sMAG_PSF' % band])
+
+            # errors in quad
+            comb_err = np.sqrt(survey_cat[magerrcolname][survey_idx] ** 2 +
+                               prime_cat['e_%sMAG_PSF' % band] ** 2)
+
+        err_3_sig = 3 * comb_err
+
+        if abs(mag_diff) > err_3_sig:
+            flg = 2
+            # print(' At least 1 source in threshold has a significant mag difference to the catalog!')
+        else:
+            flg = 1
+        return mag_diff, np.int16(flg)
+
+    # generation of html file
+    def html_gen(data, directory, savename, threshname, survname, primename, band, survey, ra, dec, thresh):
+        df = data.to_pandas()
+        tbl_html = df.to_html(index=False, classes="my-table")
+
+        with open(savename+'.png', "rb") as img_file:
+            encoded = base64.b64encode(img_file.read()).decode("utf-8")
+
+        fits_items = [savename+'.fits', threshname, survname, primename]
+        fits_items = [os.path.join(directory, f) for f in fits_items]
+
+        ds9_command = (f"ds9 {fits_items[0]} -regions {fits_items[1]} "
+                       f"-regions {fits_items[2]} -regions {fits_items[3]} &")
+
+        final_html = f"""
+        <div style="text-align: center; font-family: Arial, sans-serif;">
+    
+            <h2>GRB Information</h2>
+            <p style="margin-top: 0; margin-bottom: 10px; font-size: 16px; color: #555;">
+                RA = {ra}, Dec = {dec}, threshold = {thresh}"
+            </p>
+    
+            <img src="data:image/png;base64,{encoded}" alt="GRB Cutout Region" width="600" style="margin-bottom: 10px;">
+            
+            <p style="margin-top: 0px; margin-bottom: 10px; font-size: 16px; color: #555;">
+                Open GRB stamp in DS9 through terminal: 
+            </p>
+            <p style="margin-top: 0px; margin-bottom: 20px; font-size: 14px; color: #030303;">
+                {ds9_command}
+            </p>
+    
+            <div style="display: inline-block; text-align: left;">
+                {tbl_html}
+            </div>
+    
+        </div>
+        """
+
+        with open('GRB_Multisource_%s_Data_%s.html' % (band, survey), "w") as f:
+            f.write(final_html)
 
     # sexigesimal conversion
     try:
@@ -914,11 +990,11 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             source_reg_gen(src_survey=survey)
             for idx in idx_surveycleanpsf:
                 src = massCatCoords[idx]
-                source_reg_gen(src.ra.deg, src.dec.deg, src_survey=survey, append=True)
+                regsurvname = source_reg_gen(src.ra.deg, src.dec.deg, src_survey=survey, append=True)
         else:
             print(' No existing %s sources found within GRB threshold!' % survey)
 
-        grb_cutout(imageName, GRBcoords, photoDistThresh)
+        savename, threshname = grb_cutout(imageName, GRBcoords, photoDistThresh)
 
     if coordlist:
         source_reg_gen()
@@ -950,19 +1026,24 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                     mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
                     grb_rad * u.arcsec)
                 if len(idx_bothcleanpsf) > 0:
-                    print(' Detected source crossmatched to existing %s source!' % survey)
-                    survey_flg = 1
+                    # print(' Detected source crossmatched to existing %s source!' % survey)
+                    prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
+                    mag_diff_crs, survey_flg = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
+                                                             survey_idx=idx_bothcleanpsf, prime_idx=[idx_GRBcleanpsf][idx_both],
+                                                             band=band)
                 else:
-                    survey_flg = 0
+                    mag_diff_crs = 99
+                    survey_flg = np.int16(0)
 
                 grbdata = Table()
-                grbdata['RA (deg)'] = np.round(np.array([grb_ra]), decimals=5)
-                grbdata['DEC (deg)'] = np.round(np.array([grb_dec]), decimals=5)
-                grbdata['%sMag' % band] = np.round(np.array([grb_mag]), decimals=3)
-                grbdata['%sMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3)
-                grbdata['Radius (arcsec)'] = np.round(np.array([grb_rad]), decimals=2)
+                grbdata['RA'] = np.round(np.array([grb_ra]), decimals=5) * u.deg
+                grbdata['DEC'] = np.round(np.array([grb_dec]), decimals=5) * u.deg
+                grbdata['%sMag' % band] = np.round(np.array([grb_mag]), decimals=3) * u.ABmag
+                grbdata['%sMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3) * u.ABmag
+                grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
+                grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
                 grbdata['SNR'] = np.round(np.array([grb_snr]), decimals=2)
-                grbdata['Distance (arcsec)'] = np.round(np.array([grb_dist]), decimals=5)
+                grbdata['Distance'] = np.round(np.array([grb_dist]), decimals=5) * u.arcsec
                 grbdata['Survey Crsmtch'] = survey_flg
 
 
@@ -980,6 +1061,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                 rad_ar = []
                 snr_ar = []
                 dist_ar = []
+                diff_ar = []
                 crsmtch_ar = []
                 idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
                 for i in idx_GRBcleanpsflist:
@@ -1007,23 +1089,31 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                     idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
                         checkcoords, grb_rad * u.arcsec)
                     if len(idx_bothcleanpsf) > 0:
-                        print(' Detected source crossmatched to existing %s source!' % survey)
-                        survey_flg = 1
+                        # print(' Detected source crossmatched to existing %s source!' % survey)
+                        prime_crs_cat = mag_ecsvcleanSources[i]
+                        mag_diff_crs, survey_flg = mag_diff_calc(survey_cat=good_cat_stars,
+                                                                 prime_cat=prime_crs_cat,
+                                                                 survey_idx=idx_bothcleanpsf, prime_idx=[i][idx_both],
+                                                                 band=band)
                     else:
-                        survey_flg = 0
+                        mag_diff_crs = 99
+                        survey_flg = np.int16(0)
+
+                    diff_ar.append(mag_diff_crs)
                     crsmtch_ar.append(survey_flg)
 
                     source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
 
                 grbdata = Table()
-                grbdata['RA (deg)'] = np.round(np.array(ra_ar), decimals=5)
-                grbdata['DEC (deg)'] = np.round(np.array(dec_ar), decimals=5)
-                grbdata['%sMag' % band] = np.round(np.array(mag_ar), decimals=3)
-                grbdata['%sMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3)
-                grbdata['Radius (arcsec)'] = np.round(np.array(rad_ar), decimals=2)
+                grbdata['RA'] = np.round(np.array(ra_ar), decimals=5) * u.deg
+                grbdata['DEC'] = np.round(np.array(dec_ar), decimals=5) * u.deg
+                grbdata['%sMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
+                grbdata['%sMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
+                grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
+                grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
                 grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
-                grbdata['Distance (arcsec)'] = np.round(np.array(dist_ar), decimals=5)
-                grbdata['Survey Crsmtch'] = np.array(crsmtch_ar)
+                grbdata['Distance'] = np.round(np.array(dist_ar), decimals=5) * u.arcsec
+                grbdata['Survey_Crsmtch'] = np.array(crsmtch_ar)
                 grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
                 print(' Generated GRB data table & source DS9 regions!')
             else:
@@ -1049,27 +1139,35 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
             # survey crsmtch check
-            idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
-                                                                                       grb_rad * u.arcsec)
+            idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = (
+                massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf], grb_rad * u.arcsec))
             if len(idx_bothcleanpsf) > 0:
-                print(' Detected source crossmatched to existing %s source!' % survey)
-                survey_flg = 1
+                # print(' Detected source crossmatched to existing %s source!' % survey)
+                prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
+                mag_diff_crs, survey_flg = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
+                                                         survey_idx=idx_bothcleanpsf, prime_idx=[idx_GRBcleanpsf][idx_both],
+                                                         band=band)
             else:
-                survey_flg = 0
+                mag_diff_crs = 99
+                survey_flg = np.int16(0)
 
             grbdata = Table()
-            grbdata['RA (deg)'] = np.round(np.array([grb_ra]), decimals=5)
-            grbdata['DEC (deg)'] = np.round(np.array([grb_dec]), decimals=5)
-            grbdata['%sMag' % band] = np.round(np.array([grb_mag]), decimals=3)
-            grbdata['%sMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3)
-            grbdata['Radius (arcsec)'] = np.round(np.array([grb_rad]), decimals=2)
+            grbdata['RA'] = np.round(np.array([grb_ra]), decimals=5) * u.deg
+            grbdata['DEC'] = np.round(np.array([grb_dec]), decimals=5) * u.deg
+            grbdata['%sMag' % band] = np.round(np.array([grb_mag]), decimals=3) * u.ABmag
+            grbdata['%sMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3) * u.ABmag
+            grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
+            grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
             grbdata['SNR'] = np.round(np.array([grb_snr]), decimals=2)
-            grbdata['Distance (arcsec)'] = np.round(np.array([grb_dist]), decimals=5)
+            grbdata['Distance'] = np.round(np.array([grb_dist]), decimals=5) * u.arcsec
             grbdata['Survey Crsmtch'] = survey_flg
 
             grbdata.write('GRB_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
 
-            source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
+            regprimename = source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
+
+            html_gen(grbdata, directory, savename, threshname, regsurvname, regprimename, band, survey, ra, dec, thresh)
+
             print(' Generated GRB data table & source DS9 regions!')
         elif len(idx_GRBcleanpsf) > 1:
             print(' Multiple sources detected in search radius (ra = %s, dec = %s, rad = %s arcsec)'
@@ -1081,6 +1179,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
             rad_ar = []
             snr_ar = []
             dist_ar = []
+            diff_ar = []
             crsmtch_ar = []
             idx_GRBcleanpsflist = idx_GRBcleanpsf.tolist()
             source_reg_gen()
@@ -1106,23 +1205,36 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, coordlist=None)
                                        frame='icrs', unit='degree')
                 idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
                     checkcoords, grb_rad * u.arcsec)
+
                 if len(idx_bothcleanpsf) > 0:
-                    survey_flg = 1
+                    # print(' Detected source crossmatched to existing %s source!' % survey)
+                    prime_crs_cat = mag_ecsvcleanSources[i]
+                    mag_diff_crs, survey_flg = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
+                                                             survey_idx=idx_bothcleanpsf, prime_idx=idx_both, band=band)
                 else:
-                    survey_flg = 0
+                    mag_diff_crs = 99
+                    survey_flg = np.int16(0)
+
+                diff_ar.append(mag_diff_crs)
                 crsmtch_ar.append(survey_flg)
 
-                source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
+                regprimename = source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
+
             grbdata = Table()
-            grbdata['RA (deg)'] = np.round(np.array(ra_ar), decimals=5)
-            grbdata['DEC (deg)'] = np.round(np.array(dec_ar), decimals=5)
-            grbdata['%sMag' % band] = np.round(np.array(mag_ar), decimals=3)
-            grbdata['%sMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3)
-            grbdata['Radius (arcsec)'] = np.round(np.array(rad_ar), decimals=2)
+            grbdata['RA'] = np.round(np.array(ra_ar), decimals=5) * u.deg
+            grbdata['DEC'] = np.round(np.array(dec_ar), decimals=5) * u.deg
+            grbdata['%sMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
+            grbdata['%sMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
+            grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
+            grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
             grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
-            grbdata['Distance (arcsec)'] = np.round(np.array(dist_ar), decimals=5)
-            grbdata['Survey Crsmtch'] = np.array(crsmtch_ar)
+            grbdata['Distance'] = np.round(np.array(dist_ar), decimals=5) * u.arcsec
+            grbdata['Survey_Crsmtch'] = np.array(crsmtch_ar)
+            # grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
+
+            html_gen(grbdata, directory, savename, threshname, regsurvname, regprimename, band, survey, ra, dec, thresh)
+
             print(' Generated GRB data table & source DS9 regions!')
         else:
             print(' GRB source at inputted coords %s and %s not found in PRIME catalog, perhaps increase photoDistThresh or '
@@ -1606,7 +1718,7 @@ def int_calibration(
         mag_low_lim, mag_high_lim, grb_ra, grb_dec,
         grb_coordlist, grb_radius
 ):
-    print('3 sigma fit y-intercept > 0.15! Redoing photometry w/ mag low cutoff = %s\n' % mag_low_lim)
+    print('3 sigma fit y-intercept > 0.15! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (sigma, mag_low_lim))
     data, header, w, raImage, decImage, bulge = img(directory, name, crop)
     Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                              mag_high_lim, bulge)
@@ -1621,9 +1733,9 @@ def int_calibration(
                                                                          idx_psfmass, idx_psfimage,
                                                                          name, band, chosen_survey, sigma)
     if grb_ra:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords)
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, good_cat_stars, directory)
     elif grb_coordlist:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, grb_coordlist)
+        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, good_cat_stars, directory, grb_coordlist)
     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
 
@@ -1673,13 +1785,13 @@ def photometry(
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         if grb_coordlist:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, grb_coordlist)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory, grb_coordlist)
         else:
             if grb_thresh > 60:
                 # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
                 newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
             else:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory)
     else:
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
@@ -1700,9 +1812,9 @@ def photometry(
                 if grb_thresh > 60:
                     newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
                 else:
-                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords)
+                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory)
             elif grb_coordlist:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, grb_coordlist)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory, grb_coordlist)
             if not no_plots:
                 slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma)
@@ -1714,16 +1826,17 @@ def photometry(
                 revert_flag = False
                 while abs(intercept) > 0.15:
                     print('\nIntercept = %.4f\n' % intercept)
-                    mag_low_cutoff += 0.5
+                    sigma -= 0.5
+                    # mag_low_cutoff += 0.5
                     new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_radius)
+                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
                     if abs(new_intercept) > abs(prev_intercept):
                         print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                               "redoing...\n" % (new_intercept, prev_intercept))
                         intercept = prev_intercept
-                        new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                        mag_low_cutoff-0.5, mag_high_lim, grb_ra,
-                                                        grb_dec, grb_coordlist, grb_radius)
+                        new_intercept = int_calibration(name, directory, band, crop, sigma+0.5, given_catalog, chosen_survey,
+                                                        mag_low_cutoff, mag_high_lim, grb_ra,
+                                                        grb_dec, grb_coordlist, grb_thresh)
                         revert_flag = True
                         break
                     else:
@@ -1737,8 +1850,9 @@ def photometry(
 
     end_time = dt.now()
     print('\nFull photometric processing time:', (end_time - start_time).total_seconds())
-def main():
 
+
+def main():
     parser = argparse.ArgumentParser(
         description='runs sextractor and psfex on swarped img to get psf fit photometry, then '
                     'outputs ecsv w/ corrected mags')

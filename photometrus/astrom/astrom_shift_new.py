@@ -138,7 +138,7 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
     print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
           % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
     v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
-                                                "%sperrbits" % band: errbits_vvv,
+                                                 "%sperrbits" % band: errbits_vvv,
                                                 "%s1perrb" % band: errbits_vvv,
                                                 "%sflags" % band: errbits_vvv,
                                                 "Cflg": errbits_2M,

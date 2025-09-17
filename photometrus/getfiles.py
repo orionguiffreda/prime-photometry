@@ -158,16 +158,16 @@ def get_temperature_date(datetime, temperature):
     cutoff_dates = sorted(temperature_date_dict.keys())
     temp_dates = {}
     for cutoff_date in cutoff_dates:  # getting era with identical load files
-        td = to_datetime(cutoff_date) - datetime
+        td = datetime - to_datetime(cutoff_date)
         if td.total_seconds() > 0:
             temp_dates = temperature_date_dict[cutoff_date]
             break
     if not temp_dates:  # raise an error if no dataset exists
         raise NoCalError
     temperature_keys = temp_dates.keys()
-    temperatures = np.asarray(temperature_keys, dtype=float)
+    temperatures = np.asarray(list(temperature_keys), dtype=float)
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
-    date_list = temp_dates[temperature_keys[nearest_temp]]
+    date_list = temp_dates['{:.1f}'.format(temperatures[nearest_temp])]
     if len(date_list) == 1:
         return date_list[0]
     else:
@@ -240,7 +240,7 @@ def regen_ramp(file_number, nframe, camera):
     ext_dict = {'.fz': 1, '.fits': 0, '.ramp': 0}
     extension = ext_dict[os.path.splitext(raw_files[0])[1]]
     try:
-        superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal_files(fits.getheader(raw_files[0], ext=extension))
+        superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
