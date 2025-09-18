@@ -64,7 +64,7 @@ def get_table_from_ldac(filename, frame=1):
 #%% vega to AB mag conversion
 
 
-def ab_convert(mag, band, survey=None):
+def ab_convert(mag, band, survey=None, revert=False):
     # jy zero points
     # from 2MASS
     if survey == '2MASS':
@@ -77,6 +77,11 @@ def ab_convert(mag, band, survey=None):
 
         flx = zp * 10 ** (-mag / 2.5)
         ab_mag = -2.5 * np.log10(flx / 3631)
+        if revert:
+            # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
+            v_flx = 3631 * 10 ** (-mag / 2.5)
+            vega_mag = -2.5 * np.log10(v_flx / zp)
+            return vega_mag
     elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS':
         print('Survey %s is already reported in AB mag, no offset required.' % survey)
         ab_mag = mag
@@ -88,6 +93,10 @@ def ab_convert(mag, band, survey=None):
             if k == band:
                 offset = v
         ab_mag = mag+offset
+        if revert:
+            # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
+            vega_mag = mag - offset
+            return vega_mag
     return ab_mag
 
 #%%
@@ -788,6 +797,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
+    mag_ecsvcleanSources['%sMAG_PSF' % band] = (
+        ab_convert(mag_ecsvcleanSources['%sMAG_PSF' % band], band=band, survey=survey, revert=True))
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'],
                                        frame='icrs',
                                        unit='degree')
@@ -909,7 +920,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             <img src="data:image/png;base64,{encoded}" alt="GRB Cutout Region" width="600" style="margin-bottom: 10px;">
             
             <p style="margin-top: 0px; margin-bottom: 10px; font-size: 16px; color: #555;">
-                Open GRB stamp in DS9 through terminal: 
+                To see source regions, open GRB stamp in DS9 through terminal: 
             </p>
             <p style="margin-top: 0px; margin-bottom: 20px; font-size: 14px; color: #030303;">
                 {ds9_command}
@@ -1246,9 +1257,14 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
 def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band, good_cat_stars, idx_psfmass, idx_psfimage,
                      psfweights_noclip, psf_clipped, sigma):
+
     # appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
+
+    # survey AB conversion for plot correctness
+    print('Converting Vega surveys to AB to ensure plot correctness!')
+    good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
 
     chip = imageName[-6]
     if len(imageName) <= 16:
@@ -1818,35 +1834,34 @@ def photometry(
             if not no_plots:
                 slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma)
-            if not int_cal:
-                if not keep:
-                    removal(directory)
-            else:
-                prev_intercept = intercept
-                revert_flag = False
-                while abs(intercept) > 0.15:
-                    print('\nIntercept = %.4f\n' % intercept)
-                    sigma -= 0.5
-                    # mag_low_cutoff += 0.5
-                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                    mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
-                    if abs(new_intercept) > abs(prev_intercept):
-                        print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
-                              "redoing...\n" % (new_intercept, prev_intercept))
-                        intercept = prev_intercept
-                        new_intercept = int_calibration(name, directory, band, crop, sigma+0.5, given_catalog, chosen_survey,
-                                                        mag_low_cutoff, mag_high_lim, grb_ra,
-                                                        grb_dec, grb_coordlist, grb_thresh)
-                        revert_flag = True
-                        break
-                    else:
-                        intercept = new_intercept
-                        prev_intercept = intercept
-                        revert_flag = False
-                if revert_flag:
-                    print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+            prev_intercept = intercept
+            revert_flag = False
+            while abs(intercept) > 0.15:
+                print('\nIntercept = %.4f\n' % intercept)
+                sigma -= 0.5
+                # mag_low_cutoff += 0.5
+                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
+                if abs(new_intercept) > abs(prev_intercept):
+                    print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
+                          "redoing...\n" % (new_intercept, prev_intercept))
+                    intercept = prev_intercept
+                    new_intercept = int_calibration(name, directory, band, crop, sigma+0.5, given_catalog, chosen_survey,
+                                                    mag_low_cutoff, mag_high_lim, grb_ra,
+                                                    grb_dec, grb_coordlist, grb_thresh)
+                    revert_flag = True
+                    break
                 else:
-                    print(f"Final intercept below 0.15: %.4f" % intercept)
+                    intercept = new_intercept
+                    prev_intercept = intercept
+                    revert_flag = False
+            if revert_flag:
+                print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+            else:
+                print(f"Final intercept below 0.15: %.4f" % intercept)
+
+            if not keep:
+                removal(directory)
 
     end_time = dt.now()
     print('\nFull photometric processing time:', (end_time - start_time).total_seconds())
