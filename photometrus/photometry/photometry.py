@@ -82,7 +82,8 @@ def ab_convert(mag, band, survey=None, revert=False):
             v_flx = 3631 * 10 ** (-mag / 2.5)
             vega_mag = -2.5 * np.log10(v_flx / zp)
             return vega_mag
-    elif survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS':
+    elif (survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS'
+          or survey == 'PanSTARRS_Z'):
         print('Survey %s is already reported in AB mag, no offset required.' % survey)
         ab_mag = mag
     else:
@@ -356,6 +357,20 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                       % (catNum, frame_long_str, frame_lat_str, width))
                 try:
                     v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
+                               column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
+                    Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                                       catalog=catNum, cache=False, frame=chosen_frame)
+                    print('Queried source total = ', len(Q[0]))
+                except:
+                    print(
+                        'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+                        '\n perhaps check UKIDSS coverage maps?')
+            elif survey == 'PanSTARRS':
+                catNum = 'II/389/ps1_dr2'
+                print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin'
+                      % (catNum, frame_long_str, frame_lat_str, width))
+                try:
+                    v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band.lower(), 'e_%smag' % band.lower()],
                                column_filters={"%smag" % band: f">{mag_low_cutoff:f}"}, row_limit=-1)
                     Q = v.query_region(SkyCoord(ra=raImage, dec=decImage, unit=(u.deg, u.deg)), width=str(width) + 'm',
                                        catalog=catNum, cache=False, frame=chosen_frame)
@@ -896,7 +911,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         return mag_diff, np.int16(flg)
 
     # generation of html file
-    def html_gen(data, directory, savename, threshname, survname, primename, band, survey, ra, dec, thresh):
+    def html_gen(data, directory, savename, threshname, band, survey, ra, dec, thresh, survname=None, primename=None):
         df = data.to_pandas()
         tbl_html = df.to_html(index=False, classes="my-table")
 
@@ -904,10 +919,12 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             encoded = base64.b64encode(img_file.read()).decode("utf-8")
 
         fits_items = [savename+'.fits', threshname, survname, primename]
-        fits_items = [os.path.join(directory, f) for f in fits_items]
+        fits_items = [os.path.join(directory, f) for f in fits_items if f is not None]
 
-        ds9_command = (f"ds9 {fits_items[0]} -regions {fits_items[1]} "
-                       f"-regions {fits_items[2]} -regions {fits_items[3]} &")
+        base = fits_items[0]
+        regions = " ".join(f"-regions {f}" for f in fits_items[1:])
+
+        ds9_command = f"ds9 {base} {regions} &"
 
         final_html = f"""
         <div style="text-align: center; font-family: Arial, sans-serif;">
@@ -987,7 +1004,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             print('No Sources found!')
 
     else:
-        print('Checking GRB location %s: %s' % (ra, dec))
+        print('Checking GRB location %s, %s' % (ra, dec))
         GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
         # prime source crsmtch
         idx_GRB, idx_GRBcleanpsf, d2d, d3d = mag_ecsvsourceCatCoords.search_around_sky(GRBcoords,
@@ -1004,6 +1021,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 regsurvname = source_reg_gen(src.ra.deg, src.dec.deg, src_survey=survey, append=True)
         else:
             print(' No existing %s sources found within GRB threshold!' % survey)
+            regsurvname = None
 
         savename, threshname = grb_cutout(imageName, GRBcoords, photoDistThresh)
 
@@ -1177,7 +1195,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
             regprimename = source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
 
-            html_gen(grbdata, directory, savename, threshname, regsurvname, regprimename, band, survey, ra, dec, thresh)
+            html_gen(grbdata, directory, savename, threshname, band, survey, ra, dec, thresh, regsurvname, regprimename)
 
             print(' Generated GRB data table & source DS9 regions!')
         elif len(idx_GRBcleanpsf) > 1:
@@ -1244,7 +1262,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             # grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
 
-            html_gen(grbdata, directory, savename, threshname, regsurvname, regprimename, band, survey, ra, dec, thresh)
+            html_gen(grbdata, directory, savename, threshname, band, survey, ra, dec, thresh, regsurvname, regprimename)
 
             print(' Generated GRB data table & source DS9 regions!')
         else:
@@ -1732,12 +1750,12 @@ def grb_rad_convert(rad):
 def int_calibration(
         name, directory, band, crop, sigma, given_catalog, survey,
         mag_low_lim, mag_high_lim, grb_ra, grb_dec,
-        grb_coordlist, grb_radius
+        grb_coordlist, grb_radius, max_int
 ):
-    print('3 sigma fit y-intercept > 0.15! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (sigma, mag_low_lim))
+    print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
     data, header, w, raImage, decImage, bulge = img(directory, name, crop)
-    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
-                                             mag_high_lim, bulge)
+    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
+                                             mag_upper_lim=mag_high_lim, bulge=bulge)
     psfcatalogName = []
     for f in os.listdir(directory):
         if f.endswith('.psf.cat'):
@@ -1749,9 +1767,9 @@ def int_calibration(
                                                                          idx_psfmass, idx_psfimage,
                                                                          name, band, chosen_survey, sigma)
     if grb_ra:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, good_cat_stars, directory)
+        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, good_cat_stars, directory)
     elif grb_coordlist:
-        GRB(grb_ra, grb_dec, name, survey, band, grb_radius, massCatCoords, good_cat_stars, directory, grb_coordlist)
+        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, good_cat_stars, directory, grb_coordlist)
     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, good_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
 
@@ -1793,6 +1811,8 @@ def photometry(
         grb_thresh = grb_rad_convert(grb_radius)
 
     if grb_only:
+        if grb_dec is None:
+            sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
         os.chdir(directory)
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
@@ -1825,6 +1845,8 @@ def photometry(
             cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
                                                  name, band, chosen_survey, sigma)
             if grb_ra:
+                if grb_dec is None:
+                    sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
                 if grb_thresh > 60:
                     newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
                 else:
@@ -1836,19 +1858,22 @@ def photometry(
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma)
             prev_intercept = intercept
             revert_flag = False
-            while abs(intercept) > 0.15:
+
+            max_int = 0.1
+            while abs(intercept) > max_int:
                 print('\nIntercept = %.4f\n' % intercept)
-                sigma -= 0.5
-                # mag_low_cutoff += 0.5
+                # sigma -= 0.5
+                mag_low_cutoff += 0.5
                 new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh)
+                                                mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh,
+                                                max_int=max_int)
                 if abs(new_intercept) > abs(prev_intercept):
                     print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                           "redoing...\n" % (new_intercept, prev_intercept))
                     intercept = prev_intercept
-                    new_intercept = int_calibration(name, directory, band, crop, sigma+0.5, given_catalog, chosen_survey,
-                                                    mag_low_cutoff, mag_high_lim, grb_ra,
-                                                    grb_dec, grb_coordlist, grb_thresh)
+                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                    mag_low_cutoff-0.5, mag_high_lim, grb_ra,
+                                                    grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
                     revert_flag = True
                     break
                 else:
@@ -1929,7 +1954,7 @@ def main():
                              'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
                         default=defaults["int_cal"])
     args, unknown = parser.parse_known_args()
-    # print(args)
+    print(args)
     # print(unknown)
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,

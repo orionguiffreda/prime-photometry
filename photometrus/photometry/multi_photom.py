@@ -24,7 +24,7 @@ def fetchstacks(stackpath, chip=None):
             chips = chip.split(',')
             chips = [int(f) for f in chips]
 
-    allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.Open')]
+    allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.')]
     matchingstacks = sorted([img for img in allstacks if any(f'C{chosenchips}' in img for chosenchips in chips)])
     if not matchingstacks:
         raise FileNotFoundError('No stacks matching format and given chip(s) are found!')

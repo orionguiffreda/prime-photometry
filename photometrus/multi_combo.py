@@ -18,12 +18,13 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
           grb_radius=defaults['grb_radius'],auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist']
           ):
-    print('combo date', date)
-    if parentdir:
+    # print('combo date', date)
+    if parentdir != defaults['parent']:
         chosen_parent = parentdir
+        stackpath = os.path.join(chosen_parent, 'stack')
     else:
         chosen_parent, field_dir = multi_master.parentcreation(target, date, band)
-    stackpath = os.path.join(chosen_parent, 'stack')
+        stackpath = os.path.join(chosen_parent, 'stack')
 
     if not chip:
         chips = [1, 2, 3, 4]
@@ -109,9 +110,9 @@ def main():
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults['grb_radius'])
     args, unknown = parser.parse_known_args()  # TODO: get these default arguments from defaults dict
-    print('main', args.date)
-    print('args', args)
-    print('unknown', unknown)
+    # print('main', args.date)
+    # print('args', args)
+    # print('unknown', unknown)
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,
           args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'])
