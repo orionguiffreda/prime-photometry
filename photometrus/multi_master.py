@@ -9,20 +9,22 @@ from photometrus.preprocess import auto_flat
 from photometrus.getdata import download_data
 from photometrus.getfiles import get_data_files
 from photometrus.master import master
-from photometrus.settings import mflat_checker
+from photometrus.preprocess.auto_flat import gen_mflat_file_name_new
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
 
 
-def auto_mflat_gen(date):
-    print("auto_mflat_gen date", date)
-    check = mflat_checker(date)
-    print('Running auto-MFLAT generation...')
-    if check is False:
-        auto_flat.autoflatgen(date)
-    else:
-        pass
+def auto_mflat_gen(date, band, chip):
+    file = gen_mflat_file_name_new(band, chip, date)
+
+    # print("auto_mflat_gen date", date)
+    # check = mflat_checker(date)
+    # print('Running auto-MFLAT generation...')
+    # if check is False:
+    #     auto_flat.autoflatgen(date)
+    # else:
+    #     pass
 
 
 def parentcreation(target, date, band):
@@ -86,9 +88,9 @@ def datadownload(parentdir, target, band, date, chip):
 def refineprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
                   bulge):
     if chip == 1 or chip == 2:
-        sigma = 4
+        sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
-        sigma = 6
+        sigma = defaults['sigma'] + 2
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
@@ -98,9 +100,9 @@ def refineprocess(parentdir, chip, band, date, rot_val, sky_override_path, remov
 def shiftprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
                  bulge):
     if chip == 1 or chip == 2:
-        sigma = 4
+        sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
-        sigma = 6
+        sigma = defaults['sigma'] + 2
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, sky_override=sky_override_path,
@@ -110,9 +112,9 @@ def shiftprocess(parentdir, chip, band, date, rot_val, sky_override_path, remova
 def baseprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
                 bulge):
     if chip == 1 or chip == 2:
-        sigma = 4
+        sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
-        sigma = 6
+        sigma = defaults['sigma'] + 2
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
@@ -144,9 +146,8 @@ def multi_master(
         no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'], auto_mode=defaults['automode'],
         input_ramp_lists=defaults['ramplist']
 ):
-    print('multi_master date', date)
     if not no_mflat:
-        auto_mflat_gen(date)
+        auto_mflat_gen(date, band, chip)
 
     if parentdir != defaults['parent']:
         chosen_parent = parentdir

@@ -8,8 +8,7 @@ from astropy.io import fits
 from datetime import datetime as dt
 
 # from photometrus.settings import makedirs
-from photometrus.settings import gen_pipeline_file_name
-from photometrus.settings import gen_mflat_file_name
+from photometrus.settings import gen_pipeline_file_name, gen_mflat_file_name, gen_sflat_file_name
 from photometrus.preprocess import astromangle_new
 from photometrus.preprocess import astromangle_wcs
 from photometrus.preprocess import gen_astrometry
@@ -148,6 +147,7 @@ def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
 def flatfielding(astrompath, FFpath, band, chip, date=None):
     os.chdir(gen_pipeline_file_name())
     print('using master flat to flat field ramp imgs..')
+    # flatpath = gen_mflat_file_name(band, chip, date)
     flatpath = gen_mflat_file_name(band, chip, date)
 
     print('\nEquivalent argparse cmd: photometrus process flatfield -in_path %s -out_path %s'

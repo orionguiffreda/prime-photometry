@@ -204,19 +204,36 @@ def gen_mflat_file_name(band, chip, date=None):
     return os.path.join(flat_dir, filename)
 
 
-def mflat_checker(date):
+def mflat_checker(date, band=None, sflat=False):
     base_dir = gen_pipeline_file_name()
     flat_dir = gen_flat_dir()
     # flat_dir = '/home/alex/PycharmProjects/prime-photometry/photometrus/mflats/'
-    mflat_list = [
-        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
+    if band:
+        mflat_list = [
+            f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.%s.' % (band,date) in f]
+    else:
+        mflat_list = [
+            f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
     if not mflat_list:
-        print('\nNo master flat currently generated for this date!')
+        if not sflat:
+            print('\nNo master flat currently generated for this date!')
         return False
     else:
-        print('\nMaster flats exist for this date!')
-    return True
+        if not sflat:
+            print('\nMaster flats exist for this date!')
+        return True
 
+
+def gen_sflat_file_name(band, chip, date=None):
+    flat_dir = gen_flat_dir()
+    sflat_list = [
+        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f
+        if f.startswith('sflat.')]
+
+    sflat_list = sorted(sflat_list, reverse=True)
+    filename = sflat_list[0]
+    print('Getting latest sflat: ', filename)
+    return os.path.join(flat_dir, filename)
 #%%
 """
 # Settings for list of directory+filenames

@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 import statsmodels.api as sm
 import subprocess
 from scipy.stats import skew
+from scipy import odr
 import warnings
 from datetime import datetime as dt
 
@@ -67,6 +68,8 @@ def get_table_from_ldac(filename, frame=1):
 def ab_convert(mag, band, survey=None, revert=False):
     # jy zero points
     # from 2MASS
+    offset_dict = AB_OFFSET_DICT
+
     if survey == '2MASS':
         zp_dict = {'zp_J': 1594, 'zp_H': 1024}
         pick_zp = 'zp_' + band
@@ -82,15 +85,10 @@ def ab_convert(mag, band, survey=None, revert=False):
             v_flx = 3631 * 10 ** (-mag / 2.5)
             vega_mag = -2.5 * np.log10(v_flx / zp)
             return vega_mag
-    elif (survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS'
-          or survey == 'PanSTARRS_Z'):
-        print('Survey %s is already reported in AB mag, no offset required.' % survey)
-        ab_mag = mag
-    else:
-        # for vista (AB-Vega offsets): https://www.aanda.org/articles/aa/full_html/2015/03/aa24973-14/T3.html
-        offset_dict = AB_OFFSET_DICT
 
-        for k, v in offset_dict.items():
+    elif 'UKIDSS' in survey:
+        # for ukirt conversion: https://adsabs.harvard.edu/full/2006MNRAS.367..454H
+        for k, v in offset_dict['UKIDSS'].items():
             if k == band:
                 offset = v
         ab_mag = mag+offset
@@ -98,6 +96,24 @@ def ab_convert(mag, band, survey=None, revert=False):
             # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
             vega_mag = mag - offset
             return vega_mag
+
+    elif (survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS'
+          or survey == 'PanSTARRS_Z'):
+        print('Survey %s is already reported in AB mag, no offset required.' % survey)
+        ab_mag = mag
+
+    else:
+        # for vista (AB-Vega offsets): https://www.aanda.org/articles/aa/full_html/2015/03/aa24973-14/T3.html
+
+        for k, v in offset_dict['VISTA'].items():
+            if k == band:
+                offset = v
+        ab_mag = mag+offset
+        if revert:
+            # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
+            vega_mag = mag - offset
+            return vega_mag
+
     return ab_mag
 
 #%%
@@ -206,8 +222,9 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
 
             # current columns
             v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band,
-                                'e_%sap3' % band, '%smag' % band, '%smag3' % band, 'e_%smag' % band, 'e_%smag3' % band,
-                                '%smag' % band.lower(),'e_%smag' % band.lower(), '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
+                                'e_%sap3' % band, '%smag' % band, '%smag3' % band, '%smag1' % band, 'e_%smag1' % band,
+                                'e_%smag' % band, 'e_%smag3' % band, '%smag' % band.lower(),'e_%smag' % band.lower(),
+                                '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
                                 '%spmag' % band.lower(), 'e_%spmag' % band.lower()])
             try:
                 result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs])
@@ -247,7 +264,8 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                             try:
                                 v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3]],
                                            column_filters={"%s" % cols[2]: mag_lims,
-                                                           "%sFlag" % band.lower(): "<4"
+                                                           "%sFlag" % band.lower(): "<4",
+                                                           "%sflags1" % band.lower(): "<16"
                                                            # "%sperrbits" % band: '<=16',
                                                            }, row_limit=-1)
                                 Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
@@ -423,17 +441,31 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
 # run sextractor on swarped img to find sources
 
 
-def sex1(imageName):
+def sex1(imageName, det_cut):
     print('Running sextractor on img to initially find sources...')
     configFile = gen_config_file_name('sex2.config')
     paramName = gen_config_file_name('tempsource.param')
     catalogName = imageName + '.cat'
     weightName = 'weight'+imageName[5:]
     if os.path.isfile(weightName):
+        # imghdr = fits.getheader(imageName)
+        # if 'BUNIT' in imghdr:
+        #     scale_fac = imghdr['CONV_FAC']
+        # else:
+        scale_fac = 1
+        weightdata = fits.getdata(weightName)
+        weightdata = weightdata / scale_fac**2
+        weight_med = np.nanmedian(weightdata)
+        detect_cutoff = weight_med * det_cut
+        with fits.open(weightName, mode='update') as hdu:
+            whdr = hdu[0].header
+            whdr.set('MEDIAN', weight_med, 'Median of weight image', after='EQUINOX')
+            whdr.set('DET_CUT', detect_cutoff, 'Pix value cutoff for source detection', after='MEDIAN')
+            hdu.close()
         try:
             print('Including weight map!')
-            command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
-                       (imageName, configFile, catalogName, weightName, paramName))
+            command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
+                       (imageName, configFile, catalogName, detect_cutoff, weightName, paramName))
             # print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
@@ -471,7 +503,7 @@ def psfex(catalogName):
 # feed generated psf model back into sextractor w/ diff param (or could use that param from the start but its slower)
 
 
-def sex2(imageName):
+def sex2(imageName, det_cut):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
     psfcatalogName = imageName.replace('.fits', '.psf.cat')
@@ -479,10 +511,19 @@ def sex2(imageName):
     psfparamName = gen_config_file_name('photomPSF.param')
     weightName = 'weight' + imageName[5:]
     if os.path.isfile(weightName):
+        # imghdr = fits.getheader(imageName)
+        # if 'BUNIT' in imghdr:
+        #     scale_fac = imghdr['CONV_FAC']
+        # else:
+        scale_fac = 1
+        weightdata = fits.getdata(weightName)
+        weightdata = weightdata / scale_fac**2
+        weight_med = np.nanmedian(weightdata)
+        detect_cutoff = weight_med * det_cut
         try:
             # We are supplying SExtactor with the PSF model with the PSF_NAME option
-            command = 'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
-            imageName, configFile, psfcatalogName, weightName, psfName, psfparamName)
+            command = 'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
+            imageName, configFile, psfcatalogName, detect_cutoff, weightName, psfName, psfparamName)
             # print("Executing command: %s" % command)
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
@@ -517,16 +558,28 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                (given_cat['YMODEL_IMAGE'] < (max_y) - crop) & (given_cat['YMODEL_IMAGE'] > crop)]
 
         psfsourceTable = get_table_from_ldac(psfcatalogName)
+        if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
+            r50 = psfsourceTable['FLUX_RADIUS'][:, 0]
+            r90 = psfsourceTable['FLUX_RADIUS'][:, 1]
+
+            idx_r = psfsourceTable.colnames.index('FLUX_RADIUS')
+            psfsourceTable['FLUX_RADIUS'] = r50
+            psfsourceTable.add_column(r90, name='FLUX_RADIUS_90', index=idx_r + 1)
+            flux_radius = psfsourceTable['FLUX_RADIUS_90']
+        else:
+            flux_radius = psfsourceTable['FLUX_RADIUS']
+
+        psfsourceTable = psfsourceTable[~np.isnan(flux_radius)]
 
         PSFSources = psfsourceTable[
             (psfsourceTable['XMODEL_IMAGE'] < (max_x - crop)) & (psfsourceTable['XMODEL_IMAGE'] > crop)
             & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop) &
-            (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
+            (flux_radius >= 1 / 0.498)]
 
         cleanPSFSources = psfsourceTable[
             (psfsourceTable['FLAGS'] == 0) & (psfsourceTable['FLAGS_MODEL'] == 0) & (psfsourceTable['XMODEL_IMAGE']
             < (max_x - crop)) & (psfsourceTable['XMODEL_IMAGE'] > crop) & (psfsourceTable['YMODEL_IMAGE']
-            < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop) & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
+            < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop) & (flux_radius >= 1 / 0.498)]
 
         print('Catalogue cropped, source total = ', len(good_cat_stars))
 
@@ -550,17 +603,27 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         print('Catalogue cropped, source total = ', len(good_cat_stars))
 
         psfsourceTable = get_table_from_ldac(psfcatalogName)
+        if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
+            r50 = psfsourceTable['FLUX_RADIUS'][:, 0]
+            r90 = psfsourceTable['FLUX_RADIUS'][:, 1]
+
+            idx_r = psfsourceTable.colnames.index('FLUX_RADIUS')
+            psfsourceTable['FLUX_RADIUS'] = r50
+            psfsourceTable.add_column(r90, name='FLUX_RADIUS_90', index=idx_r + 1)
+            flux_radius = psfsourceTable['FLUX_RADIUS_90']
+        else:
+            flux_radius = psfsourceTable['FLUX_RADIUS']
 
         PSFSources = psfsourceTable[
             (psfsourceTable['XMODEL_IMAGE'] < (max_x - crop)) & (psfsourceTable['XMODEL_IMAGE'] > crop)
             & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop) & (psfsourceTable['YMODEL_IMAGE'] > crop)
-            & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
+            & (flux_radius >= 1 / 0.498)]
 
         cleanPSFSources = psfsourceTable[
             (psfsourceTable['FLAGS'] == 0) & (psfsourceTable['FLAGS_MODEL'] == 0) & (psfsourceTable['XMODEL_IMAGE']
                                                                                      < (max_x - crop)) & (
                         psfsourceTable['XMODEL_IMAGE'] > crop) & (psfsourceTable['YMODEL_IMAGE'] < (max_y) - crop)
-            & (psfsourceTable['YMODEL_IMAGE'] > crop) & (psfsourceTable['FLUX_RADIUS'] >= 1.0)]
+            & (psfsourceTable['YMODEL_IMAGE'] > crop) & (flux_radius >= 1 / 0.498)]
 
         # psfsourceCatCoords = SkyCoord(ra=cleanPSFSources['ALPHA_J2000'], dec=cleanPSFSources['DELTA_J2000'], frame='icrs', unit='degree')
 
@@ -636,7 +699,6 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     # print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
     print('zp = %.4f, zp err = %.6f' % (zero_psfmean, zero_psfstd))
-
     # writing zp to header
     print('Writing ZP info to image header...')
     with fits.open(imageName, mode='update') as hdul:
@@ -647,27 +709,6 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         hdr.set('N_SRCS', len(PSFSources), 'Total PRIME Sources Number', after='N_CRSMCH')
         hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SRCS')
         hdul.close()
-
-    # catalog for just clean sources (no flags)
-    psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
-    psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
-    # ab mag conversion
-    psfmag_clean = ab_convert(psfmag_clean, band=band, survey=survey)
-
-    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit=u.ABmag)
-    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit=u.ABmag)
-    cleanPSFSources.add_column(psfmagcol_clean)
-    cleanPSFSources.add_column(psfmagerrcol_clean)
-    cleanPSFSources.remove_column('VIGNET')
-    cleanPSFSources['FLUX_RADIUS'] = cleanPSFSources['FLUX_RADIUS'] * 0.498
-    cleanPSFSources['FLUX_RADIUS'].unit = u.arcsec
-
-    cleanpsfflux = psfmagcol_clean.to(u.microjansky)
-    cleanpsffluxerr = psfmagerrcol_clean.to(u.microjansky)
-    cleanpsffluxcol = Column(cleanpsfflux, name='FLUX_DENSITY', unit=u.microjansky)
-    cleanpsffluxerrcol = Column(cleanpsffluxerr, name='e_FLUX_DENSITY', unit=u.microjansky)
-    cleanPSFSources.add_column(cleanpsffluxcol)
-    cleanPSFSources.add_column(cleanpsffluxerrcol)
 
     # catalog for all detected sources
     psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
@@ -683,38 +724,77 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     PSFSources.remove_column('VIGNET')
     PSFSources['FLUX_RADIUS'] = PSFSources['FLUX_RADIUS'] * 0.498
     PSFSources['FLUX_RADIUS'].unit = u.arcsec
+    if 'FLUX_RADIUS_90' in PSFSources.colnames:
+        PSFSources['FLUX_RADIUS_90'] = PSFSources['FLUX_RADIUS_90'] * 0.498
+        PSFSources['FLUX_RADIUS_90'].unit = u.arcsec
     print('Total PRIME source # = ', len(PSFSources))
 
     # real unit flux conversion
     psfflux = psfmagcol.to(u.microjansky)
-    psffluxerr = psfmagerrcol.to(u.microjansky)
     psffluxcol = Column(psfflux, name='FLUX_DENSITY', unit=u.microjansky)
-    # psffluxerrcol = Column(psffluxerr, name='e_FLUX_DENSITY', unit=u.microjansky)
     PSFSources.add_column(psffluxcol)
-    # PSFSources.add_column(psffluxerrcol)
 
-    PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
-    print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
-
-    # image data conversion to uJy
+    # image / col data conversion to uJy
 
     conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']   # u = uJy / adu
     conv_factor = np.nanmedian(conv_factor_all)
 
+    fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
+    fluxerrujycol = Column(fluxerr_ujy, name='E_FLUX_DENSITY', unit=u.microjansky)
+    PSFSources.add_column(fluxerrujycol)
+
+    # PSFSources['%sMAG_PSF' % band] = -2.5 * np.log10(PSFSources['FLUX_DENSITY']) + 23.9
+    # PSFSources['e_%sMAG_PSF' % band] = 1.086 * (PSFSources['E_FLUX_DENSITY'] / PSFSources['FLUX_DENSITY'])
+
+    # catalog for just clean sources (no flags)
+    psfmag_clean = zero_psfmean + cleanPSFSources['MAG_POINTSOURCE']
+    psfmagerr_clean = np.sqrt(cleanPSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+    # ab mag conversion
+    psfmag_clean = ab_convert(psfmag_clean, band=band, survey=survey)
+
+    psfmagcol_clean = Column(psfmag_clean, name='%sMAG_PSF' % band, unit=u.ABmag)
+    psfmagerrcol_clean = Column(psfmagerr_clean, name='e_%sMAG_PSF' % band, unit=u.ABmag)
+    cleanPSFSources.add_column(psfmagcol_clean)
+    cleanPSFSources.add_column(psfmagerrcol_clean)
+    cleanPSFSources.remove_column('VIGNET')
+    cleanPSFSources['FLUX_RADIUS'] = cleanPSFSources['FLUX_RADIUS'] * 0.498
+    cleanPSFSources['FLUX_RADIUS'].unit = u.arcsec
+    if 'FLUX_RADIUS_90' in cleanPSFSources.colnames:
+        cleanPSFSources['FLUX_RADIUS_90'] = cleanPSFSources['FLUX_RADIUS_90'] * 0.498
+        cleanPSFSources['FLUX_RADIUS_90'].unit = u.arcsec
+
+    cleanpsfflux = psfmagcol_clean.to(u.microjansky)
+    cleanpsffluxcol = Column(cleanpsfflux, name='FLUX_DENSITY', unit=u.microjansky)
+    cleanPSFSources.add_column(cleanpsffluxcol)
+
+    cleanfluxerr_ujy = cleanPSFSources['FLUXERR_POINTSOURCE'] * conv_factor
+    cleanfluxerrujycol = Column(cleanfluxerr_ujy, name='E_FLUX_DENSITY', unit=u.microjansky)
+    cleanPSFSources.add_column(cleanfluxerrujycol)
+
+    cleanPSFSources['%sMAG_PSF' % band] = -2.5 * np.log10(cleanPSFSources['FLUX_DENSITY']) + 23.9
+    cleanPSFSources['e_%sMAG_PSF' % band] = 1.086 * (cleanPSFSources['E_FLUX_DENSITY'] / cleanPSFSources['FLUX_DENSITY'])
+
     with fits.open(imageName, mode='update') as imagehdu:
         imagehdr = imagehdu[0].header
-        if 'BUNIT' not in imagehdr:
-            imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
+        # TODO if you replace the pix values, put the if statement back in
+        # imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
+        imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values', after='EXTEND')
+        imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor, multiply img by this to get in uJy', after='BUNIT')
+        print('Conversion of ADU to uJy calculated, med conversion factor: %.4f' % conv_factor)
 
-            imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values', after='EXTEND')
-            imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor', after='BUNIT')
-            print('Conversion of ADU to uJy for flux and image data complete, med conversion factor: %.4f' % conv_factor)
-        else:
-            print('BUNIT found already in header, skipping conversion.')
+        # print('BUNIT found already in header, skipping conversion.')
         imagehdu.close()
 
+    PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
+    print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
 
-    return cleanPSFSources, PSFSources, psfweights_noclip, psf_clipped
+    # catalog conversion to AB
+
+    print('Converting Vega surveys to AB to ensure correctness!')
+    good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
+    ab_cat_stars = good_cat_stars
+
+    return cleanPSFSources, PSFSources, psfweights_noclip, psf_clipped, ab_cat_stars
 
 
 #%%
@@ -812,11 +892,17 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
-    mag_ecsvcleanSources['%sMAG_PSF' % band] = (
-        ab_convert(mag_ecsvcleanSources['%sMAG_PSF' % band], band=band, survey=survey, revert=True))
+    # mag_ecsvcleanSources['%sMAG_PSF' % band] = (
+    #     ab_convert(mag_ecsvcleanSources['%sMAG_PSF' % band], band=band, survey=survey, revert=True))
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'],
                                        frame='icrs',
                                        unit='degree')
+
+    # survey AB conversion for plot correctness
+    # print('Converting Vega surveys to AB to ensure GRB reporting correctness!')
+    # colnames = good_cat_stars.colnames
+    # magcol = colnames[2]
+    # good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
 
 
     # postage stamp cutout fctn (png & fits)
@@ -1046,7 +1132,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grb_dist = d2d[0].to(u.arcsec)
                 grb_dist = grb_dist / u.arcsec
 
-                print(' Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+                print(' Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius (HWHM) = %.3f arcsec and SNR = %.3f' % (
                     grb_ra, grb_dec, grb_rad, grb_snr))
                 print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
@@ -1163,7 +1249,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grb_dist = d2d[0].to(u.arcsec)
             grb_dist = grb_dist / u.arcsec
 
-            print(' Detected GRB ra = %.6f, dec = %.6f, with 90 percent flux radius = %.3f arcsec and SNR = %.3f' % (
+            print(' Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius (HWHM) = %.3f arcsec and SNR = %.3f' % (
                 grb_ra, grb_dec, grb_rad, grb_snr))
             print(' %s magnitude of GRB is %.2f +/- %.2f' % (band, grb_mag, grb_magerr))
 
@@ -1279,10 +1365,11 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     # appropriate mag column
     colnames = good_cat_stars.colnames
     magcol = colnames[2]
+    magerrcol = colnames[3]
 
     # survey AB conversion for plot correctness
-    print('Converting Vega surveys to AB to ensure plot correctness!')
-    good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
+    # print('Converting Vega surveys to AB to ensure plot correctness!')
+    # good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
 
     chip = imageName[-6]
     if len(imageName) <= 16:
@@ -1371,8 +1458,8 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     # res2_err = np.std(model2.resid)
 
     # residual fit - 3 sigma clip
-    x_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
-    y_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    x_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    y_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
     x_const_sig = sm.add_constant(x_sig)
     model_sig = sm.WLS(y_sig, x_const_sig, weights=psfweights_noclip[~psf_clipped.mask]).fit()
     m_sig = model_sig.params[1]
@@ -1381,11 +1468,54 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     b_sigerr = model_sig.bse[0]
     rsquare_sig = model_sig.rsquared
     rss_sig = model_sig.ssr
+    model_sig_resid = model_sig.resid
 
     print('# of crossmatched sources used in %s sig fit: %i'
           % (sigma, len(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask])))
     print('%s sig fit: slope = %.4f +/- %.4f' % (sigma, m_sig, m_sigerr))
     print('%s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_sig, b_sigerr))
+
+    # sigma-clipped data
+    # x_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
+    # y_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    #
+    # # errors
+    # x_err = cleanPSFsources['e_%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
+    # y_err = good_cat_stars['%s' % magerrcol][idx_psfmass][~psf_clipped.mask]
+    #
+    # # define linear function for ODR
+    # def linear_func(B, x):
+    #     return B[0] * x + B[1]  # B[0]=slope, B[1]=intercept
+    #
+    # linear_model = odr.Model(linear_func)
+    #
+    # # create RealData object with x, y and their errors
+    # odr_data = odr.RealData(x_sig, y_sig, sx=x_err, sy=y_err)
+    #
+    # # set up ODR with initial guess [slope, intercept] = [1, 0]
+    # odr_obj = odr.ODR(odr_data, linear_model, beta0=[1.0, 0.0])
+    #
+    # # run ODR fit
+    # odr_out = odr_obj.run()
+    #
+    # m_sig, b_sig = odr_out.beta
+    # m_sigerr, b_sigerr = odr_out.sd_beta
+    #
+    # # residuals
+    # model_sig_resid = y_sig - (m_sig * x_sig + b_sig)
+    # model_sig_resid = np.array(model_sig_resid, dtype=float)
+    #
+    # # RSS (residual sum of squares)
+    # rss_sig = np.sum(model_sig_resid ** 2)
+    #
+    # # R squared
+    # y_mean = np.mean(y_sig)
+    # ss_tot = np.sum((y_sig - y_mean) ** 2)
+    # rsquare_sig = 1 - rss_sig / ss_tot
+    #
+    # print('# of crossmatched sources used in ODR fit:', len(x_sig))
+    # print('ODR fit: slope = %.4f +/- %.4f' % (m_sig, m_sigerr))
+    # print('ODR fit: y-int = %.4f +/- %.4f' % (b_sig, b_sigerr))
 
     # residual fit 3 sig clip - bin errors and stats
     mags = range(10,22)
@@ -1398,7 +1528,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     for i in mags:
         mask = ((cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] > i) &
                 (cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask] < i+1))
-        res_mask = model_sig.resid[mask]
+        res_mask = model_sig_resid[mask]
         # avgsig = np.average(res_mask, weights=psfweights_noclip[~psf_clipped.mask][mask])
         # varsig = np.average((res_mask - avgsig)**2, weights=psfweights_noclip[~psf_clipped.mask][mask])
         # ressig_err = np.sqrt(varsig)    # spread
@@ -1461,12 +1591,12 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # res plot, y int include
     plt.figure(2, figsize=(8, 6))
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], model_sig.resid, color='red')
+    plt.scatter(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], model_sig_resid, color='red')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
-    plt.title('PRIME vs %s Residuals - %s Sigma Clip' % (survey, sigma))
+    plt.title('%s Residuals - %s Sigma Clip' % (survey, sigma))
     plt.ylabel('Residuals')
-    plt.xlabel('%s Mags' % band)
+    plt.xlabel('%s %s Mags' % (survey, band))
     # plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
     # plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
     # plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
@@ -1497,14 +1627,14 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         bin_num_int = 50
 
     plt.figure(3, figsize=(10, 6))
-    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], y=model_sig.resid,
+    plt.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], y=model_sig_resid,
                bins=[bin_num_int, bin_num_int], range=[[10, 21],[-1, 1]], cmap='gist_heat_r')
     plt.colorbar(label='Density')
     plt.ylim(-1, 1)
     plt.xlim(10, 21)
-    plt.title('PRIME vs %s Residuals w/ %s Sigma Clip- Density Histogram' % (survey, sigma))
+    plt.title('%s Residuals - %s Sigma Clip - Density Histogram' % (survey, sigma))
     plt.ylabel('Residuals')
-    plt.xlabel('%s Mags' % band)
+    plt.xlabel('%s %s Mags' % (survey, band))
     # plt.axhline(y=ressig_err, color='blue', linestyle='--', linewidth=1)
     # plt.axhline(y=ressig_err * 2, color='green', linestyle='--', linewidth=1)
     # plt.axhline(y=-ressig_err, color='blue', linestyle='--', linewidth=1)
@@ -1529,13 +1659,13 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.figure(4, figsize=(8, 8))
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit' % survey)
+    plt.title('%s vs PRIME w/ Weighted Fit' % survey)
     plt.grid()
-    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
-    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass])
-    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], m2, b2), c='r')
+    plt.ylabel('PRIME %s Mags' % band, fontsize=15)
+    plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.scatter(good_cat_stars['%s' % magcol][idx_psfmass], cleanPSFsources['%sMAG_PSF' % band][idx_psfimage])
+    plt.plot(good_cat_stars['%s' % magcol][idx_psfmass],
+             predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass], m2, b2), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
     # plt.savefig('%s_C%s_WLS_fit_plot_%s.png' % (survey, chip, num), dpi=300)
@@ -1558,14 +1688,14 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit - Density Histogram' % survey)
+    plt.title('%s vs PRIME w/ Weighted Fit - Density Histogram' % survey)
     plt.grid()
-    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
-    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
+    plt.ylabel('PRIME %s Mags' % band, fontsize=15)
+    plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass], y=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
-    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], m2, b2), c='b')
+    plt.plot(good_cat_stars['%s' % magcol][idx_psfmass],
+             predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass], m2, b2), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, txt, fontsize=12, bbox=box)
@@ -1581,14 +1711,14 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.figure(6, figsize=(8, 8))
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip' % (survey, sigma))
+    plt.title('%s vs PRIME w/ Weighted Fit - %s Sigma Clip' % (survey, sigma))
     plt.grid()
-    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
-    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.scatter(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-                good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask])
-    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], m_sig, b_sig), c='r')
+    plt.ylabel('PRIME %s Mags' % band, fontsize=15)
+    plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.scatter(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+                cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask])
+    plt.plot(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+             predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], m_sig, b_sig), c='r')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
     # plt.savefig('%s_C%s_WLS_fit_3sig_plot_%s.png' % (survey, chip, num), dpi=300)
@@ -1598,15 +1728,15 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
     plt.xlim(10, 22)
     plt.ylim(10, 22)
-    plt.title('PRIME vs %s w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
+    plt.title('%s vs PRIME w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
     plt.grid()
-    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
-    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.hist2d(x=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-               y=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+    plt.ylabel('PRIME %s Mags' % band, fontsize=15)
+    plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+               y= cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
-    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
-             predict_y_for(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask], m_sig, b_sig), c='b')
+    plt.plot(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+             predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], m_sig, b_sig), c='b')
     plt.colorbar(label='Density')
     box = dict(facecolor='white')
     plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
@@ -1676,18 +1806,19 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     xticks = np.arange(12, 25.5, 0.5)
     plt.xticks(xticks, fontsize=10)
     plt.grid()
-    if len(PSFsources) < 3500:
-        plt.ylim(0, 250)
-    elif len(PSFsources) > 50000:
-        plt.ylim(0, 5000)
-    else:
-        plt.ylim(0, 2000)
+    # if len(PSFsources) < 3500:
+    #     plt.ylim(0, 250)
+    # elif len(PSFsources) > 50000:
+    #     plt.ylim(0, 5000)
+    # else:
+    #     plt.ylim(0, 2000)
     # plt.yscale('log')
     # plt.yticks([0,0.05,0.1,0.15,0.2,0.25])
     # plt.legend([r'5 $\sigma$ Limit'],loc='upper left',fontsize=12)
     # plt.legend([f'Bin of 0.2 Error = {bin_vals[imin+1]}',f'Bin of 0.3 Error = {bin_vals[iimin+1]}'])
     # plt.legend([f'Bin of 0.2 Error (>16 mag) = {bin_vals[imin+1]}'])
     # plt.legend(['Our Field','Osaka Field'],loc='upper right')
+    plt.yscale('log')
     plt.title('PRIME Limiting Mag Plot')
     plt.ylabel('Number of Sources')
     plt.xlabel('%s Magnitude' % band)
@@ -1701,12 +1832,30 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     fig = plt.figure(figsize=(10, 10))
     ax = fig.gca()
-    plt.imshow(data, vmin=median - 1.5 * sigma_plot, vmax=median + 1.5 * sigma_plot, origin='lower')
+
+    im = ax.imshow(
+        data,
+        vmin=median - 1.5 * sigma_plot,
+        vmax=median + 1.5 * sigma_plot,
+        origin='lower'
+    )
+
+    # Draw circles
     circles = [
-        plt.Circle((cleanPSFsources['X_IMAGE'][idx_psfimage][i], cleanPSFsources['Y_IMAGE'][idx_psfimage][i]), radius=5,
-                   edgecolor='r', facecolor='None') for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))]
+        plt.Circle(
+            (cleanPSFsources['X_IMAGE'][idx_psfimage][i],
+             cleanPSFsources['Y_IMAGE'][idx_psfimage][i]),
+            radius=5,
+            edgecolor='r',
+            facecolor='None'
+        ) for i in range(len(cleanPSFsources['X_IMAGE'][idx_psfimage]))
+    ]
     for c in circles:
         ax.add_artist(c)
+
+    cbar = fig.colorbar(im, ax=ax)
+    cbar.set_label("Pixel Value")
+
     plt.savefig('%s_C%s_source_check_plot_%s.png' % (survey, chip, num), dpi=200)
     print('Saved source location check plot to dir!')
     plt.clf()
@@ -1763,14 +1912,14 @@ def int_calibration(
     psfcatalogName = ''.join(psfcatalogName)
     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                     crop, given_catalog)
-    cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources,
+    cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars = zeropt(good_cat_stars, cleanPSFSources, PSFSources,
                                                                          idx_psfmass, idx_psfimage,
                                                                          name, band, chosen_survey, sigma)
     if grb_ra:
-        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, good_cat_stars, directory)
+        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory)
     elif grb_coordlist:
-        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, good_cat_stars, directory, grb_coordlist)
-    slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, good_cat_stars, idx_psfmass,
+        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, grb_coordlist)
+    slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
 
     return intercept
@@ -1800,6 +1949,8 @@ def photometry(
         grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal']
 ):
     start_time = dt.now()
+
+    det_thresh = 0.15   # percentage of median of weight image to cut sources under (ex. det_thresh = 0.15 -> cutoff = med * 0.15)
 
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -1832,33 +1983,42 @@ def photometry(
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
-        catalogName = sex1(name)
+        catalogName = sex1(name, det_cut=det_thresh)
         psfex(catalogName)
-        psfcatalogName = sex2(name)
+        psfcatalogName = sex2(name, det_cut=det_thresh)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
         if len(idx_psfimage) == 0:
             print('No crossmatches found!  Cannot continue with photometry!  Is there something wrong with the image, '
-                  'source catalogs, or psf model?')
-            pass
+                  'source catalogs, or psf model?  If those all seem normal, perhaps the image has had pixel values scaled'
+                  'to uJy.  The current setup only applies the uJy/ADU conv factor as a header card, rerun the image '
+                  'stacking and try again!')
         else:
-            cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
+            cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
                                                  name, band, chosen_survey, sigma)
+            # if 'BUNIT' not in header:
+            #     psfcatalogName = sex2(name, det_cut=det_thresh)
+            #     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w,
+            #                                                                                                    psfcatalogName,
+            #                                                                                                    crop,
+            #                                                                                                    given_catalog)
+            #     cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
+            #                                          name, band, chosen_survey, sigma)
             if grb_ra:
                 if grb_dec is None:
                     sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
                 if grb_thresh > 60:
                     newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
                 else:
-                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory)
+                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
             elif grb_coordlist:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory, grb_coordlist)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, grb_coordlist)
             if not no_plots:
-                slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, good_cat_stars, idx_psfmass,
+                slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, ab_cat_stars, idx_psfmass,
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma)
+
             prev_intercept = intercept
             revert_flag = False
-
             max_int = 0.1
             while abs(intercept) > max_int:
                 print('\nIntercept = %.4f\n' % intercept)
@@ -1871,6 +2031,7 @@ def photometry(
                     print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                           "redoing...\n" % (new_intercept, prev_intercept))
                     intercept = prev_intercept
+                    mag_low_cutoff -= 0.5
                     new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
                                                     mag_low_cutoff-0.5, mag_high_lim, grb_ra,
                                                     grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
@@ -1884,6 +2045,37 @@ def photometry(
                 print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
             else:
                 print(f"Final intercept below 0.15: %.4f" % intercept)
+
+            prev_intercept = intercept
+            revert_flag = False
+
+            while abs(intercept) > max_int and sigma > 0:  # ensure sigma doesn't go negative
+                print('\nIntercept = %.4f\n' % intercept)
+                sigma -= 0.5
+                new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
+                                                mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
+                                                grb_thresh,
+                                                max_int=max_int)
+                if abs(new_intercept) > abs(prev_intercept):
+                    print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
+                          "redoing...\n" % (new_intercept, prev_intercept))
+                    # revert
+                    intercept = prev_intercept
+                    new_intercept = int_calibration(name, directory, band, crop, sigma + 0.5, given_catalog,
+                                                    chosen_survey,
+                                                    mag_low_cutoff, mag_high_lim, grb_ra,
+                                                    grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
+                    revert_flag = True
+                    break
+                else:
+                    intercept = new_intercept
+                    prev_intercept = intercept
+                    revert_flag = False
+
+            if revert_flag:
+                print("Sigma loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
+            else:
+                print(f"Final intercept after sigma tuning: %.4f" % intercept)
 
             if not keep:
                 removal(directory)
@@ -1954,7 +2146,7 @@ def main():
                              'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
                         default=defaults["int_cal"])
     args, unknown = parser.parse_known_args()
-    print(args)
+    # print(args)
     # print(unknown)
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,

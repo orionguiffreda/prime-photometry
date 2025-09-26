@@ -218,6 +218,8 @@ def swarp_missfits(imgdir, chip):
 
 
 def astromfin(directory, chip):
+    if not chip:
+        sys.exit('Specify a chip when using this functionality!')
     print('Re-running astrometry on swarped image! Running sextractor...')
     catname = swarp_sx(directory, chip)
     print('Applying 4th order scamp fit to stacked image...')
