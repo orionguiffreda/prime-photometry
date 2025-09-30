@@ -4,6 +4,7 @@ Calibrates photometry for stacked image
 
 import os
 import sys
+import re
 import numpy as np
 import numpy.ma as ma
 import argparse
@@ -906,7 +907,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
 
     # postage stamp cutout fctn (png & fits)
-    def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None, append=False):
+    def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None, append=False, regprimename=None, regsurvname=None):
         imgdata = fits.getdata(imageName)
         img = fits.open(imageName)
         head = img[0].header
@@ -919,9 +920,53 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
         mean, median, sigma_cut = sigma_clipped_stats(cutout.data)
         plt.figure(10, figsize=(8, 8))
-        plt.imshow(cutout.data, vmin=median - 3 * sigma_cut, vmax=median + 3 * sigma_cut, origin='lower')
-        pix_region.plot(color='red', ls='--', label='Input GRB threshold')
-        plt.legend()
+        plt.imshow(cutout.data, vmin=median - 3 * sigma_cut, vmax=median + 3 * sigma_cut, origin='lower', cmap='viridis')
+        pix_region.plot(color='cyan', ls='--', label='Input GRB threshold')
+
+        if regprimename:
+            primeregs = open('GRB_PRIME_srcs.reg', 'r')
+            plt_primeregs = []
+            primeallregs = [reg for reg in primeregs if reg != 'fk5\n']
+            for reg in primeallregs:
+                nums = re.findall(r'[-+]?\d*\.?\d+', reg)
+                srcra = nums[0]
+                srcdec = nums[1]
+                srcrad = nums[2]
+                srccoords = SkyCoord(ra=[srcra], dec=[srcdec], frame='icrs', unit='degree')
+                srcreg = CircleSkyRegion(center=srccoords[0], radius=Angle(srcrad, unit='arcsec'))
+                plt_primeregs.append(srcreg)
+
+            for reg in plt_primeregs:
+                pix_reg = reg.to_pixel(cutout.wcs)
+                pix_reg.plot(color='red', ls='-', label='PRIME Source')
+
+        if regsurvname:
+            survregs = open('GRB_%s_srcs.reg' % survey, 'r')
+            plt_survregs = []
+            survallregs = [reg for reg in survregs if reg != 'fk5\n']
+            for reg in survallregs:
+                nums = re.findall(r'[-+]?\d*\.?\d+', reg)
+                srcra = nums[0]
+                srcdec = nums[1]
+                srcrad = nums[2]
+                srccoords = SkyCoord(ra=[srcra], dec=[srcdec], frame='icrs', unit='degree')
+                srcreg = CircleSkyRegion(center=srccoords[0], radius=Angle(srcrad, unit='arcsec'))
+                plt_survregs.append(srcreg)
+
+            for reg in plt_survregs:
+                pix_reg = reg.to_pixel(cutout.wcs)
+                pix_reg.plot(color='magenta', ls='-', label='%s Source' % survey)
+
+        handles, labels = plt.gca().get_legend_handles_labels()
+        seen = set()
+        filtered_handles = []
+        filtered_labels = []
+        for h, l in zip(handles, labels):
+            if l not in seen:
+                filtered_handles.append(h)
+                filtered_labels.append(l)
+                seen.add(l)
+        plt.legend(filtered_handles, filtered_labels, loc='best')
 
         if loc:
             savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
@@ -1281,6 +1326,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
             regprimename = source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
 
+            savename, threshname = grb_cutout(imageName, GRBcoords, photoDistThresh,
+                                              regprimename=regprimename, regsurvname=regsurvname)
+
             html_gen(grbdata, directory, savename, threshname, band, survey, ra, dec, thresh, regsurvname, regprimename)
 
             print(' Generated GRB data table & source DS9 regions!')
@@ -1347,6 +1395,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['Survey_Crsmtch'] = np.array(crsmtch_ar)
             # grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
             grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
+
+            savename, threshname = grb_cutout(imageName, GRBcoords, photoDistThresh,
+                                              regprimename=regprimename, regsurvname=regsurvname)
 
             html_gen(grbdata, directory, savename, threshname, band, survey, ra, dec, thresh, regsurvname, regprimename)
 
@@ -1951,6 +2002,7 @@ def photometry(
     start_time = dt.now()
 
     det_thresh = 0.15   # percentage of median of weight image to cut sources under (ex. det_thresh = 0.15 -> cutoff = med * 0.15)
+    max_int = 0.1   # max int value allowed for photometric fit
 
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -2019,7 +2071,7 @@ def photometry(
 
             prev_intercept = intercept
             revert_flag = False
-            max_int = 0.1
+
             while abs(intercept) > max_int:
                 print('\nIntercept = %.4f\n' % intercept)
                 # sigma -= 0.5
@@ -2033,7 +2085,7 @@ def photometry(
                     intercept = prev_intercept
                     mag_low_cutoff -= 0.5
                     new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
-                                                    mag_low_cutoff-0.5, mag_high_lim, grb_ra,
+                                                    mag_low_cutoff, mag_high_lim, grb_ra,
                                                     grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
                     revert_flag = True
                     break
@@ -2051,7 +2103,8 @@ def photometry(
 
             while abs(intercept) > max_int and sigma > 0:  # ensure sigma doesn't go negative
                 print('\nIntercept = %.4f\n' % intercept)
-                sigma -= 0.5
+                step = 0.25 if sigma <= 1.5 else 0.5
+                sigma -= step
                 new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog, chosen_survey,
                                                 mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
                                                 grb_thresh,
@@ -2061,7 +2114,8 @@ def photometry(
                           "redoing...\n" % (new_intercept, prev_intercept))
                     # revert
                     intercept = prev_intercept
-                    new_intercept = int_calibration(name, directory, band, crop, sigma + 0.5, given_catalog,
+                    sigma += step
+                    new_intercept = int_calibration(name, directory, band, crop, sigma, given_catalog,
                                                     chosen_survey,
                                                     mag_low_cutoff, mag_high_lim, grb_ra,
                                                     grb_dec, grb_coordlist, grb_thresh, max_int=max_int)

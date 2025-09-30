@@ -35,12 +35,13 @@ def fetchstacks(stackpath, chip=None):
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, int_cal, grb_only):
+                grb_coordlist, grb_radius, int_cal, grb_only, keep):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
-                           grb_coordlist=grb_coordlist, grb_radius=grb_radius, int_cal=int_cal, grb_only=grb_only)
+                           grb_coordlist=grb_coordlist, grb_radius=grb_radius, int_cal=int_cal, grb_only=grb_only,
+                              keep=keep)
 
     if len(matchingstacks) == 4:
         ellipticity_logger.logger(directory=stackpath)
@@ -52,9 +53,11 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-                      grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal'], grb_only=defaults['grb_only']):
+                      grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal'], grb_only=defaults['grb_only'],
+                      keep=defaults['keep']):
     matchingstacks = fetchstacks(stackpath, chip)
-    multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, int_cal, grb_only)
+    multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, int_cal, grb_only,
+                keep)
 
 
 def main():
@@ -91,10 +94,13 @@ def main():
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog',
                         default=defaults['grb_only'])
+    parser.add_argument('-keep', action='store_true',
+                        help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
+                             ' i.e. the ".cat" and ".psf" files', default=defaults['keep'])
     args, unknown = parser.parse_known_args()
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
-                      args.grb_radius, args.int_cal, args.grb_only)
+                      args.grb_radius, args.int_cal, args.grb_only, args.keep)
 
 
 if __name__ == "__main__":

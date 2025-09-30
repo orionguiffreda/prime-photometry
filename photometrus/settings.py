@@ -90,7 +90,12 @@ def bulge_checker(case):
 
 def auto_bulge_detect(directory):
     fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
-    first_fits = os.path.join(directory, fits_files[0])
+    clean = [f for f in fits_files if 'weight' not in f and 'PSF' not in f and 'GRB' not in f]
+    coadds = [f for f in clean if 'coadd' in f]
+    if coadds:
+        first_fits = os.path.join(directory, coadds[0])
+    else:
+        first_fits = os.path.join(directory, fits_files[0])
     hdr = fits.getheader(first_fits)
 
     case = hdr['OBJTYPE']

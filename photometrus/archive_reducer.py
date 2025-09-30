@@ -16,7 +16,7 @@ from photometrus.settings import PIPELINE_DEFAULT_DIR, gen_config_file_name
 # PIPELINE_DEFAULT_DIR = '/mnt/photometry'
 # _grid_df = pd.read_csv('obsable_all_sky_grid.csv')
 _defaults = dict(
-    coord_file_sep='\s+', coord_file_object_field=None, coord_ra_field='RA', coord_dec_field='DEC', frame='icrs',
+    coord_file_sep='\s+', coord_file_object_field='ObjectName', coord_ra_field='RA', coord_dec_field='DEC', frame='icrs',
     unit=u.degree,
     grid_file=gen_config_file_name('obsable_all_sky_grid.csv'), parent=PIPELINE_DEFAULT_DIR,
     rot_val=48, no_shift=False, astromnet=False,
@@ -80,7 +80,7 @@ def calculate_distance_all(target, grid=_defaults['grid_df']):
     grid['ra_offsets'], grid['dec_offsets'] = dra.arcmin, ddec.arcmin
     grid['ra_degrees'] = grid_coords.icrs.ra.deg
     grid['dec_degrees'] = grid_coords.icrs.dec.deg
-    grid['chip'] = grid.apply(get_chip_df, axis=1)
+    grid['chip'] = get_chip_df(grid)
     return index, min_dist, grid.sort_values('distance')
 
 
@@ -88,7 +88,7 @@ def obtain_point_source_grid_df(
         dataframe, point_source_radius=3/60, dither_radius=-1, min_ra_dec_offset=3.5, max_ra_dec_offset=37.5
 ):
     new_df = dataframe.copy()
-    print(new_df[['distance', 'ra_offsets', 'dec_offsets']].head(10))
+    print(new_df[['distance', 'ra_offsets', 'dec_offsets', 'chip']].head(10))
     # print(new_df['ra_offsets'] > settings.MIN_RA_DEC_OFFSET_ARCMIN)
     ra_abs = new_df['ra_offsets'].abs()
     dec_abs = new_df['dec_offsets'].abs()
@@ -134,17 +134,17 @@ def get_coords(
 #     pass
 
 
+
+
+
 def archive_reducer(
-        coord_file, coord_file_sep=_defaults['coord_file_sep'],
-        coord_file_object_field=_defaults['coord_file_object_field'],
-        coord_ra_field=_defaults['coord_ra_field'], coord_dec_field=_defaults['coord_dec_field'],
-        frame=_defaults['frame'], unit=_defaults['unit'],
-        grid_file=_defaults['grid_file'], parent=_defaults['parent'],
-        rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'],
-        sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'],
-        no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'],
-        survey=_defaults['survey'],
+    coord_file, coord_file_sep=_defaults['coord_file_sep'],
+    coord_file_object_field=_defaults['coord_file_object_field'],
+    coord_ra_field=_defaults['coord_ra_field'],
+    coord_dec_field=_defaults['coord_dec_field'],
+    frame=_defaults['frame'], unit=_defaults['unit'], grid_file=_defaults['grid_file'], parent=_defaults['parent'], rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'], sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'], no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'], survey=_defaults['survey'], no_reduce=False
 ):
+
     grid_df = pd.read_csv(grid_file)
     archive_command_filename = 'combo_commands_{}'.format(datetime.datetime.utcnow().isoformat())
     archive_command_filename = os.path.join(os.getcwd(), archive_command_filename)
@@ -154,6 +154,9 @@ def archive_reducer(
     )
     grids = get_grid_locations(coord_df.coords, grid_df)
     archive = get_all_date_logs()
+    archive_filename = os.path.join(parent, 'prime_log_archive_{}'.format(datetime.date.today().strftime('%Y-%m-%d')))
+    archive.to_csv(os.path.join(archive_filename))
+    print('output file to: ', archive_filename)
     for i, grid_df in enumerate(grids):
         if grid_df is not None:
             coord_dict = coord_df.iloc[i].to_dict()
@@ -166,7 +169,7 @@ def archive_reducer(
                     combo_dict = dict(
                         target=object_dict['OBJNAME'], date=object_dict['date'].replace('-', ''),
                         band=bandpass,
-                        chip=str(object_dict['CHIP']),
+                        chip=str(grid_dict['chip']),
                         parentdir=os.path.join(
                             parent, coord_dict[coord_file_object_field],
                             '{}-{}'.format(object_dict['OBJNAME'], object_dict['date']), bandpass
@@ -181,7 +184,10 @@ def archive_reducer(
                     with open(archive_command_filename, 'a') as f:
                         f.write('{}\n'.format(combo_dict))
                     try:
-                        combo(**combo_dict)
+                        if not no_reduce:
+                            combo(**combo_dict)
+                        else:
+                            print('no_reduce')
                     except Exception:
                         tb = traceback.format_exc()
                         print(combo_dict)
@@ -257,12 +263,14 @@ def main():
     parser.add_argument('-survey', type=str, help='Specify specific survey to query for photometry (default'
                                                   ' picks for you), see photometrus single_photometry -h for list of '
                                                   'available surveys')
+    parser.add_argument('-no_reduce', action='store_true', help='optional flag, use if you *DO NOT* want to'
+                                                               ' actually reduce the data, and just want the list of '
+                                                               ' coommands')
     args, unknown = parser.parse_known_args()
     archive_reducer(
-        args.coord_file, args.coord_file_sep, args.coord_file_object_field, args.coord_ra_field, args.coord_dec_field,
-        args.frame, args.unit, args.grid_file, args.parent, args.rot_val, args.no_shift, args.astromnet, args.sky_override,
-        args.no_get_files, args.no_download, args.no_mflat, args.survey
+        coord_file=args.coord_file, coord_file_sep=args.coord_file_sep, coord_file_object_field=args.coord_file_object_field, coord_ra_field=args.coord_ra_field, coord_dec_field=args.coord_dec_field,
+        frame=args.frame, unit=args.unit, grid_file=args.grid_file, parent=args.parent, rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, sky_override_path=args.sky_override,
+        removal=args.removal, no_get_files=args.no_get_files, no_download=args.no_download, no_mflat=args.no_mflat, survey=args.survey, no_reduce=args.no_reduce
     )
-
 if __name__ == '__main__':
     main()
