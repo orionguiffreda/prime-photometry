@@ -5,6 +5,8 @@ Calibrates photometry for stacked image
 import os
 import sys
 import re
+
+import astropy.nddata.utils
 import numpy as np
 import numpy.ma as ma
 import argparse
@@ -836,7 +838,12 @@ def newsourcesearch(source_ra, source_dec, thresh, w, imageName, survey, band, Q
         (mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x - crop)) & (mass_imCoords[1] > crop) & (
                 mass_imCoords[1] < (max_y - crop)))]
 
-    massCatCoords = SkyCoord(ra=good_cat_stars[RA], dec=good_cat_stars[DEC], frame='icrs', unit='degree')
+    colnames = good_cat_stars.colnames
+    magcolname = colnames[2]
+    good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
+    ab_cat_stars = good_cat_stars
+
+    massCatCoords = SkyCoord(ra=ab_cat_stars[RA], dec=ab_cat_stars[DEC], frame='icrs', unit='degree')
     print('Catalog cropped #:', len(massCatCoords))
 
     # initial crossmatch
@@ -913,10 +920,21 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         head = img[0].header
         w = WCS(head)
 
+        if loc:
+            savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
+            threshname = 'GRB_queries_thresh.reg'
+        else:
+            savename = 'GRB_%s_Cutout_%s' % (band, survey)
+            threshname = 'GRB_query_thresh.reg'
+
         size = 4 * photoDistThresh * u.arcsec
-        cutout = Cutout2D(imgdata, GRBcoords, size, wcs=w, copy=True)
-        region = CircleSkyRegion(center=GRBcoords[0], radius=Angle(thresh, unit='arcsec'))
-        pix_region = region.to_pixel(cutout.wcs)
+        try:
+            cutout = Cutout2D(imgdata, GRBcoords, size, wcs=w, copy=True)
+            region = CircleSkyRegion(center=GRBcoords[0], radius=Angle(thresh, unit='arcsec'))
+            pix_region = region.to_pixel(cutout.wcs)
+        except astropy.nddata.utils.NoOverlapError:
+            print(' Area of GRB threshold not found within image, cannot generate cutout!')
+            return savename, threshname
 
         mean, median, sigma_cut = sigma_clipped_stats(cutout.data)
         plt.figure(10, figsize=(8, 8))
@@ -967,13 +985,6 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 filtered_labels.append(l)
                 seen.add(l)
         plt.legend(filtered_handles, filtered_labels, loc='best')
-
-        if loc:
-            savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
-            threshname = 'GRB_queries_thresh.reg'
-        else:
-            savename = 'GRB_%s_Cutout_%s' % (band, survey)
-            threshname = 'GRB_query_thresh.reg'
         plt.savefig(savename + '.png', dpi=300)
         plt.clf()
 
@@ -2012,6 +2023,8 @@ def photometry(
 
     if grb_ra:
         grb_thresh = grb_rad_convert(grb_radius)
+    else:
+        grb_thresh = grb_radius
 
     if grb_only:
         if grb_dec is None:
@@ -2023,14 +2036,18 @@ def photometry(
         psfcatalogName = name.replace('.fits', '.psf.cat')
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                         crop, given_catalog)
+        colnames = good_cat_stars.colnames
+        magcolname = colnames[2]
+        good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=chosen_survey)
+        ab_cat_stars = good_cat_stars
         if grb_coordlist:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory, grb_coordlist)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, grb_coordlist)
         else:
             if grb_thresh > 60:
                 # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
                 newsourcesearch(grb_ra, grb_dec, grb_thresh, w, name, chosen_survey, band, Q, data, crop)
             else:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, good_cat_stars, directory)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
     else:
         data, header, w, raImage, decImage, bulge = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,

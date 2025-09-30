@@ -91,19 +91,22 @@ def bulge_checker(case):
 def auto_bulge_detect(directory):
     fits_files = [f for f in os.listdir(directory) if f.endswith('.fits') or f.endswith('.new')]
     clean = [f for f in fits_files if 'weight' not in f and 'PSF' not in f and 'GRB' not in f]
-    coadds = [f for f in clean if 'coadd' in f]
-    if coadds:
-        first_fits = os.path.join(directory, coadds[0])
+    if len(clean) == 0:
+        print('No applicable fields to check, defaulting to non-bulge!')
+        return False
     else:
-        first_fits = os.path.join(directory, fits_files[0])
-    hdr = fits.getheader(first_fits)
+        coadds = [f for f in clean if 'coadd' in f]
+        if coadds:
+            first_fits = os.path.join(directory, coadds[0])
+        else:
+            first_fits = os.path.join(directory, fits_files[0])
+        hdr = fits.getheader(first_fits)
 
-    case = hdr['OBJTYPE']
-    bulge = bulge_checker(case)
-    if bulge:
-        print('Bulge field detected! Switching to bulge setup if not already specified!')
-
-    return bulge
+        case = hdr['OBJTYPE']
+        bulge = bulge_checker(case)
+        if bulge:
+            print('Bulge field detected! Switching to bulge setup if not already specified!')
+        return bulge
 
 
 def gen_user_prime_dir():
