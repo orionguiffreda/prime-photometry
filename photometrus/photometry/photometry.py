@@ -34,7 +34,7 @@ from datetime import datetime as dt
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
-                                  AB_OFFSET_DICT)
+                                  AB_OFFSET_DICT, get_weight_thresh)
 
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
@@ -148,7 +148,11 @@ def img(directory, imageName, crop):
     case = header['OBJTYPE']
     bulge = bulge_checker(case)
 
-    return data, header, w, raImage, decImage, bulge
+    # get weight map detection threshold
+    chip = header['CHIP']
+    det_cut = get_weight_thresh(chip)
+
+    return data, header, w, raImage, decImage, bulge, det_cut
 
 
 # %%
@@ -459,7 +463,8 @@ def sex1(imageName, det_cut):
         weightdata = fits.getdata(weightName)
         weightdata = weightdata / scale_fac**2
         weight_med = np.nanmedian(weightdata)
-        detect_cutoff = weight_med * det_cut
+        weight_std = np.nanstd(weightdata)
+        detect_cutoff = weight_med - (weight_std * det_cut)
         with fits.open(weightName, mode='update') as hdu:
             whdr = hdu[0].header
             whdr.set('MEDIAN', weight_med, 'Median of weight image', after='EQUINOX')
@@ -522,7 +527,8 @@ def sex2(imageName, det_cut):
         weightdata = fits.getdata(weightName)
         weightdata = weightdata / scale_fac**2
         weight_med = np.nanmedian(weightdata)
-        detect_cutoff = weight_med * det_cut
+        weight_std = np.nanstd(weightdata)
+        detect_cutoff = weight_med - (weight_std * det_cut)
         try:
             # We are supplying SExtactor with the PSF model with the PSF_NAME option
             command = 'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
@@ -1964,7 +1970,7 @@ def int_calibration(
         grb_coordlist, grb_radius, max_int
 ):
     print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
-    data, header, w, raImage, decImage, bulge = img(directory, name, crop)
+    data, header, w, raImage, decImage, bulge, det_thresh = img(directory, name, crop)
     Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
                                              mag_upper_lim=mag_high_lim, bulge=bulge)
     psfcatalogName = []
@@ -2008,11 +2014,10 @@ def photometry(
         full_filename=defaults['filepath'], band=defaults['band'], crop=defaults['crop'], sigma=defaults['sigma_photom'], given_catalog=defaults['catalog'], survey=defaults['survey'],
         mag_low_lim=defaults['mag_low'], mag_high_lim=defaults['mag_high'], no_plots=defaults['no_plots'],
         keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-        grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal']
+        grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal'], det_cut=defaults['det_cut']
 ):
     start_time = dt.now()
 
-    det_thresh = 0.15   # percentage of median of weight image to cut sources under (ex. det_thresh = 0.15 -> cutoff = med * 0.15)
     max_int = 0.1   # max int value allowed for photometric fit
 
     directory = os.path.dirname(full_filename)
@@ -2030,7 +2035,7 @@ def photometry(
         if grb_dec is None:
             sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
         os.chdir(directory)
-        data, header, w, raImage, decImage, bulge = img(directory, name, crop)
+        data, header, w, raImage, decImage, bulge, det_thresh = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
         psfcatalogName = name.replace('.fits', '.psf.cat')
@@ -2049,7 +2054,7 @@ def photometry(
             else:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
     else:
-        data, header, w, raImage, decImage, bulge = img(directory, name, crop)
+        data, header, w, raImage, decImage, bulge, det_thresh = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
         catalogName = sex1(name, det_cut=det_thresh)
@@ -2216,13 +2221,17 @@ def main():
                         help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
                              'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
                         default=defaults["int_cal"])
+    parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
+                                                     ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
+                        default=defaults["det_cut"])
+
     args, unknown = parser.parse_known_args()
     # print(args)
     # print(unknown)
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,
                args.mag_high, args.no_plots, args.keep,
-               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.int_cal)
+               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.int_cal, args.det_cut)
 
 
 if __name__ == "__main__":

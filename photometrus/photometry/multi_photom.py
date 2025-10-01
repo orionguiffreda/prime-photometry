@@ -35,13 +35,13 @@ def fetchstacks(stackpath, chip=None):
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, int_cal, grb_only, keep):
+                grb_coordlist, grb_radius, int_cal, grb_only, keep, det_cut):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
                            grb_coordlist=grb_coordlist, grb_radius=grb_radius, int_cal=int_cal, grb_only=grb_only,
-                              keep=keep)
+                              keep=keep, det_cut=det_cut)
 
     if len(matchingstacks) == 4:
         ellipticity_logger.logger(directory=stackpath)
@@ -54,10 +54,10 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
                       grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal'], grb_only=defaults['grb_only'],
-                      keep=defaults['keep']):
+                      keep=defaults['keep'], det_cut=defaults['det_cut']):
     matchingstacks = fetchstacks(stackpath, chip)
     multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, int_cal, grb_only,
-                keep)
+                keep, det_cut)
 
 
 def main():
@@ -97,10 +97,14 @@ def main():
     parser.add_argument('-keep', action='store_true',
                         help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
                              ' i.e. the ".cat" and ".psf" files', default=defaults['keep'])
+    parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
+                                                     ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
+                        default=defaults["det_cut"])
+
     args, unknown = parser.parse_known_args()
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
-                      args.grb_radius, args.int_cal, args.grb_only, args.keep)
+                      args.grb_radius, args.int_cal, args.grb_only, args.keep, args.det_cut)
 
 
 if __name__ == "__main__":

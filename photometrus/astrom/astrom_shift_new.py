@@ -270,6 +270,8 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                         offset = AB_OFFSET_DICT.get(band, 0.0)
                         mag_high_cutoff -= offset
 
+                    no_sources_flag = False
+
                     for bounds in bounds_change_list:  # Try full boxsize, then half if too many sources
                         boxscale = bounds[0]
                         low_lim_scalar = bounds[1]
@@ -312,14 +314,20 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                                     break  # Accept result if not too many sources
                                 else:
                                     print("Too many sources (>%i), trying different bounds..." % acc_source_num)
+                                    no_sources_flag = True
                                     continue  # Try next bounds
                             else:
                                 print(f"No sources found in {catNum}, trying fallback if available...")
                                 break  # No sources at all; stop retrying bounds
+
                         except Exception as e:
                             print('Error in Vizier query.')
                             print(f"Error details: {e}")
                             continue
+
+                    if no_sources_flag:
+                        print('Query unsuccessful, defaulting to next fallback catalog...')
+                        continue
 
                     else:
                         print('Too many sources even after reducing boxsize. Skipping this catalog...')

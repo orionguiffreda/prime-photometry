@@ -44,6 +44,9 @@ GB_QUERY_CATALOGS = {'VVV': ['J', 'II/348/vvv2'], '2MASS': ['J', 'II/246/'],
 
 CHIP_ZPS = {'Z': [23.88], 'Y': [23.88], 'J': [23.88], 'H': [24.111]}
 # 24.111
+
+WEIGHT_SIGMA_THRESHOLDS = {'C1': 2.0, 'C2': 2.0, 'C3': 2.0, 'C4': 1.0}
+
 GET_DATA_SETTINGS = dict(
     replace_list = [
         ('all sky grid', 'all_sky_grid'),
@@ -163,6 +166,7 @@ def update_settings(settings_file='photometrus.json5'):
     PHOTOMETRY_LIM_MAGS = settings['PHOTOMETRY_LIM_MAGS']
     GB_QUERY_CATALOGS = settings['GB_QUERY_CATALOGS']
     CHIP_ZPS = settings['CHIP_ZPS']
+    WEIGHT_SIGMA_THRESHOLDS = settings['WEIGHT_SIGMA_THRESHOLDS']
     GET_DATA_SETTINGS = settings['GET_DATA_SETTINGS']
 
 
@@ -242,6 +246,11 @@ def gen_sflat_file_name(band, chip, date=None):
     filename = sflat_list[0]
     print('Getting latest sflat: ', filename)
     return os.path.join(flat_dir, filename)
+
+def get_weight_thresh(chip):
+    chosen_thresh = WEIGHT_SIGMA_THRESHOLDS['C%i' % chip]
+    return chosen_thresh
+
 #%%
 """
 # Settings for list of directory+filenames
