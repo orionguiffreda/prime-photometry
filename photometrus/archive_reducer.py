@@ -25,10 +25,10 @@ _defaults = dict(
 )
 _defaults['grid_df'] = pd.read_csv(_defaults['grid_file'])
 chip_dict = {
-    '00': 3,
-    '01': 1,
-    '10': 4,
-    '11': 2,
+    '11': 3,
+    '10': 1,
+    '01': 4,
+    '00': 2,
 }
 
 def get_dates(start_date=datetime.date(day=11, month=10, year=2022), end_date=datetime.date.today()):
