@@ -1,3 +1,7 @@
+"""
+Runs processing on whole observations
+"""
+
 import os
 import sys
 import subprocess

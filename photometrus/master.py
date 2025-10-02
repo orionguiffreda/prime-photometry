@@ -1,3 +1,7 @@
+"""
+Runs processing on give files / filepaths (backbone of processing pipeline)
+"""
+
 import os
 import sys
 import subprocess

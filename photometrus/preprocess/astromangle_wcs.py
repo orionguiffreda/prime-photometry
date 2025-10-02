@@ -1,3 +1,7 @@
+"""
+Generates rough initial astrometry for input images
+"""
+
 import os
 from fnmatch import fnmatch
 import shutil

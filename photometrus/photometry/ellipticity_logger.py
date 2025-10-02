@@ -1,3 +1,7 @@
+"""
+Generates check plot showing ellipticity & psf size for full 4 chip observations
+"""
+
 import numpy as np
 import argparse
 from astropy.table import Table

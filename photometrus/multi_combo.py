@@ -1,3 +1,7 @@
+"""
+Runs processing and photometry on whole observation
+"""
+
 import os
 import shutil
 import argparse

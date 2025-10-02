@@ -1,3 +1,7 @@
+"""
+Functions for automatic master / super flat generation
+"""
+
 import pandas as pd
 import os
 from pandas import to_datetime

@@ -1,4 +1,7 @@
-#%%
+"""
+Runs full pipeline (proc. & photom.) on whole night's data
+"""
+
 import os
 import sys
 import argparse

@@ -1,3 +1,7 @@
+"""
+Corrects initial astrometry for zero order translation error
+"""
+
 import os
 import subprocess
 import argparse
@@ -251,12 +255,12 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                           [1.0, 0.5, 1.0, '<16', errbit_2mass], [1.0, 0.5, 1.25, '<16', errbit_2mass],
                           [0.85, 0.5, 1.25, '<16', errbit_2mass]]
 
+    success_flag = False
     for chosen_survey, catNum in catalogs:
         for k in keycheck:
             if catNum in k:
                 print('%s catalog found!' % k)
                 vhs_table = result[''.join(k)]
-                # print(vhs_table)
                 cols = vhs_table.colnames
                 vhs_band_col = vhs_table[cols[2]]
 
@@ -272,31 +276,26 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
                     no_sources_flag = False
 
-                    for bounds in bounds_change_list:  # Try full boxsize, then half if too many sources
-                        boxscale = bounds[0]
-                        low_lim_scalar = bounds[1]
-                        high_lim_scalar = bounds[2]
-                        errbits_constraint = bounds[3]
-                        errbits_2M = bounds[4]
-
+                    for bounds in bounds_change_list:
+                        boxscale, low_lim_scalar, high_lim_scalar, errbits_constraint, errbits_2M = bounds
                         errbits = [errbits_constraint, errbits_2M]
-
 
                         effective_boxsize = boxsize * boxscale
                         eff_mag_low_cutoff = mag_low_cutoff + low_lim_scalar
                         eff_mag_high_cutoff = mag_high_cutoff - high_lim_scalar
+
                         print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, '
                               'err constraints: %s, %s'
-                              % (catNum, frame_long_str, frame_lat_str, effective_boxsize, eff_mag_low_cutoff,
-                                 eff_mag_high_cutoff, errbits_constraint, errbits_2M))
+                              % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
+                                 eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
                         try:
-                            v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2]],
+                            v = Vizier(columns=[cols[0], cols[1], cols[2]],
                                        column_filters={
-                                           "%s" % cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
-                                           "%sFlag" % band.lower(): "<4",
-                                           "%sperrbits" % band: errbits_constraint,
-                                           "%s1perrb" % band: errbits_constraint,
-                                           "%sflags" % band: errbits_constraint,
+                                           cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
+                                           f"{band.lower()}Flag": "<4",
+                                           f"{band}perrbits": errbits_constraint,
+                                           f"{band}1perrb": errbits_constraint,
+                                           f"{band}flags": errbits_constraint,
                                            "Cflg": errbits_2M,
                                            "Hclass": "== -1",
                                            "Class": "== 0",
@@ -311,36 +310,26 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                             if Q and len(Q[0]) > 0:
                                 print('Queried source total = ', len(Q[0]))
                                 if len(Q[0]) <= acc_source_num:
-                                    break  # Accept result if not too many sources
+                                    success_flag = True  # Mark success
+                                    break
                                 else:
                                     print("Too many sources (>%i), trying different bounds..." % acc_source_num)
                                     no_sources_flag = True
-                                    continue  # Try next bounds
+                                    continue
                             else:
                                 print(f"No sources found in {catNum}, trying fallback if available...")
-                                break  # No sources at all; stop retrying bounds
+                                break
 
                         except Exception as e:
                             print('Error in Vizier query.')
                             print(f"Error details: {e}")
                             continue
 
-                    if no_sources_flag:
-                        print('Query unsuccessful, defaulting to next fallback catalog...')
-                        continue
+                    if success_flag:
+                        break  # Break out of keycheck loop as well
 
-                    else:
-                        print('Too many sources even after reducing boxsize. Skipping this catalog...')
-                        continue
-
-                    break  # Catalog succeeded
-                else:
-                    print('Query unsuccessful, defaulting to next fallback catalog...')
-            else:
-                continue
-        else:
-            continue
-        break
+        if success_flag:
+            break  # Break out of catalogs loop
 
     return Q, coords, catNum, cols[2], eff_mag_low_cutoff, eff_mag_high_cutoff, effective_boxsize, errbits
 
@@ -386,16 +375,14 @@ def sex2(imageName):
     newcatalogName = os.path.splitext(imageName)[0] + '.psf.cat'
 
     configFile = gen_config_file_name('sex2.config')
-    paramName = gen_config_file_name('photomPSF.param')
+    paramName = gen_config_file_name('adv_shift.param')
 
-    try:
-        # We are supplying SExtactor with the PSF model with the PSF_NAME option
-        command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PARAMETERS_NAME %s' % (
-            imageName, configFile, newcatalogName, psfName, paramName)
-        # print("Executing command: %s" % command)
-        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError as err:
-        print('Could not run sextractor with exit error %s' % err)
+    # We are supplying SExtactor with the PSF model with the PSF_NAME option
+    command = 'sex %s -c %s -CATALOG_NAME %s -PSF_NAME %s -PHOT_FLUXFRAC 0.5 -PARAMETERS_NAME %s' % (
+        imageName, configFile, newcatalogName, psfName, paramName)
+    # print("Executing command: %s" % command)
+    subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     return newcatalogName
 
 
@@ -838,8 +825,8 @@ def boxchange(size):
 
 def shift(
         directory, imagename, band, length=defaults['length'], num=defaults['num'], thresh_low=defaults['thresh_low'],
-        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=False, x=defaults['x_guess'],
-        y=defaults['y_guess']
+        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=defaults['adv_solve'],
+        x=defaults['x_guess'],y=defaults['y_guess']
 ):
 
     if band == 'Y':
@@ -857,21 +844,20 @@ def shift(
     if bulge:
         boxsize, crop = boxchange(4)
         thresh_high = 0.25
-
-        if adv_solve:
-            if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
-                print('Previous psf cat detected, saving you some time and skipping all sextractor steps...')
-                catname = os.path.splitext(imagename)[0] + '.psf.cat'
-            else:
-                catname = sex1(imagename, bulge=bulge)
-                psfex(catname)
-                catname = sex2(imagename)
-        else:
-            sex1(imagename, bulge=bulge)
-
     else:
         boxsize, crop = boxchange(10)
+
+    if adv_solve:
+        if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
+            print('Previous psf cat detected, saving you some time and skipping all sextractor steps...')
+            catname = os.path.splitext(imagename)[0] + '.psf.cat'
+        else:
+            catname = sex1(imagename, bulge=bulge)
+            psfex(catname)
+            catname = sex2(imagename)
+    else:
         sex1(imagename, bulge=bulge)
+
     # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
     Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff, eff_boxsize, errbits = complex_query(raImage, decImage,
                                                                                                      filter_used, boxsize,

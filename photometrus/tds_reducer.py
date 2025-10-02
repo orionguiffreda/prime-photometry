@@ -1,3 +1,7 @@
+"""
+Runs full pipeline (proc. & photom.) on specified fields during a night's observation
+"""
+
 import pandas as pd
 import argparse
 import os
