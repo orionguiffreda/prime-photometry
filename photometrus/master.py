@@ -152,7 +152,7 @@ def flatfielding(astrompath, FFpath, band, chip, date=None):
     os.chdir(gen_pipeline_file_name())
     print('using master flat to flat field ramp imgs..')
     # flatpath = gen_mflat_file_name(band, chip, date)
-    flatpath = gen_mflat_file_name(band, chip, date)
+    flatpath = gen_sflat_file_name(band, chip, date)
 
     print('\nEquivalent argparse cmd: photometrus process flatfield -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
@@ -165,11 +165,15 @@ def flatfielding(astrompath, FFpath, band, chip, date=None):
 
 def sky(astrompath, skypath, sigma, chip):
     os.chdir(gen_pipeline_file_name())
-    filelist = [f for f in os.listdir(skypath) if f.endswith('.C{}.fits'.format(chip))]
-    if filelist:
-        print('Previous sky %s found! Skipping sky gen..\n' % filelist[0])
-        pass
-    else:
+    check_for_sky = True
+    filelist = None
+
+    if check_for_sky:
+        filelist = [f for f in os.listdir(skypath) if f.endswith('.C{}.fits'.format(chip))]
+        if filelist:
+            print('Previous sky %s found! Skipping sky gen..\n' % filelist[0])
+            pass
+    if not filelist:
         print('generating sky...')
         FFstring = '_FF'
         if FFstring in astrompath:
@@ -270,13 +274,16 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
     attempted_angles = set()
 
     while True:
-        # run initial astrometry, if no ROTOFF, shift should fail
+        # Initial shift attempt
         astrom_angle(astromdir, subdir, chip, chosen_rot_val)
-        shift(astromdir, band)
+        try:
+            shift(astromdir, band)
+        except (IndexError, ValueError) as e:
+            print(f"Shift algorithm (initial) encountered an error: %s" % e)
+            print("Skipping to ROTOFF verification...")
 
-        # checks for .shift.fits file, should only remain if shift agreement is not found
+        # check if shift succeeded
         shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
-
         if not shift_fail_check:
             break
 
@@ -285,46 +292,55 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
         if not all_fits:
             print('No suitable FITS files found in dir!')
             break
+
         imgpath = os.path.join(astromdir, all_fits[0])
 
+        # Check if rotoff is real
+        rotoff_real = False
         try:
             img = fits.open(imgpath)
             imghdr = img[0].header
-            # verify ROTOFF value is real and not nonsense
             rotoff_check = int(imghdr['ROTOFF'])
-            print('ROTOFF value is real: %i... Attempting more advanced shift algorithm (may take a while!)...'
-                  % rotoff_check)
+            rotoff_real = True
+            print('ROTOFF value is real: %i... Attempting more advanced shift algorithm (may take a while!)...' %
+                  rotoff_check)
+        except (ValueError, KeyError):
+            print('ROTOFF value is not real! Varying ROTOFF value by +90 deg...')
 
-            shift(astromdir, band, adv=True)
+        if rotoff_real:
+            # Advanced shift
+            try:
+                shift(astromdir, band, adv=True)
+            except (IndexError, ValueError) as e:
+                print(f"Shift algorithm (advanced) encountered an error: %s" % e)
 
             shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
             if not shift_fail_check:
                 break
 
+            # old algo fallback
             if not bulge:
                 print('Improved shift algorithm failed... Attempting old shift algorithm. *MAY HAVE INACCURACY*')
-                shift(astromdir, band, old=True)
+                try:
+                    shift(astromdir, band, old=True)
+                except (IndexError, ValueError) as e:
+                    print(f"Shift algorithm (old) encountered an error: %s" % e)
 
-            # print('Shift astrometry failed!  Stacking is likely to fail, so examine images further!')
+            # No rotation variation if rotoff was real, even if these failed
             break
 
-        except (ValueError, KeyError):
-            print('ROTOFF value is not real!, Varying ROTOFF value by +90 deg...')
+        else:
+            # Rotation variation block for if rotoff is bad
+            attempted_angles.add(chosen_rot_val)
+            chosen_rot_val = (chosen_rot_val + 90) % 360
+            print('New ROTOFF value: %i' % chosen_rot_val)
 
-        # record attempted rotation
-        attempted_angles.add(chosen_rot_val)
-
-        # compute next angle, modulo 360
-        chosen_rot_val = (chosen_rot_val + 90) % 360
-        print('New ROTOFF value: %i' % chosen_rot_val)
-
-        if chosen_rot_val in attempted_angles:
-            print("All rotations failed. Moving on, but astrometry is likely to fail, so examine images further!")
-            break
+            if chosen_rot_val in attempted_angles:
+                print("All rotations failed. Moving on, but astrometry is likely to fail, so examine images further!")
+                break
 
 
-
-# %% packing compression
+#%% packing compression
 
 
 def fpack(stackpath, chip):

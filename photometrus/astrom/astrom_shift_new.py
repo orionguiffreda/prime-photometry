@@ -51,7 +51,7 @@ def timed_input(prompt, timeout=60, default='Y'):
 #%% image info
 
 
-def imaging(directory, imageName, x_guess=None, y_guess=None):
+def imaging(directory, imageName, x_offset=0, x_guess=None, y_guess=None):
     os.chdir(directory)
     f = fits.open(os.path.join(directory, imageName))
     data = f[0].data  # This is the image array
@@ -61,7 +61,11 @@ def imaging(directory, imageName, x_guess=None, y_guess=None):
     w = WCS(header)
 
     # Get the RA and Dec of the center of the image
-    [raImage, decImage] = w.all_pix2world(data.shape[0] / 2, data.shape[1] / 2, 1)
+    if x_offset != 0:
+        x_center = (data.shape[0] / 2) + x_offset
+        [raImage, decImage] = w.all_pix2world(x_center, data.shape[1] / 2, 1)
+    else:
+        [raImage, decImage] = w.all_pix2world(data.shape[0] / 2, data.shape[1] / 2, 1)
 
     # Get zero point for image
     # chip = header['CHIP']
@@ -350,7 +354,8 @@ def sex1(imageName, bulge=False):
     else:
         catname = imageName + '.cat'
     try:
-        command = 'sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE NONE' % (imageName, configFile, catname, paramName)
+        command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE NONE'
+                   % (imageName, configFile, catname, paramName))
         #print('Executing command: %s' % command)
         rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except subprocess.CalledProcessError as err:
@@ -423,25 +428,33 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
         sexcat = Table.read(os.path.join(directory, catname), hdu=2)
     colnames = Q[0].colnames
 
+    if not float(crop):
+        left_crop = crop[0]
+        right_crop = crop[1]
+        y_crop = crop[2]
+    else:
+        left_crop = right_crop = y_crop = crop
+
     max_x = data.shape[0]
     max_y = data.shape[1]
     mass_imCoords = w.all_world2pix(Q[0][colnames[0]], Q[0][colnames[1]], 1)
-    inner_catsources = Q[0][np.where((mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x-crop)) & (mass_imCoords[1] > crop)
-                                   & (mass_imCoords[1] < (max_y-crop)))]
+    inner_catsources = Q[0][np.where((mass_imCoords[0] > left_crop) & (mass_imCoords[0] < (max_x-right_crop)) & (mass_imCoords[1] > y_crop)
+                                   & (mass_imCoords[1] < (max_y-y_crop)))]
     # inner_catsources = inner_catsources[(inner_catsources[colnames[2]] * 0.339 > 1)]
 
     # print(sexcat.colnames)
     if adv:
         inner_primesources = sexcat[(sexcat['FLAGS'] < 2) &
-                                    (sexcat['X_IMAGE'] < (max_x - crop)) & (sexcat['X_IMAGE'] > crop)
-                                    & (sexcat['Y_IMAGE'] < (max_y) - crop) & (
-                                                sexcat['Y_IMAGE'] > crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
+                                    (sexcat['X_IMAGE'] < (max_x - right_crop)) & (sexcat['X_IMAGE'] > left_crop)
+                                    & (sexcat['Y_IMAGE'] < (max_y) - y_crop) & (
+                                                sexcat['Y_IMAGE'] > y_crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
                                     & (sexcat['CLASS_STAR'] > 0.5)]
     else:
-        inner_primesources = sexcat[(sexcat['FLAGS'] < 2) &
-                                    (sexcat['X_IMAGE'] < (max_x - crop)) & (sexcat['X_IMAGE'] > crop)
-                                    & (sexcat['Y_IMAGE'] < (max_y) - crop) & (
-                                                sexcat['Y_IMAGE'] > crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
+        inner_primesources = sexcat[(sexcat['FLAGS'] <= 1) &
+                                    (sexcat['X_IMAGE'] < (max_x - right_crop)) & (sexcat['X_IMAGE'] > left_crop)
+                                    & (sexcat['Y_IMAGE'] < (max_y) - y_crop) & (
+                                                sexcat['Y_IMAGE'] > y_crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
+                                    & (sexcat['FLUX_MAX'] / sexcat['FLUX_AUTO'] < 0.25)
                                     ]
 
     # zp correction
@@ -461,7 +474,7 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
     inner_catsources.add_column(xs)
     inner_catsources.add_column(ys)
 
-    # inner_catsources.write('cat_all.ecsv', overwrite=True)
+    inner_primesources.write('prime_all.ecsv', overwrite=True)
 
     Path = os.path.join(directory, 'catcoords_crop.reg')
     newtext = open(Path, 'w+')
@@ -470,8 +483,8 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
     # #
     Path = os.path.join(directory, 'primecoords_crop.reg')
     newtext = open(Path, 'w+')
-    for i,j in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE']):
-        newtext.write('\npoint(%f,%f) # point=circle 5' % (i,j))
+    for i,j,k in zip(inner_primesources['X_IMAGE'],inner_primesources['Y_IMAGE'],inner_primesources['FLUX_RADIUS']):
+        newtext.write(f'\ncircle({i}, {j}, {k}") # color=red')
     #
     # Path = os.path.join(directory, 'primecoords_all.reg')
     # newtext = open(Path, 'w+')
@@ -816,10 +829,26 @@ def removal(directory):
 
 #%%
 
-def boxchange(size):
+def boxchange(size, x_offset=0):
     # size = size of box in arcmin
-    boxsize_pix = size * 60 * (1/0.498)
-    crop_pix = (4088 - boxsize_pix) / 2
+    pixscale = 0.498
+    imgsize = 4088
+
+    boxsize_pix = size * 60 * (1/pixscale)
+    crop_pix = (imgsize - boxsize_pix) / 2
+
+    if x_offset != 0:
+        center_pix = imgsize / 2
+
+        new_center_x = center_pix + x_offset
+
+        x_start = new_center_x - boxsize_pix / 2
+        x_end = new_center_x + boxsize_pix / 2
+
+        left_crop = x_start  # pixels from left edge
+        right_crop = imgsize - x_end  # pixels from right edge
+        crops = [left_crop, right_crop, crop_pix]
+        return size, crops
     return size, crop_pix
 
 
@@ -829,6 +858,7 @@ def shift(
         x=defaults['x_guess'],y=defaults['y_guess']
 ):
 
+    x_offset = 0
     if band == 'Y':
         print('Switching Y band to J for ease of astrometry...')
         filter_used = 'J'
@@ -840,12 +870,12 @@ def shift(
     maglow = 12
     maghigh = 14
 
-    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename, x_guess=x, y_guess=y)
+    data, header, w, raImage, decImage, zp, catname, bulge = imaging(directory, imagename, x_offset=x_offset, x_guess=x, y_guess=y)
     if bulge:
         boxsize, crop = boxchange(4)
         thresh_high = 0.25
     else:
-        boxsize, crop = boxchange(10)
+        boxsize, crop = boxchange(10, x_offset=x_offset)
 
     if adv_solve:
         if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
