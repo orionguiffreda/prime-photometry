@@ -27,10 +27,10 @@ def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
             image = hdul[0].data
             header = hdul[0].header
             cropimage = image [4:4092, 4:4092]  #remove if crop issue ever fixed
-            CRPIX1 = (header['CRPIX1'])         #changing ref pixels to work w/ cropped imgs
-            CRPIX2 = (header['CRPIX2'])
-            header.set('CRPIX1', value=CRPIX1 - 4)
-            header.set('CRPIX2', value=CRPIX2 - 4)
+            # CRPIX1 = (header['CRPIX1'])
+            # CRPIX2 = (header['CRPIX2'])
+            # header.set('CRPIX1', value=CRPIX1 - 4)
+            # header.set('CRPIX2', value=CRPIX2 - 4)
         reduced_image = (cropimage-cropsky*np.nanmedian(cropimage))
         output_fname = os.path.basename(f)
         output_fname = output_fname.replace('.ramp.new', '.sky.flat.fits')

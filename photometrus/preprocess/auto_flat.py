@@ -4,6 +4,7 @@ Functions for automatic master / super flat generation
 
 import pandas as pd
 import os
+import sys
 from pandas import to_datetime
 from datetime import datetime, timedelta
 import argparse
@@ -18,8 +19,12 @@ from photometrus.getfiles import get_data_files
 
 
 def auto_flat_creation(date, band=None, chip=None):
-    datetime = to_datetime(date)
-    date = datetime.strftime('%Y%m%d')
+    try:
+        datetime = to_datetime(date)
+        date = datetime.strftime('%Y%m%d')
+    except AttributeError:
+        sys.exit('Date of observation not extracted, cannot move forward with flat gen & processing! '
+                 'Did you specify a "-date" field correctly?')
 
     if not chip:
         chips = [1,2,3,4]

@@ -428,12 +428,12 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
         sexcat = Table.read(os.path.join(directory, catname), hdu=2)
     colnames = Q[0].colnames
 
-    if not float(crop):
+    if isinstance(crop, float):
+        left_crop = right_crop = y_crop = crop
+    else:
         left_crop = crop[0]
         right_crop = crop[1]
         y_crop = crop[2]
-    else:
-        left_crop = right_crop = y_crop = crop
 
     max_x = data.shape[0]
     max_y = data.shape[1]

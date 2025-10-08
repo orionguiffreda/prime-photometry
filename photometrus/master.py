@@ -165,7 +165,7 @@ def flatfielding(astrompath, FFpath, band, chip, date=None):
 
 def sky(astrompath, skypath, sigma, chip):
     os.chdir(gen_pipeline_file_name())
-    check_for_sky = True
+    check_for_sky = False
     filelist = None
 
     if check_for_sky:
@@ -279,7 +279,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
         try:
             shift(astromdir, band)
         except (IndexError, ValueError) as e:
-            print(f"Shift algorithm (initial) encountered an error: %s" % e)
+            print("Shift algorithm (initial) encountered an error: %s" % e)
             print("Skipping to ROTOFF verification...")
 
         # check if shift succeeded
@@ -312,7 +312,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             try:
                 shift(astromdir, band, adv=True)
             except (IndexError, ValueError) as e:
-                print(f"Shift algorithm (advanced) encountered an error: %s" % e)
+                print("Shift algorithm (advanced) encountered an error: %s" % e)
 
             shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
             if not shift_fail_check:
@@ -324,7 +324,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
                 try:
                     shift(astromdir, band, old=True)
                 except (IndexError, ValueError) as e:
-                    print(f"Shift algorithm (old) encountered an error: %s" % e)
+                    print("Shift algorithm (old) encountered an error: %s" % e)
 
             # No rotation variation if rotoff was real, even if these failed
             break

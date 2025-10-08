@@ -10,6 +10,7 @@ import astropy.nddata.utils
 import numpy as np
 import numpy.ma as ma
 import argparse
+import pandas as pd
 import astropy.units as u
 from astroquery.vizier import Vizier
 from astroquery.ipac.ned import Ned
@@ -156,10 +157,92 @@ def img(directory, imageName, crop):
 
 
 # %%
+# gaia query for catalog completion check
+def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
+    crop = int(crop)
+    max_x = data.shape[0]
+    max_y = data.shape[1]
+
+    # gaia query
+    mag_low_cutoff = 3
+    catNum = 'I/350/gaiaedr3'
+    # mag_lims = f">{mag_low_cutoff:f}"
+
+    try:
+        print(f' Querying {catNum} and crossmatching to determine catalog completion..')
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'RPmag'],
+                   column_filters={"Dup": "<1", "Nd": ">6"},
+                   row_limit=-1)
+        G = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+
+        # crsmtch check
+        gaia_colnames = G[0].colnames
+        G_RA = gaia_colnames[0]
+        G_DEC = gaia_colnames[1]
+
+        query_colnames = Q[0].colnames
+        Q_RA = query_colnames[0]
+        Q_DEC = query_colnames[1]
+
+        G_imCoords = w.all_world2pix(G[0][G_RA], G[0][G_DEC], 1)
+        Q_imCoords = w.all_world2pix(Q[0][Q_RA], Q[0][Q_DEC], 1)
+
+        good_G_stars = G[0][
+            np.where((G_imCoords[0] > crop) & (G_imCoords[0] < (max_x - crop)) & (G_imCoords[1] > crop) & (
+                    G_imCoords[1] < (max_y - crop)))]
+        good_Q_stars = Q[0][
+            np.where((Q_imCoords[0] > crop) & (Q_imCoords[0] < (max_x - crop)) & (Q_imCoords[1] > crop) & (
+                    Q_imCoords[1] < (max_y - crop)))]
+
+        GaiaCatCoords = SkyCoord(ra=good_G_stars[G_RA], dec=good_G_stars[G_DEC], frame='icrs', unit='degree')
+        QueryCatCoords = SkyCoord(ra=good_Q_stars[Q_RA], dec=good_Q_stars[Q_DEC], frame='icrs', unit='degree')
+
+        print(' Gaia cropped source total = ', len(good_G_stars))
+        print(f' Chosen survey cropped source total = ', len(good_Q_stars))
+
+        gaia_crsmtch_thresh = 1.0
+        idx_gaia, idx_query, d2d, d3d = QueryCatCoords.search_around_sky(GaiaCatCoords,
+                                                                         gaia_crsmtch_thresh * u.arcsec)
+
+        # df = pd.DataFrame({
+        #     'idx_gaia': idx_gaia,
+        #     'idx_query': idx_query,
+        #     'd2d': d2d.to(u.arcsec).value  # example in arcsec
+        # })
+        #
+        # # Sort by separation and drop duplicates of gaia index, keeping the closest
+        # gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
+
+        # Path = '/mnt/photometry/AT2025wgq/field9614-2025-09-10/J_rerun/stack/crsgaia.reg'
+        # newtext = open(Path, 'w+')
+        # newtext.write('fk5')
+        # for i, j in zip(good_G_stars[idx_gaia][G_RA], good_G_stars[idx_gaia][G_DEC]):
+        #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i, j))
+        #
+        # Path = '/mnt/photometry/AT2025wgq/field9614-2025-09-10/J_rerun/stack/vhs.reg'
+        # newtext = open(Path, 'w+')
+        # newtext.write('fk5')
+        # for i, j in zip(good_Q_stars[Q_RA], good_Q_stars[Q_DEC]):
+        #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i, j))
+
+        print(f' Crossmatched Gaia source num = {len(idx_gaia)}')
+        gaia_completion = len(idx_gaia) / len(good_G_stars)
+        print('Completion = %.2f' % gaia_completion)
+    except AttributeError:
+        print(' Gaia sources not found!  Skipping completion check!')
+        gaia_completion = 1
+    except Exception as e:
+        print(f'Error in Vizier GAIA query & Survey Crossmatch: {e}')
+        print(' Assuming bad completion!')
+        gaia_completion = 0
+
+    return gaia_completion
+
+
 # Use astroquery to get catalog search
-
-
-def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None, bulge=False):
+def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.5,
+          survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None, bulge=False):
     # query box width
     width = PHOTOMETRY_QUERY_WIDTH
 
@@ -248,6 +331,7 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
 
             keycheck = result.keys()
 
+            last_idx = catalogs[-1][1]
             for chosen_survey, catNum in catalogs:
                 for k in keycheck:
                     if catNum in k:
@@ -280,7 +364,13 @@ def query(raImage, decImage, band, survey=None, given_catalog_path=None, mag_low
                                                    , catalog=k, cache=False, frame=chosen_frame)
                                 if Q and len(Q[0]) > 0:
                                     print('Queried source total = ', len(Q[0]))
-                                    break  # success
+                                    if catNum != last_idx:
+                                        gaia_comp = gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q)
+                                        if gaia_comp >= acc_comp_lvl:
+                                            print(f' Completion acceptable (>{acc_comp_lvl})! Moving on w/ catalog!\n')
+                                            break
+                                        else:
+                                            print(f' Gaia completion w/ {catNum} < {acc_comp_lvl}, defaulting to next catalog..\n')
                                 else:
                                     # in case survey provides no sources for some reason, try next available
                                     print(f"No sources found in {catNum}, trying fallback if available...")
@@ -566,7 +656,11 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                (given_cat['XMODEL_IMAGE'] < (max_x - crop)) & (given_cat['XMODEL_IMAGE'] > crop) &
                                (given_cat['YMODEL_IMAGE'] < (max_y) - crop) & (given_cat['YMODEL_IMAGE'] > crop)]
 
-        psfsourceTable = get_table_from_ldac(psfcatalogName)
+        try:
+            psfsourceTable = get_table_from_ldac(psfcatalogName)
+        except FileNotFoundError:
+            sys.exit(f'{psfcatalogName} not found! Require this file for -grb_only functionality! Rerun photometry w/ '
+                     f'the "-keep" flag.')
         if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
             r50 = psfsourceTable['FLUX_RADIUS'][:, 0]
             r90 = psfsourceTable['FLUX_RADIUS'][:, 1]
@@ -611,7 +705,12 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                         mass_imCoords[1] < (max_y - crop)))]
         print('Catalogue cropped, source total = ', len(good_cat_stars))
 
-        psfsourceTable = get_table_from_ldac(psfcatalogName)
+        try:
+            psfsourceTable = get_table_from_ldac(psfcatalogName)
+        except FileNotFoundError:
+            sys.exit(f'{psfcatalogName} not found! Require this file for -grb_only functionality! Rerun photometry w/ '
+                     f'the "-keep" flag.')
+
         if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
             r50 = psfsourceTable['FLUX_RADIUS'][:, 0]
             r90 = psfsourceTable['FLUX_RADIUS'][:, 1]
@@ -1973,11 +2072,11 @@ def grb_rad_convert(rad):
 def int_calibration(
         name, directory, band, chip, crop, sigma, given_catalog, survey,
         mag_low_lim, mag_high_lim, grb_ra, grb_dec,
-        grb_coordlist, grb_radius, max_int
+        grb_coordlist, grb_radius, max_int, comp_lvl
 ):
     print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
-    data, header, w, raImage, decImage, bulge, det_thresh = img(directory, name, crop)
-    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
+    data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
+    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
                                              mag_upper_lim=mag_high_lim, bulge=bulge)
     psfcatalogName = []
     for f in os.listdir(directory):
@@ -2025,6 +2124,7 @@ def photometry(
     start_time = dt.now()
 
     max_int = 0.1   # max int value allowed for photometric fit
+    comp_lvl = 0.4
 
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -2042,7 +2142,7 @@ def photometry(
             sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
         os.chdir(directory)
         data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
-        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
         psfcatalogName = name.replace('.fits', '.psf.cat')
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
@@ -2061,7 +2161,7 @@ def photometry(
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
     else:
         data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
-        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, survey, given_catalog, mag_low_lim,
+        Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
         catalogName = sex1(name, det_cut=det_thresh)
         psfex(catalogName)
@@ -2118,7 +2218,7 @@ def photometry(
                             mag_low_cutoff += 0.5
                             new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                             mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh,
-                                                            max_int=max_int)
+                                                            max_int=max_int, comp_lvl=comp_lvl)
                             if abs(new_intercept) > abs(prev_intercept):
                                 print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                       "redoing...\n" % (new_intercept, prev_intercept))
@@ -2126,7 +2226,7 @@ def photometry(
                                 mag_low_cutoff -= 0.5
                                 new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                                 mag_low_cutoff, mag_high_lim, grb_ra,
-                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
+                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int, comp_lvl=comp_lvl)
                                 revert_flag = True
                                 break
                             else:
@@ -2136,7 +2236,7 @@ def photometry(
                         if revert_flag:
                             print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
                         else:
-                            print(f"Final intercept below 0.15: %.4f" % intercept)
+                            print(f"Final intercept below {max_int}: %.4f" % intercept)
 
                         prev_intercept = intercept
                         revert_flag = False
@@ -2148,7 +2248,7 @@ def photometry(
                             new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                             mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
                                                             grb_thresh,
-                                                            max_int=max_int)
+                                                            max_int=max_int, comp_lvl=comp_lvl)
                             if abs(new_intercept) > abs(prev_intercept):
                                 print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                       "redoing...\n" % (new_intercept, prev_intercept))
@@ -2158,7 +2258,8 @@ def photometry(
                                 new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog,
                                                                 chosen_survey,
                                                                 mag_low_cutoff, mag_high_lim, grb_ra,
-                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int)
+                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int,
+                                                                comp_lvl=comp_lvl)
                                 revert_flag = True
                                 break
                             else:
