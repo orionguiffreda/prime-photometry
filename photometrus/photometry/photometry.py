@@ -205,14 +205,14 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
         idx_gaia, idx_query, d2d, d3d = QueryCatCoords.search_around_sky(GaiaCatCoords,
                                                                          gaia_crsmtch_thresh * u.arcsec)
 
-        # df = pd.DataFrame({
-        #     'idx_gaia': idx_gaia,
-        #     'idx_query': idx_query,
-        #     'd2d': d2d.to(u.arcsec).value  # example in arcsec
-        # })
-        #
-        # # Sort by separation and drop duplicates of gaia index, keeping the closest
-        # gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
+        df = pd.DataFrame({
+            'idx_gaia': idx_gaia,
+            'idx_query': idx_query,
+            'd2d': d2d.to(u.arcsec).value  # example in arcsec
+        })
+
+        # Sort by separation and drop duplicates of gaia index, keeping the closest
+        gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
 
         # Path = '/mnt/photometry/AT2025wgq/field9614-2025-09-10/J_rerun/stack/crsgaia.reg'
         # newtext = open(Path, 'w+')
@@ -226,9 +226,9 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
         # for i, j in zip(good_Q_stars[Q_RA], good_Q_stars[Q_DEC]):
         #     newtext.write('\npoint(%f,%f) # point=circle 5' % (i, j))
 
-        print(f' Crossmatched Gaia source num = {len(idx_gaia)}')
-        gaia_completion = len(idx_gaia) / len(good_G_stars)
-        print('Completion = %.2f' % gaia_completion)
+        print(f' Crossmatched Gaia source num = {len(gaia_matches_closest)}')
+        gaia_completion = len(gaia_matches_closest) / len(good_G_stars)
+        print(' Completion = %.2f' % gaia_completion)
     except AttributeError:
         print(' Gaia sources not found!  Skipping completion check!')
         gaia_completion = 1
@@ -241,8 +241,8 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 
 
 # Use astroquery to get catalog search
-def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.5,
-          survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None, bulge=False):
+def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
+          survey=None, given_catalog_path=None, mag_lower_lim=None, mag_upper_lim=None, bulge=False, no_check=False):
     # query box width
     width = PHOTOMETRY_QUERY_WIDTH
 
@@ -364,7 +364,9 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.5,
                                                    , catalog=k, cache=False, frame=chosen_frame)
                                 if Q and len(Q[0]) > 0:
                                     print('Queried source total = ', len(Q[0]))
-                                    if catNum != last_idx:
+                                    if no_check:
+                                        break
+                                    elif not no_check and catNum != last_idx:
                                         gaia_comp = gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q)
                                         if gaia_comp >= acc_comp_lvl:
                                             print(f' Completion acceptable (>{acc_comp_lvl})! Moving on w/ catalog!\n')
@@ -2077,11 +2079,9 @@ def int_calibration(
     print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
     data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
     Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
-                                             mag_upper_lim=mag_high_lim, bulge=bulge)
-    psfcatalogName = []
-    for f in os.listdir(directory):
-        if f.endswith('.psf.cat') and 'C%i' % chip:
-            psfcatalogName.append(f)
+                                             mag_upper_lim=mag_high_lim, bulge=bulge, no_check=True)
+
+    psfcatalogName = [f for f in os.listdir(directory) if f.endswith('.psf.cat') and 'C%i' % chip in f]
     psfcatalogName = ''.join(psfcatalogName)
     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
                                                                                     crop, given_catalog)
@@ -2124,7 +2124,7 @@ def photometry(
     start_time = dt.now()
 
     max_int = 0.1   # max int value allowed for photometric fit
-    comp_lvl = 0.4
+    comp_lvl = 0.3
 
     directory = os.path.dirname(full_filename)
     if directory == '':
@@ -2203,7 +2203,7 @@ def photometry(
                           'or band? Moving on...')
                     print('*RECOMMEND DOUBLE-CHECKING THIS FIELD*')
                 else:
-                    if intercept >= 5:
+                    if abs(intercept) >= 5:
                         print('Significant photometric intercept value!: %s' % intercept)
                         print('Photometric calibration likely unreliable! Is there an issue with the image, catalog, '
                               'or band? Moving on...')
@@ -2241,7 +2241,7 @@ def photometry(
                         prev_intercept = intercept
                         revert_flag = False
 
-                        while abs(intercept) > max_int and sigma > 0:  # ensure sigma doesn't go negative
+                        while abs(intercept) > max_int and sigma > 1:  # ensure sigma doesn't go negative
                             print('\nIntercept = %.4f\n' % intercept)
                             step = 0.25 if sigma <= 1.5 else 0.5
                             sigma -= step
