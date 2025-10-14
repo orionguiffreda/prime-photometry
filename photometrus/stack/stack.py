@@ -176,60 +176,83 @@ def swarp_alt(imgdir, imout):
     print('2nd set co-added image created, all done!')
 
 
-def swarp_sx(imgdir, chip):
-    os.chdir(str(imgdir))
-    bulge = auto_bulge_detect(imgdir)
-    if bulge:
-        sx = gen_config_file_name('bulge_new.config')
-        ap = gen_config_file_name('tempsource.param')
+def swarp_sx(imgpath, chip):
+    # imgpath can be either full file path to stack or directory where stack is in
+
+    if os.path.isdir(imgpath):
+        os.chdir(str(imgpath))
+        bulge = auto_bulge_detect(imgpath)
+        if bulge:
+            sx = gen_config_file_name('bulge_new.config')
+            ap = gen_config_file_name('tempsource.param')
+        else:
+            sx = gen_config_file_name('sex.config')
+            ap = gen_config_file_name('astrom_coadd.param')
+
+        stackimg = [f for f in sorted(os.listdir(imgpath)) if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip)]
+        coaddimg = stackimg[0]
+        catname = coaddimg.replace('.fits', '.cat')
+        catpath = os.path.join(imgpath, catname)
+        weightname = 'weight' + coaddimg[5:]
+    elif os.path.isfile(imgpath):
+        coaddimgdir, coaddimg = os.path.split(imgpath)
+        os.chdir(str(coaddimgdir))
+        bulge = auto_bulge_detect(coaddimgdir)
+        if bulge:
+            sx = gen_config_file_name('bulge_new.config')
+            ap = gen_config_file_name('tempsource.param')
+        else:
+            sx = gen_config_file_name('sex.config')
+            ap = gen_config_file_name('astrom_coadd.param')
+
+        catname = coaddimg.replace('.fits', '.cat')
+        catpath = os.path.join(coaddimgdir, catname)
+        weightname = 'weight' + coaddimg[5:]
     else:
-        sx = gen_config_file_name('sex.config')
-        ap = gen_config_file_name('astrom.param')
-    stackimg = []
-    for f in sorted(os.listdir(imgdir)):
-        if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip):
-            stackimg.append(f)
+        print('Must specify a directory to stacked image or full file path to stacked image! '
+              'Cannot continue with stack image sextraction!')
+        catname = catpath = weightname = None
+    if catname:
+        if os.path.isfile(weightname):
+            print('Including weight map!')
+            command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
+                       (coaddimg, sx, catname, weightname, ap))
+            # print('Executing command: %s' % command)
+            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' %
+                       (coaddimg, sx, catname, ap))
+            # print('Executing command: %s' % command)
+            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return catpath
 
-    coaddimg = stackimg[0]
-    catname = coaddimg.replace('.fits', '.cat')
-    weightname = 'weight' + coaddimg[5:]
 
-    if os.path.isfile(weightname):
-        print('Including weight map!')
-        command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
-                   (coaddimg, sx, catname, weightname, ap))
-        # print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+def swarp_missfits(imgpath, chip):
+    # imgpath can be either full file path to stack or directory where stack is in
+    if os.path.isdir(imgpath):
+        stackimg = [f for f in sorted(os.listdir(imgpath)) if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip)]
+        stackhdr = [f for f in sorted(os.listdir(imgpath)) if fnmatch.fnmatch(f, 'coadd.*.C%i.head' % chip)]
+        combine_header_and_fits(stackhdr[0], stackimg[0], remove_header_file=True)
     else:
-        command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' %
-                   (coaddimg, sx, catname, ap))
-        # print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        stackimg = imgpath
+        stackhdr = imgpath.replace('.fits', '.head')
+        combine_header_and_fits(stackhdr, stackimg, remove_header_file=True)
 
-    catname = os.path.join(imgdir, catname)
-    return catname
-
-
-def swarp_missfits(imgdir, chip):
-    stackimg = [f for f in sorted(os.listdir(imgdir)) if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip)]
-    stackhdr = [f for f in sorted(os.listdir(imgdir)) if fnmatch.fnmatch(f, 'coadd.*.C%i.head' % chip)]
-
-    combine_header_and_fits(stackhdr[0], stackimg[0], remove_header_file=True)
 
 
 def astromfin(directory, chip):
     if not chip:
         sys.exit('Specify a chip when using this functionality!')
     print('Re-running astrometry on swarped image! Running sextractor...')
-    catname = swarp_sx(directory, chip)
+    catpath = swarp_sx(directory, chip)
     print('Applying 4th order scamp fit to stacked image...')
-    scamp(directory, swarpcat=catname)
+    scamp(directory, swarpcat=catpath)
     print('Combining scamp .head and stacked image...')
     swarp_missfits(directory, chip)
     try:
-        os.remove(catname)
+        os.remove(catpath)
     except Exception as e:
-        print(f"Error removing file: {catname} - {e}")
+        print(f"Error removing file: {catpath} - {e}")
     print('Absolute astrometry complete!')
 
 

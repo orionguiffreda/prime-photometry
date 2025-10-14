@@ -68,11 +68,16 @@ def sexback(imgdir):
             print(pre + '.back.fits back subbed!')
 
 
-def scamp(imgdir, distortdeg=None, swarpcat=None):
+def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
+    if band:
+        addition = f' -ASTREF_BAND {band}'
+    else:
+        addition = ''
     if swarpcat:
         command = ('scamp %s -c %s' % (swarpcat, sc))
+        command = command + addition
         # print('Executing command: %s' % command)
         subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
@@ -81,9 +86,11 @@ def scamp(imgdir, distortdeg=None, swarpcat=None):
         img_list = ','.join(img_list)
         if distortdeg:
             command = ('scamp %s -c %s -DISTORT_DEGREES %s' % (img_list, sc, distortdeg))
+            command = command + addition
             print('Executing command: %s' % command)
         else:
             command = ('scamp %s -c %s' % (img_list, sc))
+            command = command + addition
             print('Executing command: %s' % command)
         subprocess.run(command.split(), check=True)
     # print(pre + ext + ' scamped!')
@@ -115,13 +122,14 @@ def remove_head(directory):
                 except Exception as e:
                     print(f"Error removing file: {path} - {e}")
 
-def double_astrom(imgdir):
+
+def double_astrom(imgdir, band=None):
     # beginning from where astrom_shift_bulge solved
     start_time = dt.now()
     print('\nSextracting shift-corrected fits files!')
     sex(imgdir)                     # sextract shift-solved fits files
     print('Running SCAMP w/ 2nd order distortion polynomial...')
-    scamp(imgdir, distortdeg=2)                 # scamp shift-solved cat files w/ 2d poly solve
+    scamp(imgdir, distortdeg=2, band=band)                 # scamp shift-solved cat files w/ 2d poly solve
     print('Adding .head files directly to fits hdrs...')
     missfits(imgdir)                            # add 2d-solved scamp hdrs to shifted fits files
     print('Removing 2nd order .head files...')
@@ -130,7 +138,7 @@ def double_astrom(imgdir):
     print('\nSextracting 2nd order scamp-corrected fits files!')
     sex(imgdir)                     # sextract 2d-solved fits files
     print('Running SCAMP w/ 4th order distortion polynomial...')
-    scamp(imgdir)                               # scamp 2d-solved cat files w/ 4d poly solve
+    scamp(imgdir, band=band)                               # scamp 2d-solved cat files w/ 4d poly solve
     print('Adding 4th order .head files directly to fits hdrs...')
     missfits(imgdir)                            # replace 2d-solved fits file scamp hdrs w/ 4d soln scamp hdrs
     end_time = dt.now()
@@ -140,19 +148,19 @@ def double_astrom(imgdir):
 #%%
 
 
-def astrometry(path, run_sex=False, run_scamp=False, run_miss=False, double_solve=False):
+def astrometry(path, band=None, run_sex=False, run_scamp=False, run_miss=False, double_solve=False):
     if run_sex:
         sex(path)
     elif run_scamp:
-        scamp(path)
+        scamp(path, band=band)
     elif run_miss:
         missfits(path)
     elif double_solve:
-        double_astrom(path)
+        double_astrom(path, band=band)
     else:
         start_time = dt.now()
         sex(path)
-        scamp(path)
+        scamp(path, band=band)
         missfits(path)
         end_time = dt.now()
         print('\nnormal astrometry time:', (end_time - start_time).total_seconds())
@@ -167,9 +175,11 @@ def main():
                                                             ' then a 4th order poly scamp solution for max accuracy')
     parser.add_argument('-path', type=str, help='[str] Images path (currently just dumps .cat '
                                                                        '& .head files in same path)')
+    parser.add_argument('-band', type=str, help='[str] Optional to perhaps increase scamp accuracy, specify'
+                                                'band')
     args, unknown = parser.parse_known_args()
 
-    astrometry(args.path, args.sex, args.scamp, args.missfits, args.double_solve)
+    astrometry(args.path, args.band, args.sex, args.scamp, args.missfits, args.double_solve)
 
 
 if __name__ == "__main__":

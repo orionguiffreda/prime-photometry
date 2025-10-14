@@ -14,6 +14,7 @@ from photometrus.preprocess import gen_astrometry
 from photometrus.astrom import astrom_shift_new
 from photometrus.astrom import astrom_shift
 from photometrus.astrom import astrometry
+from photometrus.astrom import astrom_img_sub
 from photometrus.preprocess import flatfield
 from photometrus.preprocess import gen_flat
 from photometrus.preprocess import auto_flat
@@ -80,6 +81,8 @@ elif len(sys.argv) >= 2:
             astrometry.main()
         elif sys.argv[2] == 'net':
             gen_astrometry.main()
+        elif sys.argv[2] == 'imgsub':
+            astrom_img_sub.main()
 
     elif sys.argv[1] == 'process':
         if sys.argv[2] == '-h':

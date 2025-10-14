@@ -238,7 +238,7 @@ def shift(subpath, band, adv=False, old=False):
 # %% better astrometry
 
 
-def astromatic_astrometry(subpath, sex=None):
+def astromatic_astrometry(subpath, band=None, sex=None):
     os.chdir(gen_pipeline_file_name())
     print('using SXTRCTR and SCAMP to generate better astrometry...')
     # if sex:
@@ -252,7 +252,7 @@ def astromatic_astrometry(subpath, sex=None):
 
     print('\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path %s' % subpath)
 
-    astrometry.astrometry(path=subpath, double_solve=True)
+    astrometry.astrometry(path=subpath, band=band, double_solve=True)
 
 # %% stacking
 
@@ -448,7 +448,7 @@ def master(
     verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
     # astrom_angle(astromdir, subdir, chip, rot_val)
     # shift(astromdir, band, bulge=bulge)
-    astromatic_astrometry(astromdir)
+    astromatic_astrometry(astromdir, band=band)
     stacking(astromdir, stackdir, chip)
     if compress:
         fpack(stackdir, chip)
