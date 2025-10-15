@@ -20,7 +20,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           sky_override_path=defaults['sky_override_path'], removal=defaults['removal'], no_get_files=defaults['no_get_files'],
           no_download=defaults['no_download'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'],survey=defaults['survey'],
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-          grb_radius=defaults['grb_radius'],auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist']
+          grb_radius=defaults['grb_radius'],auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
           ):
     # print('combo date', date)
     if parentdir != defaults['parent']:
@@ -39,7 +39,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
     for f in chips:
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
                                   sky_override_path, removal, no_get_files, no_mflat, bulge, auto_mode=auto_mode,
-                                  input_ramp_lists=input_ramp_lists)
+                                  input_ramp_lists=input_ramp_lists, header_filter=header_filter)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius)
 
     if len(chips) == 4:
@@ -62,6 +62,9 @@ def main():
     parser.add_argument('-chip', type=str,
                         help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                              ' format.', default=defaults['chip'])
+    parser.add_argument('-header_filter', type=str, default=None,
+        help='[str] Optional, use to require fits headers match the desired pairing. Keys and headers are ":" delimited and key:header pairs are "," delimited'
+    )
     parser.add_argument('-no_get_files', action='store_true', help='optional flag, use if you want to download '
                                                                      'through old method (scp), new method passes file '
                                                                      'paths (new saves space and time)',
@@ -119,7 +122,7 @@ def main():
     # print('unknown', unknown)
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,
-          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'])
+          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'], header_filter=args.header_filter)
 
 
 if __name__ == "__main__":

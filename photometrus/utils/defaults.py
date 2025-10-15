@@ -19,8 +19,8 @@ FILE_DEFAULTS = dict(
     save_dir='.', redownload=False, overwrite=False, ftype='ramp', ip=None, user=None,
     password=None, objname=None, objtype=None, observer=None, chip=(1,2,3,4), filter1=None, filter2=None,
     n_retry=3,
-    funpack_fz=False
-
+    funpack_fz=False,
+    header_filter=None
 )
 
 ASTROM_DEFAULTS = dict(range=3,length=100,num=15,stdev=1,segstd=2)

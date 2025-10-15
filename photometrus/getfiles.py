@@ -48,9 +48,9 @@ backup_lists = {
 funpack_output_dir = path_replace(GET_DATA_SETTINGS['funpack_output_dir'])
 
 remote_file_formats = GET_DATA_SETTINGS['remote_file_formats']
-for k,v in remote_file_formats.items():
-    for i, fmt in enumerate(v):
-        remote_file_formats[k][i] = path_replace(fmt)
+for _k, _v in remote_file_formats.items():
+    for _i, fmt in enumerate(_v):
+        remote_file_formats[_k][_i] = path_replace(fmt)
 
 replace_list = GET_DATA_SETTINGS['replace_list']
 
@@ -259,13 +259,23 @@ def get_backup_file(file_number, nframe, backup_types, camera, funpack_fz=defaul
     raise FileNotFoundError
 
 
+def header_filter_file(filename, header_filter):
+    hdr = fits.getheader(filename)
+    for k, v in header_filter.items():
+        if str(hdr[k]).strip() == v:
+            continue
+        else:
+            return True
+    return False
+
+
 def get_file_names(
     file_numbers, nframes, backup_file_types, cameras=defaults['chip'], ftype=defaults['ftype'],
-    funpack_fz=defaults['funpack_fz'],
+    funpack_fz=defaults['funpack_fz'], header_filter=None
 ):
-
     filenames = []
     missing_filenames = []
+    filtered_filenames = []
     cameras = [camera - 1 for camera in cameras]
     for camera in cameras:
         camera_filenames = [get_file_name(_n, ftype, camera, funpack_fz=funpack_fz) for _n in file_numbers]
@@ -273,25 +283,31 @@ def get_file_names(
         missing_camera_filenames = []
         for f, nframe in zip(camera_filenames, nframes):
             if os.path.exists(f):
-                existing_camera_filenames.append(f)
+                if header_filter is None or not header_filter_file(f, header_filter):
+                    existing_camera_filenames.append(f)
+                else:
+                    filtered_filenames.append(f)
             else:
                 try:
                     file_number = int(os.path.basename(f)[:8])
-                    existing_camera_filenames.append(
-                        get_backup_file(file_number, nframe, backup_file_types, camera, funpack_fz=funpack_fz)
-                    )
+                    backup_file = get_backup_file(file_number, nframe, backup_file_types, camera, funpack_fz=funpack_fz)
+                    if header_filter is None or not header_filter_file(f, header_filter):
+                        existing_camera_filenames.append(f)
+                    else:
+                        filtered_filenames.append(backup_file)
                 except FileNotFoundError:
                     missing_camera_filenames.append(f)
         filenames.append(existing_camera_filenames)
         missing_filenames.append(missing_camera_filenames)
-    return filenames, missing_filenames
+    return filenames, missing_filenames, filtered_filenames
 
 
 def get_data_files(
     date, ftype=defaults['ftype'],
     objname=defaults['objname'], objtype=defaults['objtype'], observer=defaults['observer'], cameras=defaults['chip'],
     filter1=defaults['filter1'], filter2=defaults['filter2'], use_backups=True, backup_file_types=None,
-    funpack_fz=defaults['funpack_fz'],
+    funpack_fz=defaults['funpack_fz'], header_filter=defaults['header_filter'],
+    # skip_run_numbers=None
 ):
     """
     Main interface function to download a data set
@@ -310,6 +326,8 @@ def get_data_files(
     use_backups
     backup_file_types
     funpack_fz
+    header_filter: expects string of comma deliminated
+    skip_run_numbers: expects string of comma deliminated integers
 
     Returns filenames, missing_filenames
     -------
@@ -319,10 +337,21 @@ def get_data_files(
         backup_file_types = backup_lists[ftype]
     if not use_backups:
         backup_file_types = tuple()
+    # if skip_run_numbers is not None:
+    #     skip_run_numbers = np.asarray([int(i) for i in skip_run_numbers.split(',')])
+    if header_filter is not None:
+        tuples = [i.split(':') for i in header_filter.split(',')]
+        header_filter = {k.upper().strip(): v.strip() for k, v in tuples}
     datetime = to_datetime(date)
     date = datetime.strftime('%Y-%m-%d')
     log_file_df = get_log_file(date)
     log_file_df = filter_df(log_file_df, objname, objtype, observer, filter1, filter2)
-    file_numbers, nframes = get_file_numbers(log_file_df, ftype)
-    file_names, missing_file_names = get_file_names(file_numbers, nframes, backup_file_types, cameras, ftype, funpack_fz)
+    file_numbers, nframes = get_file_numbers(
+        log_file_df, ftype,
+        # skip_run_numbers
+    )
+    file_names, missing_file_names, filtered_file_name = get_file_names(
+        file_numbers, nframes, backup_file_types, cameras, ftype, funpack_fz, header_filter
+    )
+    print('header_filtered', filtered_file_name)
     return file_names, missing_file_names

@@ -46,7 +46,7 @@ def parentcreation(target, date, band):
 #%%
 
 
-def datalistdownload(parentdir, target, band, date):
+def datalistdownload(parentdir, target, band, date, header_filter=None):
     print('Verifying parent dir: %s' % parentdir)
     if not os.path.isdir(parentdir):
         os.makedirs(parentdir)
@@ -54,20 +54,20 @@ def datalistdownload(parentdir, target, band, date):
         pass
     if band == 'Z':
         try:
-            full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1=band, filter2='Open')
+            full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1=band, filter2='Open', header_filter=header_filter)
             if any(lst for lst in m_list):
                 print('Missing files!: ', m_list)
         except:
             print('Error fetching data!')
             sys.exit(0)
     else:
-        full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1='Open', filter2=band)
+        full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1='Open', filter2=band, header_filter=header_filter)
         if any(lst for lst in m_list):
             print('Missing files!: ', m_list)
     return full_ramp_list, m_list
 
 
-def datadownload(parentdir, target, band, date, chip):
+def datadownload(parentdir, target, band, date, chip, header_filter=None):
     print('Verifying parent dir: %s' % parentdir)
     if not os.path.isdir(parentdir):
         os.mkdir(parentdir)
@@ -148,7 +148,7 @@ def multi_master(
         parentdir=defaults['parent'], rot_val=defaults['rot_val'], no_shift=defaults['no_shift'], astromnet=defaults['astromnet'],
         no_download=defaults['no_download'], sky_override_path=defaults['sky_override_path'], removal=defaults['removal'],
         no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'], auto_mode=defaults['automode'],
-        input_ramp_lists=defaults['ramplist']
+        input_ramp_lists=defaults['ramplist'], header_filter=None
 ):
     if not no_mflat:
         auto_mflat_gen(date, band, chip)
@@ -211,7 +211,7 @@ def multi_master(
 
     else:
         if not auto_mode:
-            full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date)
+            full_ramp_list, m_list = datalistdownload(chosen_parent, target, band, date, header_filter=header_filter)
         else:
             full_ramp_list = input_ramp_lists[0]
             m_list = input_ramp_lists[1]
@@ -268,6 +268,9 @@ def main():
     parser.add_argument('-band', type=str, help='[str] filter, ex. "J"', default=defaults['band'])
     parser.add_argument('-chip', type=str, help='[str] Optional, use to process specific chips, use "1,2,3,4"'
                                                 ' format.', default=defaults['chip'])
+    parser.add_argument('-header_filter', type=str, default=None,
+        help='[str] Optional, use to require fits headers match the desired pairing. Keys and headers are ":" delimited and key:header pairs are "," delimited'
+    )
     parser.add_argument('-no_get_files', action='store_true', help='optional flag, use if you want to download '
                                                                      'through old method (scp), new method passes file '
                                                                      'paths (new saves space and time)',
@@ -304,11 +307,11 @@ def main():
     parser.add_argument('-auto', action='store_true',
                         help='use setup designed for full night automatic processing', default=defaults['automode'])
     args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
-
+    print('unknown args', unknown)
     multi_master(target=args.target, date=args.date, band=args.band, chip=args.chip, parentdir=args.parent,
                  rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,
                  sky_override_path=args.sky_override, removal=args.removal, no_get_files=args.no_get_files,
-                 no_mflat=args.no_mflat, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist)
+                 no_mflat=args.no_mflat, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist, header_filter=header_filter)
 
 
 if __name__ == "__main__":
