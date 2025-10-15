@@ -2194,8 +2194,10 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.axhline(y=0, color='black', linestyle='--', linewidth=1)
     plt.legend([r'1 $\sigma$ range = [%.3f - %.3f]' % (res_errs_min, res_errs_max)], loc='lower left',
                markerscale=0.5)
-    infohist = ('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
-                '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig) + ('\nRSS = %d' % rss_sig)
+    infohist = (('eqn: y = mx+b' + '\nslope = %.4f +/- %.4f' % (m_sig, m_sigerr)) + (
+                '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)) + ('\nR$^{2}$ = %.3f' % rsquare_sig)
+                + ('\nRSS = %d' % rss_sig) + ('\nn_sources = %i' % len(cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask])))
+
     plt.text(15, -0.9, infohist, fontsize=9, bbox=dict(facecolor='white', edgecolor='black', pad=5.0))
     plt.savefig('%s_C%s_residual_plot_int_hist_%s.png' % (survey, chip, num), dpi=300)
     plt.clf()
@@ -2204,7 +2206,8 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # WLS fit line over data plot
 
-    txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err)
+    txt = ('slope = %.4f' % m2 + '\nslope err = %.4f' % m2err + '\nint = %.4f' % b2 + '\nint err = %.4f' % b2err +
+           '\nn_sources = %i' % len(cleanPSFsources[idx_psfimage]))
 
     plt.figure(4, figsize=(8, 8))
     plt.xlim(10, 22)
@@ -2256,7 +2259,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # WLS fit for 3 sig clip of data
     sigtxt = ('slope = %.4f' % m_sig + '\nslope err = %.4f' % m_sigerr + '\nint = %.4f' % b_sig +
-              '\nint err = %.4f' % b_sigerr)
+              '\nint err = %.4f' % b_sigerr + '\nn_sources = %i' % len(cleanPSFsources[idx_psfimage][~psf_clipped.mask]))
 
     plt.figure(6, figsize=(8, 8))
     plt.xlim(10, 22)
@@ -2568,6 +2571,7 @@ def photometry(
             #     cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars = zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage,
             #                                          name, band, chosen_survey, sigma)
             if grb_ra:
+                keep = True
                 if grb_dec is None:
                     print('Only GRB RA is found, GRB Dec is None!  Cant conduct grb analysis, '
                           'make sure the -grb_dec flag is correctly formatted!')
