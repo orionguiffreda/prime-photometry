@@ -58,11 +58,14 @@ def makedirectories(parentdir, chip):
 #     return FFdir
 
 
-def getchiplist(full_ramp_list, chip):
+def getchiplist(full_ramp_list, chip, rampnum=defaults["rampnum"]):
     for ramplist in full_ramp_list:
         if ramplist and f'C{chip}.' in ramplist[0]:
             print(f'C{chip} images:', ramplist)
-            return ramplist#[:6]
+            if rampnum != 0:
+                return ramplist[:rampnum]
+            else:
+                return ramplist
     return None
 
 # %% mflat creation
@@ -418,13 +421,13 @@ def master(
         parentdir=defaults['parent'], chip=defaults['chip'], band=defaults['band'], sigma=defaults['sigma'],
         date=defaults['date'], fullramplist=defaults['ramplist'], rot_val=defaults['rot_val'],
         sky_override=defaults['sky_override_path'], removal=defaults['removal'], bulge=defaults['bulge'],
-        sex=defaults['sex'], compress=defaults['compress'],
+        sex=defaults['sex'], compress=defaults['compress'], rampnum=defaults['rampnum']
 ):
     start_time = dt.now()
 
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
     if fullramplist:
-        chipramplist = getchiplist(fullramplist, chip)
+        chipramplist = getchiplist(fullramplist, chip, rampnum=rampnum)
         if chipramplist is None:
             raise ValueError('For some reason, given chip doesnt match to any sublist!  Do you have the right target and date? '
                              'Are there missing files when trying to retrieve?')
@@ -516,13 +519,17 @@ def main():
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=defaults['sky_override_path'])
+    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
+                                                   'your observation you want to include in the processing, helpful for '
+                                                   'dodging bad individual images',
+                        default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future')
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.sky_override,
-           args.removal, args.bulge, args.sex, args.compress)
+           args.removal, args.bulge, args.sex, args.compress, args.rampnum)
 
 
 if __name__ == "__main__":
