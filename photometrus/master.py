@@ -439,7 +439,7 @@ def master(
 
     # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
     flatfielding(initial_ramps, FFdir, band, chip, date)
-    # bulge = auto_bulge_detect(FFdir)
+    bulge = auto_bulge_detect(FFdir)
     if sex or sky_override or bulge:
         pass
     else:
