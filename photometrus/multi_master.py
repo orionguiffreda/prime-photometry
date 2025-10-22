@@ -90,7 +90,7 @@ def datadownload(parentdir, target, band, date, chip, header_filter=None):
 
 
 def refineprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
-                  bulge):
+                  bulge, rampnum):
     if chip == 1 or chip == 2:
         sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
@@ -98,11 +98,11 @@ def refineprocess(parentdir, chip, band, date, rot_val, sky_override_path, remov
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
-           sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge)
+           sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge, rampnum=rampnum)
 
 
 def shiftprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
-                 bulge):
+                 bulge, rampnum):
     if chip == 1 or chip == 2:
         sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
@@ -110,11 +110,11 @@ def shiftprocess(parentdir, chip, band, date, rot_val, sky_override_path, remova
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, sky_override=sky_override_path,
-           removal=removal, fullramplist=fullramplist, bulge=bulge)
+           removal=removal, fullramplist=fullramplist, bulge=bulge, rampnum=rampnum)
 
 
 def baseprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
-                bulge):
+                bulge, rampnum):
     if chip == 1 or chip == 2:
         sigma = defaults['sigma']
     elif chip == 3 or chip == 4:
@@ -122,7 +122,7 @@ def baseprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val,
-           sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge)
+           sky_override=sky_override_path, removal=removal, fullramplist=fullramplist, bulge=bulge, rampnum=rampnum)
 
 
 def processparallel(target, date, band, chips):
@@ -147,8 +147,8 @@ def multi_master(
         target=defaults['target'], date=defaults['date'], band=defaults['band'], chip=defaults['chip'],
         parentdir=defaults['parent'], rot_val=defaults['rot_val'], no_shift=defaults['no_shift'], astromnet=defaults['astromnet'],
         no_download=defaults['no_download'], sky_override_path=defaults['sky_override_path'], removal=defaults['removal'],
-        no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'], auto_mode=defaults['automode'],
-        input_ramp_lists=defaults['ramplist'], header_filter=None
+        no_get_files=defaults['no_get_files'], no_mflat=defaults['no_mflat'], rampnum=defaults['rampnum'],
+        bulge=defaults['bulge'], auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
 ):
     if not no_mflat:
         auto_mflat_gen(date, band, chip)
@@ -195,19 +195,25 @@ def multi_master(
                     print('Directory already no longer exists.')
         if type(chips) is int:
             if astromnet:
-                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
             elif not no_shift:
-                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
             else:
-                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
         else:
             for f in chips:
                 if astromnet:
-                    refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                    refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
                 elif not no_shift:
-                    shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                    shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
                 else:
-                    baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge)
+                    baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                              fullramplist=None, rampnum=rampnum)
 
     else:
         if not auto_mode:
@@ -233,24 +239,24 @@ def multi_master(
         if type(chips) is int:
             if astromnet:
                 refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                              fullramplist=full_ramp_list)
+                              fullramplist=full_ramp_list, rampnum=rampnum)
             elif not no_shift:
                 shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                             fullramplist=full_ramp_list)
+                             fullramplist=full_ramp_list, rampnum=rampnum)
             else:
                 baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                            fullramplist=full_ramp_list)
+                            fullramplist=full_ramp_list, rampnum=rampnum)
         else:
             for f in chips:
                 if astromnet:
                     refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                  fullramplist=full_ramp_list)
+                                  fullramplist=full_ramp_list, rampnum=rampnum)
                 elif not no_shift:
                     shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                 fullramplist=full_ramp_list)
+                                 fullramplist=full_ramp_list, rampnum=rampnum)
                 else:
                     baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                fullramplist=full_ramp_list)
+                                fullramplist=full_ramp_list, rampnum=rampnum)
 
 
 def main():
@@ -297,6 +303,10 @@ def main():
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
                                                                ' exist', default=defaults['no_mflat'])
+    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
+                                                   'your observation you want to include in the processing, helpful for '
+                                                   'dodging bad individual images',
+                        default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future', default=defaults['bulge'])
@@ -311,7 +321,8 @@ def main():
     multi_master(target=args.target, date=args.date, band=args.band, chip=args.chip, parentdir=args.parent,
                  rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,
                  sky_override_path=args.sky_override, removal=args.removal, no_get_files=args.no_get_files,
-                 no_mflat=args.no_mflat, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist, header_filter=header_filter)
+                 no_mflat=args.no_mflat, rampnum=args.rampnum, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist,
+                 header_filter=header_filter)
 
 
 if __name__ == "__main__":

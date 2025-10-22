@@ -12,7 +12,7 @@ PROCESSING_DEFAULTS = dict(
     sex=False, compress=False, ramplist=None, automode=False,
     stackpath=None, survey=None, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius='4.0', exp_query=False,
     no_plots=False, keep=False, grb_only=False, filepath=None, crop=300, sigma_photom=3, catalog=None,
-    mag_low=PHOTOMETRY_MAG_LOWER_LIMIT, mag_high=PHOTOMETRY_MAG_UPPER_LIMIT, int_cal=False, det_cut=2
+    mag_low=PHOTOMETRY_MAG_LOWER_LIMIT, mag_high=PHOTOMETRY_MAG_UPPER_LIMIT, int_cal=False, det_cut=2, rampnum=0
 )
 
 FILE_DEFAULTS = dict(

@@ -18,7 +18,7 @@ from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'], chip=defaults['chip'],
           parentdir=defaults['parent'], rot_val=defaults['rot_val'], no_shift=defaults['no_shift'], astromnet=defaults['astromnet'],
           sky_override_path=defaults['sky_override_path'], removal=defaults['removal'], no_get_files=defaults['no_get_files'],
-          no_download=defaults['no_download'], no_mflat=defaults['no_mflat'], bulge=defaults['bulge'],survey=defaults['survey'],
+          no_download=defaults['no_download'], no_mflat=defaults['no_mflat'], rampnum=defaults['rampnum'], bulge=defaults['bulge'],survey=defaults['survey'],
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
           grb_radius=defaults['grb_radius'],auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
           ):
@@ -38,7 +38,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
 
     for f in chips:
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
-                                  sky_override_path, removal, no_get_files, no_mflat, bulge, auto_mode=auto_mode,
+                                  sky_override_path, removal, no_get_files, no_mflat, rampnum, bulge, auto_mode=auto_mode,
                                   input_ramp_lists=input_ramp_lists, header_filter=header_filter)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius)
 
@@ -93,6 +93,10 @@ def main():
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
                                                                ' exist', default=defaults['no_mflat'])
+    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
+                                                   'your observation you want to include in the processing, helpful for '
+                                                   'dodging bad individual images',
+                        default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future', default=defaults['bulge'])
@@ -119,10 +123,11 @@ def main():
     args, unknown = parser.parse_known_args()  # TODO: get these default arguments from defaults dict
     # print('main', args.date)
     # print('args', args)
-    # print('unknown', unknown)
+    # print('urnknown', unknown)
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
-          args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.bulge, args.survey,
-          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'], header_filter=args.header_filter)
+          args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.rampnum, args.bulge, args.survey,
+          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, defaults['automode'], defaults['ramplist'],
+          header_filter=args.header_filter)
 
 
 if __name__ == "__main__":
