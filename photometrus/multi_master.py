@@ -170,7 +170,7 @@ def multi_master(
     if no_get_files:
         print('Omitting usage of getfiles!')
         if not no_download:
-            chips_str = ','.join(str(x) for x in chips)
+            chips_str = ','.join(str(x) for x in [chips])
             datadownload(chosen_parent, target, band, date, chips_str)
 
         if chip:

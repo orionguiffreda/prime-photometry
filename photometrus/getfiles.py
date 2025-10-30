@@ -229,7 +229,7 @@ def regen_ramp(file_number, nframe, camera):
     output_dir = funpack_output_dir.format(camera+1, truncate_1000(file_number), '{:08d}.ramp.fits'.format(file_number))
     file_numbers = [file_number+i for i in range(nframe)]
     nframes = [nframe for i in range(nframe)]
-    raw_files, missing_raw_files = get_file_names(
+    raw_files, missing_raw_files, filtered = get_file_names(
         file_numbers, nframes, backup_file_types=backup_lists['raw'], ftype='raw', cameras=(camera,)
     )
     raw_files = raw_files[0]
@@ -291,8 +291,8 @@ def get_file_names(
                 try:
                     file_number = int(os.path.basename(f)[:8])
                     backup_file = get_backup_file(file_number, nframe, backup_file_types, camera, funpack_fz=funpack_fz)
-                    if header_filter is None or not header_filter_file(f, header_filter):
-                        existing_camera_filenames.append(f)
+                    if header_filter is None or not header_filter_file(backup_file, header_filter):
+                        existing_camera_filenames.append(backup_file)
                     else:
                         filtered_filenames.append(backup_file)
                 except FileNotFoundError:

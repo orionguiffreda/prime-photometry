@@ -25,7 +25,6 @@ def flatlistdownload(date, chip, band=None):
                 print('Missing files!: ', m_lists)
         except FileNotFoundError:
             print('Error fetching data!')
-            sys.exit(0)
     else:
         if band == 'Z':
             try:
@@ -35,7 +34,6 @@ def flatlistdownload(date, chip, band=None):
                     print('Missing files!: ', m_lists)
             except FileNotFoundError:
                 print('Error fetching data!')
-                sys.exit(0)
         else:
             try:
                 flatlists, m_lists = get_data_files(date=date, objname='FLAT', filter1='Open',
@@ -44,7 +42,6 @@ def flatlistdownload(date, chip, band=None):
                     print('Missing files!: ', m_lists)
             except FileNotFoundError:
                 print('Error fetching data!')
-                sys.exit(0)
 
     flatlist = getchiplist(flatlists, chip)
     return flatlist
@@ -54,6 +51,21 @@ def flatlists(date, flatlist, chip):
     if flatlist is None:
         raise FileNotFoundError('No flat fields found in storage dir for date? Are you sure you have the right date? '
                                 'Or were there missing files in the flat generation?')
+
+    # redundancy check to confirm correct band (protection against 1st file being a diff filter)
+    firsthdr = fits.getheader(flatlist[0], ext=1)
+    firstband = firsthdr['FILTER2']
+    sechdr = fits.getheader(flatlist[1], ext=1)
+    secband = sechdr['FILTER2']
+
+    if firstband != secband:
+        print('First file is taken in different band! Going with 2nd file band... Recommend examining the log!')
+        flat_filter = secband
+        start_idx = 1
+    else:
+        flat_filter = firstband
+        start_idx = 0
+
     datetime = to_datetime(date)
     date = datetime.strftime('%Y-%m-%d')
     log = get_log_file(date)
@@ -79,27 +91,25 @@ def flatlists(date, flatlist, chip):
 
     if log_start_flats:
         if log_end_flats:
-            if log_start['FILTER1'][0] == 'Z':
-                log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+            if log_start['FILTER1'][start_idx] == 'Z':
+                log_filter = flat_filter
             else:
-                log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
-            print('On this night, flats were taken in %s band, both at the start and end of the night' % log_filter[0])
+                log_filter = flat_filter
+            print('On this night, flats were taken in %s band, both at the start and end of the night' % log_filter)
         if not log_end_flats:
-            if log_start['FILTER1'][0] == 'Z':
-                log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+            if log_start['FILTER1'][start_idx] == 'Z':
+                log_filter = flat_filter
             else:
-                log_filter = list(log_start['FILTER2'][log_start['OBJNAME'] == 'FLAT'])
-            print('On this night, flats were taken in %s band, just at the start of the night' % log_filter[0])
+                log_filter = flat_filter
+            print('On this night, flats were taken in %s band, just at the start of the night' % log_filter)
     elif log_end_flats:
-        if log_start['FILTER1'][0] == 'Z':
-            log_filter = list(log_start['FILTER1'][log_start['OBJNAME'] == 'FLAT'])
+        if log_start['FILTER1'][start_idx] == 'Z':
+            log_filter = flat_filter
         else:
-            log_filter = list(log_end['FILTER2'][log_end['OBJNAME'] == 'FLAT'])
-        print('On this night, flats were taken in %s band, just at the end of the night' % log_filter[0])
+            log_filter = flat_filter
+        print('On this night, flats were taken in %s band, just at the end of the night' % log_filter)
     else:
         print('No flats found... ')
-
-    flat_filter = log_filter[0]
 
     if log_start_flats:
         if not log_end_flats:

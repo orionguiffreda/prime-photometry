@@ -154,8 +154,8 @@ def astrom_angle_list(astrompath, chipramplist, chip, rot_val=48):
 def flatfielding(astrompath, FFpath, band, chip, date=None):
     os.chdir(gen_pipeline_file_name())
     print('using master flat to flat field ramp imgs..')
-    # flatpath = gen_mflat_file_name(band, chip, date)
-    flatpath = gen_sflat_file_name(band, chip, date)
+    flatpath = gen_mflat_file_name(band, chip, date, sflat=True)
+    # flatpath = gen_sflat_file_name(band, chip, date)
 
     print('\nEquivalent argparse cmd: photometrus process flatfield -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
@@ -197,10 +197,11 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
     if sky_override_path:
         skyfilepath = sky_override_path
     else:
-        for file in os.listdir(skypath):
-            if file.endswith('.C{}.fits'.format(chip)):
-                skyfile = file
-                skyfilepath = os.path.join(skypath, skyfile)
+        if not sex:
+            for file in os.listdir(skypath):
+                if file.endswith('.C{}.fits'.format(chip)):
+                    skyfile = file
+                    skyfilepath = os.path.join(skypath, skyfile)
     print('cropping and subtracting sky...')
     FFstring = '_FF'
     if FFstring in astrompath:

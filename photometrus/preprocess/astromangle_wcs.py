@@ -86,6 +86,26 @@ def calculate_wcs_file(
     return calculate_wcs_header(file_header, rot_val, mesh_file_dir, sip_degree, downsample=downsample)
 
 
+def remove_todo_from_file(
+    file_header
+):
+    hdr_keys = [keyword for keyword, _ in file_header.items()]
+    if 'GAIN0' in hdr_keys:
+        gain_val = file_header['GAIN0']
+        file_header.set('GAIN', gain_val, '[e-/ADU] gain value', after='SATURATE')
+        del file_header['GAIN0']
+        del file_header['GAIN1']
+        del file_header['GAIN2']
+        del file_header['GAIN3']
+        del file_header['C*CRPIX*']
+        del file_header['PV1_1']
+
+        todo_removal_kwords = ['SATURATE', 'PIXSCALE', 'LATITUDE', 'LONGITUD', 'ALTITUDE']
+        for kword in todo_removal_kwords:
+            orig = file_header.comments[kword]
+            file_header.comments[kword] = orig.replace('TODO', "")[1:]
+
+
 def update_ra_dec(
     fits_file, rot_val, mesh_file_dir=_mesh_file_dir, sip_degree=_default_sip_degree, downsample=_default_downsample
 ):
@@ -97,6 +117,7 @@ def update_ra_dec(
         os.system('funpack -F %s' % fits_file)
         print('funpacked!')
     with fits.open(fits_file, 'update') as f:
+        remove_todo_from_file(f[0].header)
         wcs = calculate_wcs_header(f[0].header, rot_val, mesh_file_dir, sip_degree, downsample=downsample)
         wcs_header = wcs.to_header(relax=True)
         for k, v in _wcs_matrix_tranlation.items():
