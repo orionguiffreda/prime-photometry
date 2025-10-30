@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.coordinates import SkyCoord
-
+import ast
 # from getfiles import get_log_file
 from photometrus.multi_combo import combo
 from photometrus.getfiles import get_log_file
@@ -142,16 +142,35 @@ def archive_reducer(
     coord_file_object_field=_defaults['coord_file_object_field'],
     coord_ra_field=_defaults['coord_ra_field'],
     coord_dec_field=_defaults['coord_dec_field'],
-    frame=_defaults['frame'], unit=_defaults['unit'], grid_file=_defaults['grid_file'], parent=_defaults['parent'], rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'], sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'], no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'], survey=_defaults['survey'], no_reduce=False
+    frame=_defaults['frame'], unit=_defaults['unit'], grid_file=_defaults['grid_file'], parent=_defaults['parent'], rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'], sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'], no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'], survey=_defaults['survey'], no_reduce=False, combo_dict_file=None
 ):
+    if combo_dict_file is not None:
+        data_list = []
+        with open(combo_dict_file, 'r') as f :
+            for line in f:
+                line = line.replace("np.float64(", "").replace(")", "")
+                line = ast.literal_eval(line)
+                data_list.append(line)
 
+                print("combo dict:", line, type(line))
+                try:       
+                    if not no_reduce:
+                        combo(**line)
+                    else:
+                        print('no_reduce')
+                except Exception:
+                    tb = traceback.format_exc()
+                    print(line)
+                    print(tb)
+        return
+ 
     grid_df = pd.read_csv(grid_file)
     archive_command_filename = 'combo_commands_{}'.format(datetime.datetime.utcnow().isoformat())
     archive_command_filename = os.path.join(os.getcwd(), archive_command_filename)
     coord_df = get_coords(
         coord_file, coord_file_sep=coord_file_sep, coord_ra_field=coord_ra_field, coord_dec_field=coord_dec_field,
         frame=frame, unit=unit
-    )
+        )
     grids = get_grid_locations(coord_df.coords, grid_df)
     archive = get_all_date_logs()
     archive_filename = os.path.join(parent, 'prime_log_archive_{}'.format(datetime.date.today().strftime('%Y-%m-%d')))
@@ -266,11 +285,13 @@ def main():
     parser.add_argument('-no_reduce', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' actually reduce the data, and just want the list of '
                                                                ' coommands')
+    parser.add_argument('-combo_dict_file', type=str, help='[str] optional flag, use combo dict file instead of coord_file') 
+
     args, unknown = parser.parse_known_args()
     archive_reducer(
         coord_file=args.coord_file, coord_file_sep=args.coord_file_sep, coord_file_object_field=args.coord_file_object_field, coord_ra_field=args.coord_ra_field, coord_dec_field=args.coord_dec_field,
         frame=args.frame, unit=args.unit, grid_file=args.grid_file, parent=args.parent, rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, sky_override_path=args.sky_override,
-        removal=args.removal, no_get_files=args.no_get_files, no_download=args.no_download, no_mflat=args.no_mflat, survey=args.survey, no_reduce=args.no_reduce
+        removal=args.removal, no_get_files=args.no_get_files, no_download=args.no_download, no_mflat=args.no_mflat, survey=args.survey, no_reduce=args.no_reduce, combo_dict_file=args.combo_dict_file
     )
 if __name__ == '__main__':
     main()
