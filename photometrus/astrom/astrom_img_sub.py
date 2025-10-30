@@ -30,7 +30,7 @@ def multi_epoch_scamp(input_epoch_cat_path, base_epoch_cat_path):
     command = (f'scamp {input_epoch_cat_path} -c {sc} -ASTREF_CATALOG FILE -ASTREFCAT_NAME {base_epoch_cat_path} '
                f'-ASTREFMAG_LIMITS -99.0,99.0 '
                f'-ASTREFCENT_KEYS ALPHA_J2000,DELTA_J2000 -ASTREFERR_KEYS ERRAWIN_WORLD,ERRBWIN_WORLD,ERRTHETAWIN_WORLD '
-               f'-ASTREFMAG_KEY MAG_AUTO -ASTREFMAGERR_KEY MAGERR_AUT')
+               f'-ASTREFMAG_KEY MAG_AUTO -ASTREFMAGERR_KEY MAGERR_AUTO')
 
     subprocess.run(command.split(), check=True)
 

@@ -7,6 +7,7 @@ import os
 import sys
 from pandas import to_datetime
 from datetime import datetime, timedelta
+import calendar
 import argparse
 from astropy.io import fits
 import numpy as np
@@ -201,7 +202,8 @@ def superflatgen(date, band, chip=None):
     try:
         # Try single-date format
         dt = datetime.strptime(date, "%Y%m%d")
-        date_range = [dt]  # Keep as a list for consistency
+        first_day = dt.replace(day=1)
+        last_day = dt.replace(day=calendar.monthrange(dt.year, dt.month)[1])
     except ValueError:
         # Try date-range format 'yyyymmdd-yyyymmdd'
         try:
@@ -269,7 +271,9 @@ def main():
                                                  'storing them in prime-photometry')
     parser.add_argument('-sflat', action='store_true', help='use to generate super flat (median of all mflats'
                                                             ' from that month)')
-    parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format')
+    parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format, or when '
+                                                'using -sflat, can be 2 dates to generate sflats betw., w/ the format '
+                                                '"yyyymmdd-yyyymmdd"')
     parser.add_argument('-band', type=str, help='[str], optional, specify filter ex. "J", otherwise it will'
                                                 ' try to generate mflats regardless of filter', default=None)
     parser.add_argument('-chip', type=int, help='[int], optional, to only generate mflat for 1 detector',

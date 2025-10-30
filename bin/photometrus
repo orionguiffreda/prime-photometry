@@ -69,6 +69,7 @@ elif len(sys.argv) >= 2:
                 '   shift - astrom_shift.py (astrometric translation correction)\n'
                 '   astromatic - astrometry.py (astromatic suite programs: sextractor & scamp)\n'
                 '   net - gen_astrometry.py (astrometry.net)\n'
+                '   imgsub - astrom_img_sub.py (self-referential astrometry designed for 2 epochs)\n'
             )
         elif sys.argv[2] == 'angle':
             # astromangle_new.main()

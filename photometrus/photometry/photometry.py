@@ -150,7 +150,10 @@ def img(directory, imageName, crop):
     bulge = bulge_checker(case)
 
     # get weight map detection threshold
-    chip = header['CHIP']
+    try:
+        chip = header['CHIP']
+    except KeyError:
+        chip = 4
     det_cut = get_weight_thresh(chip)
 
     return data, header, w, raImage, decImage, bulge, det_cut, chip
@@ -788,63 +791,162 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         magcolname = colnames[2]
         magerrcolname = colnames[3]
 
+    # calculating zp for all appropriate mag columns
+
+    prime_psf_mags = [cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage]]
+    primeerr = [cleanPSFSources['MAGERR_POINTSOURCE'][idx_psfimage]]
+
+    if 'MAG_APER' in PSFSources.colnames:
+        prime_psf_mags.append(cleanPSFSources['MAG_APER'][idx_psfimage])
+        primeerr.append(cleanPSFSources['MAGERR_APER'][idx_psfimage])
+
+    cat_mags = good_cat_stars[magcolname][idx_psfmass]
     caterr = good_cat_stars[magerrcolname][idx_psfmass]
-    primeerr = cleanPSFSources['MAGERR_POINTSOURCE'][idx_psfimage]
 
-    comberr = np.sqrt(caterr ** 2 + primeerr ** 2)
+    for prime_mag_col, prime_err_col in zip(prime_psf_mags, primeerr):
+        if prime_mag_col.ndim == 1:    # standard MAG_POINTSOURCE column zp calc
 
-    psfweights_noclip = 1 / (comberr ** 2)
+            comberr = np.sqrt(caterr ** 2 + prime_err_col ** 2)
 
-    psfoffsets = ma.array(good_cat_stars[magcolname][idx_psfmass] - cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
-    psfoffsets = psfoffsets.data
+            psfweights_noclip = 1 / (comberr ** 2)
 
-    # 3 sigma clip
-    psf_clipped = sigma_clip(psfoffsets, sigma=sigma)
-    psfoffsets = psfoffsets[~psf_clipped.mask]
-    psfweights = np.array(psfweights_noclip[~psf_clipped.mask])
-    print('Zero point source offsets clipped by %s sigma, total clipped offset # = %s' % (sigma, len(psfoffsets)))
+            psfoffsets = ma.array(cat_mags - prime_mag_col)
+            psfoffsets = psfoffsets.data
 
-    # Compute statistics
-    # zero_psfmean = np.average(psfoffsets, weights=psfweights)
-    zero_psfmean = sum(psfoffsets * psfweights) / sum(psfweights)
-    # zero_psfvar = np.average((psfoffsets - zero_psfmean) ** 2, weights=psfweights)
-    # zero_psfstd = np.sqrt(zero_psfvar)
-    zero_psfstd = np.sqrt(1 / sum(psfweights))
+            # 3 sigma clip
+            psf_clipped = sigma_clip(psfoffsets, sigma=sigma)
+            psfoffsets = psfoffsets[~psf_clipped.mask]
+            psfweights = np.array(psfweights_noclip[~psf_clipped.mask])
+            print('Zero point source offsets clipped by %s sigma, total clipped offset # = %s' % (sigma, len(psfoffsets)))
+
+            # Compute statistics
+            # zero_psfmean = np.average(psfoffsets, weights=psfweights)
+            zero_psfmean = sum(psfoffsets * psfweights) / sum(psfweights)
+            # zero_psfvar = np.average((psfoffsets - zero_psfmean) ** 2, weights=psfweights)
+            # zero_psfstd = np.sqrt(zero_psfvar)
+            zero_psfstd = np.sqrt(1 / sum(psfweights))
+
+            print('zp = %.4f, zp err = %.6f' % (zero_psfmean, zero_psfstd))
+
+            zero_apermeans = []
+            zero_aperstds = []
+
+            # catalog for all detected sources
+            psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
+            psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
+
+            print('Converting mags from Vega to AB for all sources! (if not already in AB)')
+            psfmag = ab_convert(psfmag, band=band, survey=survey)
+
+            psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit=u.ABmag)
+            psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit=u.ABmag)
+
+            PSFSources.add_column(psfmagcol)
+            PSFSources.add_column(psfmagerrcol)
+
+            # real unit flux conversion
+            psfflux = psfmagcol.to(u.microjansky)
+            psffluxcol = Column(psfflux, name='FLUX_DENSITY', unit=u.microjansky)
+            PSFSources.add_column(psffluxcol)
+
+            # image / col data conversion to uJy
+            conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']  # u = uJy / adu
+            conv_factor = np.nanmedian(conv_factor_all)
+
+            fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
+            fluxerrujycol = Column(fluxerr_ujy, name='E_FLUX_DENSITY', unit=u.microjansky)
+            PSFSources.add_column(fluxerrujycol)
+
+            with fits.open(imageName, mode='update') as imagehdu:
+                imagehdr = imagehdu[0].header
+                # if you replace the pix values, put the if statement back in
+                # imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
+                imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values if multiplied by conv_fac', after='EXTEND')
+                imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor, multiply img by this to get in uJy', after='BUNIT')
+                print('Conversion of ADU to uJy calculated, med conversion factor: %.4f' % conv_factor)
+
+                # print('BUNIT found already in header, skipping conversion.')
+                imagehdu.close()
+
+        else:   # vector column MAG_APER zp calc
+
+            valid_apermask = prime_mag_col < 90
+
+            aper_comberr = np.sqrt(caterr[:, np.newaxis] ** 2 + prime_err_col ** 2)
+
+            aperweights_noclip = 1 / (aper_comberr ** 2)
+
+            aperoffsets = ma.array(cat_mags[:, np.newaxis] - prime_mag_col)
+            aperoffsets = aperoffsets.data
+
+            # sigma clip & zp calc
+            zero_apermeans = []
+            zero_aperstds = []
+
+            for i in range(aperoffsets.shape[1]):
+                valid = valid_apermask[:, i]
+                if not np.any(valid):
+                    zero_apermeans.append(np.nan)
+                    zero_aperstds.append(np.nan)
+                    print(f'    {(i + 1) * 2}" aper zp = NaN (all invalid aperture mags)')
+                    continue
+
+                aperoffsets_i = aperoffsets[:, i][valid]
+                aperweights_i = aperweights_noclip[:, i][valid]
+
+                aper_clipped = sigma_clip(aperoffsets_i, sigma=sigma)
+                mask = ~aper_clipped.mask
+                aperoffsets_i = aperoffsets_i[mask]
+                aperweights_i = np.array(aperweights_i[mask])
+
+                zero_apermean = sum(aperoffsets_i * aperweights_i) / sum(aperweights_i)
+                zero_aperstd = np.sqrt(1 / sum(aperweights_i))
+
+                zero_apermeans.append(zero_apermean)
+                zero_aperstds.append(zero_aperstd)
+
+                print(f'    {(i+1)*2}" aper zp = %.4f, zp err = %.6f' % (zero_apermean, zero_aperstd))
+
+            zero_apermeans = np.array(zero_apermeans)
+            zero_aperstds = np.array(zero_aperstds)
+
+            cal_apermags = zero_apermeans + PSFSources['MAG_APER']
+            apermagerrs = np.sqrt(PSFSources['MAGERR_APER'] ** 2 + zero_aperstds ** 2)
+
+            apermags = []
+            for i in range(cal_apermags.shape[1]):
+                apmag = ab_convert(cal_apermags[:, i], band=band, survey=survey)
+                apermags.append(apmag)
+
+            apermags = np.column_stack(apermags)
+
+            apermagcol = Column(apermags, name='%sMAG_APER' % band, unit=u.ABmag)
+            apermagerrcol = Column(apermagerrs, name='e_%sMAG_APER' % band, unit=u.ABmag)
+
+            PSFSources.add_column(apermagcol)
+            PSFSources.add_column(apermagerrcol)
 
     # zero_psfmean, zero_psfmed, zero_psfstd = sigma_clipped_stats(psfoffsets)
     # print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
-    print('zp = %.4f, zp err = %.6f' % (zero_psfmean, zero_psfstd))
     # writing zp to header
     print('Writing ZP info to image header...')
     with fits.open(imageName, mode='update') as hdul:
         hdr = hdul[0].header
-        hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
+        try:
+            hdr.set('ZP', zero_psfmean, 'Zero Point Offset', after='NINT')
+        except KeyError:
+            hdr.set('ZP', zero_psfmean, 'Zero Point Offset')
         hdr.set('e_ZP', zero_psfstd, 'Zero Point Offset Error', after='ZP')
         hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatches', after='e_ZP')
         hdr.set('N_SRCS', len(PSFSources), 'Total PRIME Sources Number', after='N_CRSMCH')
         hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SRCS')
+
+        if len(zero_apermeans) > 0:
+            for idx, (zp, err) in enumerate(zip(zero_apermeans, zero_aperstds)):
+                hdr.set(f'e_ZPap{idx}', err, f'{(idx + 1) * 2}" Aperture Zero Point Offset Error', after='e_ZP')
+                hdr.set(f'ZPap{idx}', zp, f'{(idx + 1) * 2}" Aperture Zero Point Offset', after='e_ZP')
         hdul.close()
-
-    # catalog for all detected sources
-    psfmag = zero_psfmean + PSFSources['MAG_POINTSOURCE']
-    psfmagerr = np.sqrt(PSFSources['MAGERR_POINTSOURCE'] ** 2 + zero_psfstd ** 2)
-
-    apermag = zero_psfmean + PSFSources['MAG_APER']
-    apermagerr = np.sqrt(PSFSources['MAGERR_APER'] ** 2 + zero_psfstd ** 2)
-    # ab mag conversion
-    print('Converting mags from Vega to AB for all sources! (if not already in AB)')
-    psfmag = ab_convert(psfmag, band=band, survey=survey)
-    apermag = ab_convert(apermag, band=band, survey=survey)
-
-    psfmagcol = Column(psfmag, name='%sMAG_PSF' % band, unit=u.ABmag)
-    psfmagerrcol = Column(psfmagerr, name='e_%sMAG_PSF' % band, unit=u.ABmag)
-    apermagcol = Column(apermag, name='%sMAG_APER' % band, unit=u.ABmag)
-    apermagerrcol = Column(apermagerr, name='e_%sMAG_APER' % band, unit=u.ABmag)
-    PSFSources.add_column(psfmagcol)
-    PSFSources.add_column(psfmagerrcol)
-    PSFSources.add_column(apermagcol)
-    PSFSources.add_column(apermagerrcol)
 
     PSFSources.remove_column('VIGNET')
     PSFSources['FLUX_RADIUS'] = PSFSources['FLUX_RADIUS'] * 0.498
@@ -855,22 +957,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         PSFSources['FLUX_RADIUS_90'].description = '90% flux radius'
     print('Total PRIME source # = ', len(PSFSources))
 
-    # real unit flux conversion
-    psfflux = psfmagcol.to(u.microjansky)
-    psffluxcol = Column(psfflux, name='FLUX_DENSITY', unit=u.microjansky)
-    PSFSources.add_column(psffluxcol)
-
-    # image / col data conversion to uJy
-
-    conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']   # u = uJy / adu
-    conv_factor = np.nanmedian(conv_factor_all)
-
-    fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
-    fluxerrujycol = Column(fluxerr_ujy, name='E_FLUX_DENSITY', unit=u.microjansky)
-    PSFSources.add_column(fluxerrujycol)
-
     # col descriptions
-
     PSFSources['%sMAG_PSF' % band].description = f'{band} band PSF model magnitude'
     PSFSources['e_%sMAG_PSF' % band].description = f'Error in {band} band PSF model magnitude'
     PSFSources['%sMAG_APER' % band].description = f'{band} Band aperture magnitudes: 2", 4", 6", 8", 10" diameters'
@@ -889,17 +976,6 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
     cleanPSFSources = PSFSources[(PSFSources['FLAGS'] == 0) & (PSFSources['FLAGS_MODEL'] == 0)]
 
-    with fits.open(imageName, mode='update') as imagehdu:
-        imagehdr = imagehdu[0].header
-        # TODO if you replace the pix values, put the if statement back in
-        # imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
-        imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values', after='EXTEND')
-        imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor, multiply img by this to get in uJy', after='BUNIT')
-        print('Conversion of ADU to uJy calculated, med conversion factor: %.4f' % conv_factor)
-
-        # print('BUNIT found already in header, skipping conversion.')
-        imagehdu.close()
-
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
 
@@ -916,7 +992,20 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
 
 # New Source Search
-def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, survey, band, ab_cat_stars, mag_low_lim=12.5):
+def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, survey, band, ab_cat_stars, mag_low_lim=12.5,
+                    grbname=defaults['grb_name']):
+
+    if grbname != defaults['grb_name']:
+        grb_name = grbname
+        newsrcname = grbname
+    else:
+        grb_name = defaults['grb_name']
+        newsrcname = 'New_PRIME'
+
+    if len(imageName) <= 16:
+        num = 'img'
+    else:
+        num = imageName[-16:-8]
 
     # large region postage stamp cutout fctn (png & fits)
     def grb_cutout(imageName, GRBcoords, photoDistThresh, regprimename=None, regsurvname=None):
@@ -925,8 +1014,8 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
         head = img[0].header
         w = WCS(head)
 
-        savename = 'GRB_%s_Cutout_%s' % (band, survey)
-        threshname = 'GRB_query_thresh.reg'
+        savename = '%s_%s_Cutout_%s_%s' % (grb_name, band, survey, num)
+        threshname = '%s_query_thresh.reg' % grb_name
 
         size = 4 * photoDistThresh * u.arcsec
         try:
@@ -943,7 +1032,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
         pix_region.plot(color='cyan', ls='--', label='Input GRB threshold')
 
         if regprimename:
-            primeregs = open('New_PRIME_srcs.reg', 'r')
+            primeregs = open('%s_srcs.reg' % newsrcname, 'r')
             plt_primeregs = []
             primeallregs = [reg for reg in primeregs if reg != 'fk5\n']
             for reg in primeallregs:
@@ -960,7 +1049,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
                 pix_reg.plot(color='red', ls='-', label='PRIME Source')
 
         if regsurvname:
-            survregs = open('GRB_%s_srcs.reg' % survey, 'r')
+            survregs = open('%s_%s_srcs.reg' % (grb_name, survey), 'r')
             plt_survregs = []
             survallregs = [reg for reg in survregs if reg != 'fk5\n']
             for reg in survallregs:
@@ -995,10 +1084,10 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
     # new source reg gen
     def source_reg_gen(src_ra=0, src_dec=0, rad=2, src_survey=None, append=False):
         if not src_survey:
-            name = 'New_PRIME_srcs.reg'
+            name = '%s_srcs.reg' % newsrcname
             color = 'red'
         else:
-            name = 'GRB_%s_srcs.reg' % survey
+            name = '%s_%s_srcs.reg' % (grb_name, survey)
             color = 'yellow'
         if not append:
             newtext = open(name, 'w+')
@@ -1051,7 +1140,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
         </div>
         """
 
-        with open('New_Source_%s_Data_%s.html' % (band, survey), "w") as f:
+        with open('%s_Source_%s_Data_%s_%s.html' % (newsrcname, band, survey, num), "w") as f:
             f.write(final_html)
 
     # crossmatch for all detected sources
@@ -1131,7 +1220,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
                                         (PSFsources_nomatch['%sMAG_PSF' % band] > mag_low_lim)]
     print('# of sources found after removing sources < %.2f & > %.2f: %i' % (mag_low_lim, lim_mag, len(PSFsources_new)))
 
-    PSFsources_new.write('New_Sources.%s.%s.ecsv' % (imageName, survey), overwrite=True)
+    PSFsources_new.write('%s_Sources.%s.%s.%s.ecsv' % (newsrcname, imageName, survey, num), overwrite=True)
     print('New source full catalog written!')
 
     # Table gen
@@ -1169,7 +1258,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
         grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
 
         print('New source catalog writen!')
-        grbdata.write('New_Source_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
+        grbdata.write('%s_Source_%s_Data_%s_%s.ecsv' % (newsrcname, band, survey, num), overwrite=True)
 
         # generate stamp & html
         print('Generating location cutout and html files!')
@@ -1182,7 +1271,8 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
 # %% optional GRB-specific photom
 
 
-def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars, directory, coordlist=None):
+def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars, directory, chip, coordlist=None,
+        grbname=defaults['grb_name']):
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
     mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
@@ -1192,12 +1282,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                                        frame='icrs',
                                        unit='degree')
 
-    # survey AB conversion for plot correctness
-    # print('Converting Vega surveys to AB to ensure GRB reporting correctness!')
-    # colnames = good_cat_stars.colnames
-    # magcol = colnames[2]
-    # good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
-
+    if len(imageName) <= 16:
+        num = 'img'
+    else:
+        num = imageName[-16:-8]
 
     # postage stamp cutout fctn (png & fits)
     def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None, append=False, regprimename=None, regsurvname=None):
@@ -1207,11 +1295,11 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         w = WCS(head)
 
         if loc:
-            savename = 'GRB_%s_Cutout_%s_loc_%d' % (band, survey, loc)
-            threshname = 'GRB_queries_thresh.reg'
+            savename = '%s_%s_C%i_Cutout_%s_%s_loc_%d' % (grbname, band, chip, survey, num, loc)
+            threshname = '%s_queries_thresh.reg' % grbname
         else:
-            savename = 'GRB_%s_Cutout_%s' % (band, survey)
-            threshname = 'GRB_query_thresh.reg'
+            savename = '%s_%s_C%i_Cutout_%s_%s' % (grbname, band, chip, survey, num)
+            threshname = '%s_query_thresh.reg' % grbname
 
         size = 4 * photoDistThresh * u.arcsec
         try:
@@ -1228,7 +1316,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         pix_region.plot(color='cyan', ls='--', label='Input GRB threshold')
 
         if regprimename:
-            primeregs = open('GRB_PRIME_srcs.reg', 'r')
+            primeregs = open('%s_PRIME_srcs.reg' % grbname, 'r')
             plt_primeregs = []
             primeallregs = [reg for reg in primeregs if reg != 'fk5\n']
             for reg in primeallregs:
@@ -1245,7 +1333,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 pix_reg.plot(color='red', ls='-', label='PRIME Source')
 
         if regsurvname:
-            survregs = open('GRB_%s_srcs.reg' % survey, 'r')
+            survregs = open('%s_%s_srcs.reg' % (grbname, survey), 'r')
             plt_survregs = []
             survallregs = [reg for reg in survregs if reg != 'fk5\n']
             for reg in survallregs:
@@ -1292,10 +1380,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
     # source ds9 region writing
     def source_reg_gen(src_ra=0, src_dec=0, rad=2, src_survey=None, append=False):
         if not src_survey:
-            name = 'GRB_PRIME_srcs.reg'
+            name = '%s_PRIME_srcs.reg' % grbname
             color = 'red'
         else:
-            name = 'GRB_%s_srcs.reg' % survey
+            name = '%s_%s_srcs.reg' % (grbname, survey)
             color = 'yellow'
         if not append:
             newtext = open(name, 'w+')
@@ -1350,7 +1438,9 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         else:
             flg = 1
 
-        if len(sep) > 1:
+        if not np.isscalar(sep):
+            sep = sep
+        elif len(sep) > 1:
             sep = sep[0]
 
         sep_dist = sep.to(u.arcsec)
@@ -1421,7 +1511,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         </div>
         """
 
-        with open('GRB_Multisource_%s_Data_%s.html' % (band, survey), "w") as f:
+        with open('%s_Multisource_%s_C%i_Data_%s_%s.html' % (grbname, band, chip, survey, num), "w") as f:
             f.write(final_html)
 
     # sexigesimal conversion
@@ -1587,7 +1677,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['Separation'].description = desc['separation']
                 grbdata['Survey_Crsmtch'].description = desc['crsmtch_flg']
 
-                grbdata.write('GRB_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
+                grbdata.write('%s_%s_C%i_Data_%s_%s_loc_%d.ecsv' % (grbname, band, chip, survey, num, key), overwrite=True)
 
                 source_reg_gen(grb_ra, grb_dec, rad=grb_rad, append=True)
                 print(' Generated GRB data table & source DS9 regions!')
@@ -1698,7 +1788,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['Separation'].description = desc['separation']
                 grbdata['Survey_Crsmtch'].description = desc['crsmtch_flg']
 
-                grbdata.write('GRB_Multisource_%s_Data_%s_loc_%d.ecsv' % (band, survey, key), overwrite=True)
+                grbdata.write('%s_Multisource_%s_C%i_Data_%s_%s_loc_%d.ecsv' % (grbname, band, chip, survey, num, key), overwrite=True)
                 print(' Generated GRB data table & source DS9 regions!')
             else:
                 print(' GRB source at inputted coords %s and %s not found in PRIME catalog, perhaps increase photoDistThresh or '
@@ -1775,7 +1865,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['Separation'].description = desc['separation']
             grbdata['Survey_Crsmtch'].description = desc['crsmtch_flg']
 
-            grbdata.write('GRB_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
+            grbdata.write('%s_%s_C%i_Data_%s_%s.ecsv' % (grbname, band, chip, survey, num), overwrite=True)
 
             regprimename = source_reg_gen(grb_ra, grb_dec, rad=grb_rad)
 
@@ -1873,7 +1963,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['Distance'] = np.round(np.array(dist_ar), decimals=5) * u.arcsec
             grbdata['Separation'] = np.round(np.array(sep_ar), decimals=5) * u.arcsec
             grbdata['Survey_Crsmtch'] = np.array(crsmtch_ar)
-            grbdata.write('GRB_Multisource_%s_Data_%s.ecsv' % (band, survey), overwrite=True)
+            grbdata.write('%s_Multisource_%s_C%i_Data_%s_%s.ecsv' % (grbname, band, chip, survey, num), overwrite=True)
 
             # descriptions
             grbdata['RA'].description = mag_ecsvcleanSources['ALPHA_J2000'].description
@@ -2452,7 +2542,7 @@ def grb_rad_convert(rad):
 def int_calibration(
         name, directory, band, chip, crop, sigma, given_catalog, survey,
         mag_low_lim, mag_high_lim, grb_ra, grb_dec,
-        grb_coordlist, grb_radius, max_int, comp_lvl
+        grb_coordlist, grb_radius, grb_name, max_int, comp_lvl
 ):
     print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
     data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
@@ -2469,12 +2559,12 @@ def int_calibration(
     if grb_ra:
         if grb_radius > 60:
             newsourcesearch(grb_ra, grb_dec, grb_radius, directory, w, name, chosen_survey, band, ab_cat_stars,
-                            mag_low_lim=mag_low_cutoff)
+                            mag_low_lim=mag_low_cutoff, grbname=grb_name)
             # GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory)
         else:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
     elif grb_coordlist:
-        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, grb_coordlist)
+        GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma)
 
@@ -2501,7 +2591,7 @@ def photometry(
         full_filename=defaults['filepath'], band=defaults['band'], crop=defaults['crop'], sigma=defaults['sigma_photom'], given_catalog=defaults['catalog'], survey=defaults['survey'],
         mag_low_lim=defaults['mag_low'], mag_high_lim=defaults['mag_high'], no_plots=defaults['no_plots'],
         keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-        grb_radius=defaults['grb_radius'], int_cal=defaults['int_cal'], det_cut=defaults['det_cut']
+        grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], int_cal=defaults['int_cal'], det_cut=defaults['det_cut']
 ):
     start_time = dt.now()
 
@@ -2537,14 +2627,14 @@ def photometry(
         good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=chosen_survey)
         ab_cat_stars = good_cat_stars
         if grb_coordlist:
-            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, grb_coordlist)
+            GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
         else:
             if grb_thresh > 60:
                 # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
                 newsourcesearch(grb_ra, grb_dec, grb_thresh, directory, w, name, chosen_survey, band, ab_cat_stars,
-                                mag_low_lim=mag_low_cutoff)
+                                mag_low_lim=mag_low_cutoff, grbname=grb_name)
             else:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
     else:
         data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
@@ -2577,12 +2667,12 @@ def photometry(
                           'make sure the -grb_dec flag is correctly formatted!')
                 if grb_thresh > 60:
                     newsourcesearch(grb_ra, grb_dec, grb_thresh, directory, w, name, chosen_survey, band, ab_cat_stars,
-                                    mag_low_lim=mag_low_cutoff)
+                                    mag_low_lim=mag_low_cutoff, grbname=grb_name)
                     # GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
                 else:
-                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory)
+                    GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
             elif grb_coordlist:
-                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, grb_coordlist)
+                GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
             if not no_plots:
                 try:
                     slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, ab_cat_stars, idx_psfmass,
@@ -2607,7 +2697,7 @@ def photometry(
                             # sigma -= 0.5
                             mag_low_cutoff += 0.5
                             new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
-                                                            mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh,
+                                                            mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh, grb_name,
                                                             max_int=max_int, comp_lvl=comp_lvl)
                             if abs(new_intercept) > abs(prev_intercept):
                                 print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
@@ -2616,7 +2706,7 @@ def photometry(
                                 mag_low_cutoff -= 0.5
                                 new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                                 mag_low_cutoff, mag_high_lim, grb_ra,
-                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int, comp_lvl=comp_lvl)
+                                                                grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=max_int, comp_lvl=comp_lvl)
                                 revert_flag = True
                                 break
                             else:
@@ -2637,7 +2727,7 @@ def photometry(
                             sigma -= step
                             new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                             mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
-                                                            grb_thresh,
+                                                            grb_thresh, grb_name,
                                                             max_int=max_int, comp_lvl=comp_lvl)
                             if abs(new_intercept) > abs(prev_intercept):
                                 print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
@@ -2648,7 +2738,7 @@ def photometry(
                                 new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog,
                                                                 chosen_survey,
                                                                 mag_low_cutoff, mag_high_lim, grb_ra,
-                                                                grb_dec, grb_coordlist, grb_thresh, max_int=max_int,
+                                                                grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=max_int,
                                                                 comp_lvl=comp_lvl)
                                 revert_flag = True
                                 break
@@ -2726,6 +2816,9 @@ def main():
                              ' arcmin, or deg w/ an underscore.  Ex. "-grb_radius 3_arcmin" will specify an area of 3 '
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults["grb_radius"])
+    parser.add_argument('-grb_name', type=str,
+                        help='[str] optional name for grb-related data products, default = "GRB"',
+                        default=defaults["grb_name"])
     parser.add_argument('-int_cal', action='store_true',
                         help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
                              'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
@@ -2740,7 +2833,8 @@ def main():
 
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,
                args.mag_high, args.no_plots, args.keep,
-               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.int_cal, args.det_cut)
+               args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name,
+               args.int_cal, args.det_cut)
 
 
 if __name__ == "__main__":

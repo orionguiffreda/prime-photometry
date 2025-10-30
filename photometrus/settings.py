@@ -28,6 +28,12 @@ PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/vi
                             'VVV_Y': ['J', 'II/348/vvv2'], 'Skymapper': ['Z', 'II/379/smssdr4'],'SDSS': ['Z', 'V/154/sdss16'],'DES_Z': ['Z', 'II/371/des_dr2'],
                              'VVV_Z': ['J', 'II/348/vvv2'], 'UKIDSS': ['Y', 'II/319/las9'],'PanSTARRS': ['Y', 'II/349/ps1'],'DES_Y': ['Y', 'II/371/des_dr2']
                              }
+
+ASTROM_QUERY_CATALOGS = {
+    'VIRAC': ['J,H','II/364/virac2'],
+    'GAIA': ['J,H,Y,Z','I/350/gaiaedr3']
+}
+
 # AB mag surveys: DES, Skymapper, SDSS, & PSTARRS
 AB_OFFSET_DICT = {'J': 0.94, 'H': 1.38, 'Y': 0.62, 'Z': 0.52}
 
@@ -190,11 +196,19 @@ def gen_flat_dir():
     return flat_dir
 
 
-def gen_mflat_file_name(band, chip, date=None):
+def gen_mflat_file_name(band, chip, date=None, sflat=False):
     flat_dir = gen_flat_dir()
+
+    if sflat:
+        name = 'sflat'
+        length = 33
+    else:
+        name = 'mflat'
+        length = 24
+
     mflat_list = [
-        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f
-        if len(f) <= 24]
+        f for f in sorted(os.listdir(flat_dir)) if f.startswith(name) if f.endswith('.fits') if '.%s.' % band in f
+        if 'C%s' % chip in f if len(f) <= length]
 
     if date:
         # get mflat closest to obs date, if there is a tie, it picks the earlier one to be safe
@@ -202,17 +216,21 @@ def gen_mflat_file_name(band, chip, date=None):
             target = datetime.strptime(target_date, "%Y%m%d")
 
             def extract_date(file):
-                return datetime.strptime(file.split(".")[2], "%Y%m%d")
+                if sflat:
+                    half = file.split("-")[0]
+                    return datetime.strptime(half.split(".")[2], "%Y%m%d")
+                else:
+                    return datetime.strptime(file.split(".")[2], "%Y%m%d")
 
             return min(file_list, key=lambda f: (abs((extract_date(f) - target).days), extract_date(f)))
 
         filename = closest_file(mflat_list, date)
-        print('Getting mflat closest to given date: ', filename)
+        print(f'Getting {name} closest to given date: ', filename)
     else:
         # if no date given, get latest mflat
         mflat_list = sorted(mflat_list, reverse=True)
         filename = mflat_list[0]
-        print('No date, getting latest mflat: ', filename)
+        print(f'No date, getting latest {name}: ', filename)
     return os.path.join(flat_dir, filename)
 
 
