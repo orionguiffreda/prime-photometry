@@ -334,6 +334,7 @@ def remove_head(directory):
 def double_astrom(imgdir, band=None):
     # beginning from where astrom_shift_bulge solved
     start_time = dt.now()
+    remove_head(imgdir)
     print('\nSextracting shift-corrected fits files!')
     sex(imgdir)                     # sextract shift-solved fits files
     print('Running SCAMP w/ 2nd order distortion polynomial...')
@@ -372,6 +373,7 @@ def astrometry(path, band=None, run_sex=False, run_scamp=False, run_miss=False, 
         # missfits(path)
     else:
         start_time = dt.now()
+        remove_head(path)
         sex(path)
         scamp(path, band=band)
         missfits(path)
