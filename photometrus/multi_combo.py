@@ -40,7 +40,8 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
                                   sky_override_path, removal, no_get_files, no_mflat, rampnum, bulge, auto_mode=auto_mode,
                                   input_ramp_lists=input_ramp_lists, header_filter=header_filter)
-        multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_name)
+        multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra=grb_ra, grb_dec=grb_dec,
+                                       grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name)
 
     if len(chips) == 4:
         catcheck = [f for f in sorted(os.listdir(stackpath)) if f.endswith('.ecsv') and f.startswith('coadd')]
