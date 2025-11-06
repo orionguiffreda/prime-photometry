@@ -53,9 +53,14 @@ def flatlists(date, flatlist, chip):
                                 'Or were there missing files in the flat generation?')
 
     # redundancy check to confirm correct band (protection against 1st file being a diff filter)
-    firsthdr = fits.getheader(flatlist[0], ext=1)
+    hdulist = fits.open(flatlist[0])
+    if len(hdulist) > 1:
+        ext = 1
+    else:
+        ext = 0
+    firsthdr = fits.getheader(flatlist[0], ext=ext)
     firstband = firsthdr['FILTER2']
-    sechdr = fits.getheader(flatlist[1], ext=1)
+    sechdr = fits.getheader(flatlist[1], ext=ext)
     secband = sechdr['FILTER2']
 
     if firstband != secband:
