@@ -361,6 +361,7 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
                                                            "%sFlag" % band.lower(): "<4",
                                                            "%sflags1" % band.lower(): "<16",
                                                            "%sperrbits" % band: '<256',
+                                                           "Mclass": '-1 | -2',
                                                            }, row_limit=-1)
                                 Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
                                                    width=str(width) + 'm'
@@ -892,7 +893,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                         hdr.set('ZP_PSF', zero_psfmean, 'PSF Zero Point Offset', after='NINT')
                     except KeyError:
                         hdr.set('ZP_PSF', zero_psfmean, 'PSF Zero Point Offset')
-                    hdr.set('e_ZP_PSF', zero_psfstd, 'PSF Zero Point Offset Error', after='ZP')
+                    hdr.set('e_ZP_PSF', zero_psfstd, 'PSF Zero Point Offset Error', after='ZP_PSF')
                     hdul.close()
             else:
                 cal_mag_name = '%sMAG_AUTO' % band
@@ -963,6 +964,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
             zero_aperstds = []
             aper_clipped_all = []
 
+            print('Fixed aperture ZPs below:')
             for i in range(aperoffsets.shape[1]):
                 aperoffsets_i = aperoffsets[:, i]
                 aperweights_i = aperweights_noclip[:, i]
@@ -1693,8 +1695,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
                 grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
                 grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
-                grb_mag_aper_2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][0]
-                grb_magerr_aper_2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][:, 0][0]
+                grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][0]
+                grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][0]
 
                 grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
                 grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
@@ -1731,8 +1733,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
                 grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
                 grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
-                grbdata['%sapMag2' % band] = np.round(np.array([grb_mag_aper_2]), decimals=3) * u.ABmag
-                grbdata['%sapMag2_Err' % band] = np.round(np.array([grb_magerr_aper_2]), decimals=3) * u.ABmag
+                grbdata['%sautoMag' % band] = np.round(np.array([grb_mag_auto]), decimals=3) * u.ABmag
+                grbdata['%sautoMag_Err' % band] = np.round(np.array([grb_magerr_auto]), decimals=3) * u.ABmag
                 grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
                 grbdata['SNR'] = np.round(np.array([grb_snr]), decimals=2)
                 grbdata['Elongation'] = np.round(np.array([grb_elon]), decimals=3)
@@ -1748,8 +1750,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
                 grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
                 grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
-                grbdata['%sapMag2' % band].description = desc['mag_aper_2']
-                grbdata['%sapMag2_Err' % band].description = desc['mag_aper_2_err']
+                grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
+                grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
                 grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
                 grbdata['SNR'].description = mag_ecsvcleanSources['SNR_WIN'].description
                 grbdata['Elongation'].description = mag_ecsvcleanSources['ELONGATION'].description
@@ -1768,8 +1770,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 mag_err_ar = []
                 apmag_ar = []
                 apmag_err_ar = []
-                ap2mag_ar = []
-                ap2mag_err_ar = []
+                automag_ar = []
+                automag_err_ar = []
                 ra_ar = []
                 dec_ar = []
                 rad_ar = []
@@ -1791,11 +1793,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][
                         idx_GRBcleanpsflist.index(i)]
                     apmag_err_ar.append(grb_magerr_aper)
-                    grb_mag_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][idx_GRBcleanpsflist.index(i)]
-                    ap2mag_ar.append(grb_mag_aper2)
-                    grb_magerr_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][:, 0][
-                        idx_GRBcleanpsflist.index(i)]
-                    ap2mag_err_ar.append(grb_magerr_aper2)
+                    grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
+                    automag_ar.append(grb_mag_auto)
+                    grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
+                    automag_err_ar.append(grb_magerr_auto)
                     grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
                     ra_ar.append(grb_ra)
                     grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][idx_GRBcleanpsflist.index(i)]
@@ -1842,8 +1843,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
                 grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
                 grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag2' % band] = np.round(np.array(ap2mag_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag2_Err' % band] = np.round(np.array(ap2mag_err_ar), decimals=3) * u.ABmag
+                grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
+                grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
                 grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
                 grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
                 grbdata['Elongation'] = np.round(np.array(elon_ar), decimals=3)
@@ -1859,8 +1860,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
                 grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
                 grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
-                grbdata['%sapMag2' % band].description = desc['mag_aper_2']
-                grbdata['%sapMag2_Err' % band].description = desc['mag_aper_2_err']
+                grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
+                grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
                 grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
                 grbdata['SNR'].description = mag_ecsvcleanSources['SNR_WIN'].description
                 grbdata['Elongation'].description = mag_ecsvcleanSources['ELONGATION'].description
@@ -1882,8 +1883,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
             grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
             grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
-            grb_mag_aper_2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][0]
-            grb_magerr_aper_2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][:, 0][0]
+            grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][0]
+            grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][0]
 
             grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][0]
             grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][0]
@@ -1919,8 +1920,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
             grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
             grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
-            grbdata['%sapMag2' % band] = np.round(np.array([grb_mag_aper_2]), decimals=3) * u.ABmag
-            grbdata['%sapMag2_Err' % band] = np.round(np.array([grb_magerr_aper_2]), decimals=3) * u.ABmag
+            grbdata['%sautoMag' % band] = np.round(np.array([grb_mag_auto]), decimals=3) * u.ABmag
+            grbdata['%sautoMag_Err' % band] = np.round(np.array([grb_magerr_auto]), decimals=3) * u.ABmag
             grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
             grbdata['SNR'] = np.round(np.array([grb_snr]), decimals=2)
             grbdata['Elongation'] = np.round(np.array([grb_elon]), decimals=3)
@@ -1936,8 +1937,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
             grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
             grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
-            grbdata['%sapMag2' % band].description = desc['mag_aper_2']
-            grbdata['%sapMag2_Err' % band].description = desc['mag_aper_2_err']
+            grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
+            grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
             grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
             grbdata['SNR'].description = mag_ecsvcleanSources['SNR_WIN'].description
             grbdata['Elongation'].description = mag_ecsvcleanSources['ELONGATION'].description
@@ -1962,8 +1963,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             mag_err_ar = []
             apmag_ar = []
             apmag_err_ar = []
-            ap2mag_ar = []
-            ap2mag_err_ar = []
+            automag_ar = []
+            automag_err_ar = []
             ra_ar = []
             dec_ar = []
             rad_ar = []
@@ -1986,10 +1987,11 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 apmag_err_ar.append(grb_magerr_aper)
                 grb_mag_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][
                     idx_GRBcleanpsflist.index(i)]
-                ap2mag_ar.append(grb_mag_aper2)
-                grb_magerr_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][:, 0][
+                grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
+                automag_ar.append(grb_mag_auto)
+                grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][
                     idx_GRBcleanpsflist.index(i)]
-                ap2mag_err_ar.append(grb_magerr_aper2)
+                automag_err_ar.append(grb_magerr_auto)
                 grb_ra = mag_ecsvcleanSources[idx_GRBcleanpsf]['ALPHA_J2000'][idx_GRBcleanpsflist.index(i)]
                 ra_ar.append(grb_ra)
                 grb_dec = mag_ecsvcleanSources[idx_GRBcleanpsf]['DELTA_J2000'][idx_GRBcleanpsflist.index(i)]
@@ -2035,8 +2037,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
             grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
             grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag2' % band] = np.round(np.array(ap2mag_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag2_Err' % band] = np.round(np.array(ap2mag_err_ar), decimals=3) * u.ABmag
+            grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
+            grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
             grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
             grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
             grbdata['Elongation'] = np.round(np.array(elon_ar), decimals=3)
@@ -2053,8 +2055,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
             grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
             grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
-            grbdata['%sapMag2' % band].description = desc['mag_aper_2']
-            grbdata['%sapMag2_Err' % band].description = desc['mag_aper_2_err']
+            grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
+            grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
             grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
             grbdata['SNR'].description = mag_ecsvcleanSources['SNR_WIN'].description
             grbdata['Elongation'].description = mag_ecsvcleanSources['ELONGATION'].description
@@ -2221,6 +2223,27 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
               % (sigma, len(cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask])))
         print(' %s sig fit: slope = %.4f +/- %.4f' % (sigma, m_auto, m_autoerr))
         print(' %s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_auto, b_autoerr))
+
+    # chosen population
+    # rserr = np.nanstd(model_auto_resid)
+    # print(rserr)
+    # rsmed = np.nanmedian(model_auto_resid)
+    # rspopidx = np.where(model_auto_resid < -1*rserr)
+    # rspopcrs = cleanPSFsources[idx_psfimage][~auto_clipped.mask][rspopidx]
+    # rspop = model_auto_resid[rspopidx]
+    # print(rspop)
+    # print(len(rspop))
+    #
+    # newtext = open(f'chosenpop_C{chip}.reg', 'w+')
+    # newtext.write('fk5')
+    # for a, d, rad in zip(rspopcrs['ALPHA_J2000'], rspopcrs['DELTA_J2000'],
+    #                 rspopcrs['FLUX_RADIUS']):
+    #     newtext.write(f'\ncircle({a}, {d}, {rad}") # color=red')
+    # print('Chosen pop source location reg file saved!')
+    #
+    # rspopcrs.write(f'chosenpop_C{chip}.ecsv', overwrite=True)
+
+
 
     # sigma clipped resids for aper mags
     if len(aperweights_noclip) > 0:
@@ -2650,24 +2673,80 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     # plt.savefig('%s_C%s_WLS_fit_3sig_plot_%s.png' % (survey, chip, num), dpi=300)
 
     # WLS 3 sig hist density plot
-    plt.figure(7, figsize=(10, 8))
-    plt.clf()
-    plt.xlim(10, 22)
-    plt.ylim(10, 22)
-    plt.title('%s vs PRIME w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
-    plt.grid()
-    plt.ylabel('PRIME %s Mags' % band, fontsize=15)
-    plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
-               y= cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+
+    # plt.figure(7, figsize=(10, 8))
+    # plt.clf()
+    # plt.xlim(10, 22)
+    # plt.ylim(10, 22)
+    # plt.title('%s vs PRIME w/ Weighted Fit - %s Sigma Clip - Density Histogram' % (survey, sigma))
+    # plt.grid()
+    # plt.ylabel('PRIME %s Mags' % band, fontsize=15)
+    # plt.xlabel('%s %s Mags' % (survey, band), fontsize=15)
+    # plt.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+    #            y= cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
+    #            bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
+    # plt.plot(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+    #          predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], m_sig, b_sig), c='b')
+    # plt.colorbar(label='Density')
+    # box = dict(facecolor='white')
+    # plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
+    # plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot_%s.png' % (survey, chip, num), dpi=300)
+    # plt.clf()
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
+    fig.subplots_adjust(wspace=0.12)
+    fig.suptitle(f'{survey} vs PRIME w/ Weighted Fit - {sigma} Sigma Clip - Density Histogram')
+
+    # PSF PANEL
+    psfhist = ax1.hist2d(x=good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+               y=cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask],
                bins=[bin_num, bin_num], range=[[10, 22],[10, 22]], cmap='gist_heat_r')
-    plt.plot(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+
+    psfline = ax1.plot(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
              predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask], m_sig, b_sig), c='b')
-    plt.colorbar(label='Density')
-    box = dict(facecolor='white')
-    plt.text(11, 18, sigtxt, fontsize=12, bbox=box)
+
+    cbar1 = fig.colorbar(psfhist[3], ax=ax1, pad=0.03)
+    cbar1.set_label('PSF Density')
+
+    ax1.grid()
+    ax1.set_xlim(10, 22)
+    ax1.set_ylim(10, 22)
+    ax1.set_title(f"{survey} vs PRIME PSF Mag Plot w/ WLS fit line")
+    ax1.set_xlabel(f"{survey} {band} Mags")
+    ax1.set_ylabel(f"PRIME {band} Mags")
+
+    ax1.text(11, 18, infohist, fontsize=12,
+             bbox=dict(facecolor='white', edgecolor='black'))
+
+    # AUTO PANEL
+    if len(autoweights_noclip) > 0:
+        autohist = ax2.hist2d(
+            x=good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask],
+            y=cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask],
+            bins=[bin_num, bin_num], range=[[10, 22],[10, 22]],
+            cmap='gist_earth_r'
+        )
+
+        autoline = ax2.plot(good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask],
+                           predict_y_for(good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask], m_auto, b_auto),
+                           c='r')
+
+        cbar2 = fig.colorbar(autohist[3], ax=ax2, pad=0.03)
+        cbar2.set_label('Auto Ap. Density')
+
+        ax2.grid()
+        ax2.set_xlim(10, 22)
+        ax2.set_ylim(10, 22)
+        ax2.yaxis.set_tick_params(labelleft=True)
+        ax2.set_title(f"{survey} vs PRIME Auto Ap. Plot w/ WLS fit line")
+        ax2.set_xlabel(f"{survey} {band} Mags")
+        ax2.set_ylabel(f"PRIME {band} Mags")
+
+        ax2.text(11, 18, infoauto, fontsize=12,
+                 bbox=dict(facecolor='white', edgecolor='black'))
+
     plt.savefig('%s_C%s_WLS_fit_3sig_hist_plot_%s.png' % (survey, chip, num), dpi=300)
-    plt.clf()
+    plt.close(fig)
 
     print('Saved WLS 3 sig fit plots to dir!')
 
@@ -2821,7 +2900,9 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
             hdr.set('e_auto_fit_b', b_autoerr, 'Error in WLS %s sig fit intercept' % sigma, after='auto_fit_b')
         hdul.close()
 
-    return m_sig, b_sig
+    return m_sig, b_sig, 0.1
+    # TODO to run calibration based on auto aperture photom, uncomment line below
+    # return m_auto, b_auto, round(4 * b_autoerr, 4)
 
 #%% automatic grb threshold calculation
 
@@ -2871,11 +2952,11 @@ def int_calibration(
             GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
     elif grb_coordlist:
         GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
-    slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
+    slope, intercept, int_err = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
                                         idx_psfimage, psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all
                                         , autoweights_noclip, auto_clipped)
 
-    return intercept
+    return intercept, int_err
 
 # %% optional removal of intermediate files
 
@@ -2902,7 +2983,7 @@ def photometry(
 ):
     start_time = dt.now()
 
-    max_int = 0.1   # max int value allowed for photometric fit
+    max_int = 0.05   # max int value allowed for photometric fit
     comp_lvl = 0.3
 
     try:
@@ -2982,7 +3063,7 @@ def photometry(
             elif grb_coordlist:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
             if not no_plots:
-                slope, intercept = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, ab_cat_stars, idx_psfmass,
+                slope, intercept, int_err = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, ab_cat_stars, idx_psfmass,
                                  idx_psfimage, psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all
                                  , autoweights_noclip, auto_clipped)
                 if abs(intercept) >= 5:
@@ -2994,59 +3075,63 @@ def photometry(
                     prev_intercept = intercept
                     revert_flag = False
 
-                    while abs(intercept) > max_int:
+                    while abs(intercept) > int_err:
+                        print('\nAdjusted minimum acc. intercept: ', int_err)
                         print('\nIntercept = %.4f\n' % intercept)
                         # sigma -= 0.5
                         mag_low_cutoff += 0.5
-                        new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
+                        new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                         mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh, grb_name,
-                                                        max_int=max_int, comp_lvl=comp_lvl)
+                                                        max_int=int_err, comp_lvl=comp_lvl)
                         if abs(new_intercept) > abs(prev_intercept):
                             print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                   "redoing...\n" % (new_intercept, prev_intercept))
                             intercept = prev_intercept
                             mag_low_cutoff -= 0.5
-                            new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
+                            new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                             mag_low_cutoff, mag_high_lim, grb_ra,
-                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=max_int, comp_lvl=comp_lvl)
+                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=int_err, comp_lvl=comp_lvl)
                             revert_flag = True
                             break
                         else:
                             intercept = new_intercept
                             prev_intercept = intercept
+                            int_err = new_int_err
                             revert_flag = False
                     if revert_flag:
                         print("Loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
                     else:
-                        print(f"Final intercept below {max_int}: %.4f" % intercept)
+                        print(f"Final intercept below {int_err}: %.4f" % intercept)
 
                     prev_intercept = intercept
                     revert_flag = False
 
-                    while abs(intercept) > max_int and sigma > 1:  # ensure sigma doesn't go negative
+                    while abs(intercept) > int_err and sigma > 1:  # ensure sigma doesn't go negative
+                        print('\nAdjusted minimum acc. intercept: ', int_err)
                         print('\nIntercept = %.4f\n' % intercept)
-                        step = 0.25 if sigma <= 1.5 else 0.5
+                        step = 0.125 if sigma <= 1.5 else 0.5
                         sigma -= step
-                        new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
+                        new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
                                                         mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
                                                         grb_thresh, grb_name,
-                                                        max_int=max_int, comp_lvl=comp_lvl)
+                                                        max_int=int_err, comp_lvl=comp_lvl)
                         if abs(new_intercept) > abs(prev_intercept):
                             print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                   "redoing...\n" % (new_intercept, prev_intercept))
                             # revert
                             intercept = prev_intercept
                             sigma += step
-                            new_intercept = int_calibration(name, directory, band, chip, crop, sigma, given_catalog,
+                            new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog,
                                                             chosen_survey,
                                                             mag_low_cutoff, mag_high_lim, grb_ra,
-                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=max_int,
+                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=int_err,
                                                             comp_lvl=comp_lvl)
                             revert_flag = True
                             break
                         else:
                             intercept = new_intercept
                             prev_intercept = intercept
+                            int_err = new_int_err
                             revert_flag = False
 
                     if revert_flag:
