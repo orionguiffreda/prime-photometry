@@ -1009,14 +1009,14 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     print('Writing ZP info to image header...')
     with fits.open(imageName, mode='update') as hdul:
         hdr = hdul[0].header
-        hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatches', after='e_ZP')
+        hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatches', after='NINT')
         hdr.set('N_SRCS', len(PSFSources), 'Total PRIME Sources Number', after='N_CRSMCH')
         hdr.set('Survey', survey, 'Chosen Survey for Crossmatch', after='N_SRCS')
 
         if len(zero_apermeans) > 0:
             for idx, (zp, err) in enumerate(zip(zero_apermeans, zero_aperstds)):
-                hdr.set(f'e_ZPap{idx}', err, f'{(idx + 1) * 2}" Aperture Zero Point Offset Error', after='e_ZP')
-                hdr.set(f'ZPap{idx}', zp, f'{(idx + 1) * 2}" Aperture Zero Point Offset', after='e_ZP')
+                hdr.set(f'e_ZPap{idx}', err, f'{(idx + 1) * 2}" Aperture Zero Point Offset Error', after='e_ZP_PSF')
+                hdr.set(f'ZPap{idx}', zp, f'{(idx + 1) * 2}" Aperture Zero Point Offset', after='e_ZP_PSF')
         hdul.close()
 
     PSFSources.remove_column('VIGNET')
@@ -2889,12 +2889,12 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     with fits.open(imageName, mode='update') as hdul:
         hdr = hdul[0].header
         hdr.set('PSF_fit_m', m_sig, 'WLS %s sig fit slope' % sigma, after='Survey')
-        hdr.set('e_PSF_fit_m', m_sigerr, 'Error in WLS %s sig fit slope' % sigma, after='fit_m')
-        hdr.set('PSF_fit_b', b_sig, 'WLS %s sig fit intercept' % sigma, after='e_fit_m')
-        hdr.set('e_PSF_fit_b', b_sigerr, 'Error in WLS %s sig fit intercept' % sigma, after='fit_b')
-        hdr.set('Lim_Mag', limmag, 'Source Histogram FWHM Limiting Mag', after='e_fit_b')
+        hdr.set('e_PSF_fit_m', m_sigerr, 'Error in WLS %s sig fit slope' % sigma, after='PSF_fit_m')
+        hdr.set('PSF_fit_b', b_sig, 'WLS %s sig fit intercept' % sigma, after='e_PSF_fit_m')
+        hdr.set('e_PSF_fit_b', b_sigerr, 'Error in WLS %s sig fit intercept' % sigma, after='PSF_fit_b')
+        hdr.set('Lim_Mag', limmag, 'Source Histogram FWHM Limiting Mag', after='e_PSF_fit_b')
         if len(autoweights_noclip) > 0:
-            hdr.set('auto_fit_m', m_auto, 'WLS %s sig fit slope' % sigma, after='e_fit_b')
+            hdr.set('auto_fit_m', m_auto, 'WLS %s sig fit slope' % sigma, after='e_PSF_fit_b')
             hdr.set('e_auto_fit_m', m_autoerr, 'Error in WLS %s sig fit slope' % sigma, after='auto_fit_m')
             hdr.set('auto_fit_b', b_auto, 'WLS %s sig fit intercept' % sigma, after='e_auto_fit_m')
             hdr.set('e_auto_fit_b', b_autoerr, 'Error in WLS %s sig fit intercept' % sigma, after='auto_fit_b')
@@ -2902,7 +2902,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     return m_sig, b_sig, 0.1
     # TODO to run calibration based on auto aperture photom, uncomment line below
-    # return m_auto, b_auto, round(4 * b_autoerr, 4)
+    # return m_auto, b_auto, round(3 * b_autoerr, 4)
 
 #%% automatic grb threshold calculation
 
@@ -3105,6 +3105,7 @@ def photometry(
 
                     prev_intercept = intercept
                     revert_flag = False
+                    leniency_val = 1.0 #1.1    # val above prev_intercept the new int. can be and still be accepted
 
                     while abs(intercept) > int_err and sigma > 1:  # ensure sigma doesn't go negative
                         print('\nAdjusted minimum acc. intercept: ', int_err)
@@ -3115,7 +3116,7 @@ def photometry(
                                                         mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
                                                         grb_thresh, grb_name,
                                                         max_int=int_err, comp_lvl=comp_lvl)
-                        if abs(new_intercept) > abs(prev_intercept):
+                        if abs(new_intercept) > abs(leniency_val*prev_intercept):
                             print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                   "redoing...\n" % (new_intercept, prev_intercept))
                             # revert
@@ -3129,6 +3130,10 @@ def photometry(
                             revert_flag = True
                             break
                         else:
+                            if abs(leniency_val*prev_intercept) > abs(new_intercept) > abs(prev_intercept):
+                                print(f'New int. slightly higher than prev.: {round(new_intercept,3)} > '
+                                      f'{round(prev_intercept,3)}, but '
+                                      f'w/in {leniency_val} leniency val, so accepted')
                             intercept = new_intercept
                             prev_intercept = intercept
                             int_err = new_int_err
