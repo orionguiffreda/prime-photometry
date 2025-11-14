@@ -5,7 +5,8 @@ Runs full pipeline (proc. & photom.) on whole night's data
 import os
 import sys
 import argparse
-import pandas as pd
+import traceback
+# import pandas as pd
 from pandas import to_datetime
 from collections import defaultdict
 
@@ -80,7 +81,7 @@ def get_fields_from_log(date=None, no_bulge=True):
             nint = int(block[0]['NINT'])
             filter_val = block[0]['FILTER2']
             obs = block[0]['OBSERVER']
-
+            nframes = [entry['NFRAMES'] for entry in block]
             files_list = [entry['filename'] for entry in block]
             int_val = len(files_list)
             key_suffix = block_index + 1
@@ -91,7 +92,8 @@ def get_fields_from_log(date=None, no_bulge=True):
                 'INT': int_val,
                 'OBSERVER': obs,
                 'BAND': filter_val,
-                'FILES': files_list
+                'FILES': files_list,
+                'FRAMES': nframes,
             }
 
     # pruning out calibration files, i.e. flats, etc.
@@ -113,10 +115,29 @@ def get_fields_from_log(date=None, no_bulge=True):
 #%%
 
 
-def full_processing_from_log(observations, date):
+def full_processing_from_log(init_observations, date, start_field=None):
     print('full_processing_from_log date:', date)
     datetime = to_datetime(date)
     logdate = datetime.strftime('%Y%m%d')
+
+    observations = init_observations
+
+    if start_field:
+        if start_field in init_observations:
+            print(f'\nInput starting field: {start_field} found in log, '
+                  f'starting automated processing from that field on!')
+            observations = {}
+            keep = False
+
+            for k, v in init_observations.items():
+                if k == start_field:
+                    keep = True
+                if keep:
+                    observations[k] = v
+        else:
+            print(
+                f'\n**Input starting field: {start_field} NOT found in log!** '
+                f'\nContinuing automated processing as normal.')
 
     for field in observations:
         print('\n%s' % field)
@@ -129,14 +150,26 @@ def full_processing_from_log(observations, date):
 
         # getting full filepaths to specific field
         testfieldfiles = [int(file[:8]) for file in observations[field]['FILES']]
-        input_ramp_lists = get_file_names(testfieldfiles)
+        nframes = [n for n in observations[field]['FRAMES']]
+        input_ramp_lists = get_file_names(testfieldfiles, nframes)
 
         # running full processing & photometry on field
-        combo(target=field, date=logdate, band=field_band, removal=True, auto_mode=True,
-              input_ramp_lists=input_ramp_lists)
+        combo_dict = dict(
+            target=field, date=logdate, band=field_band, removal=True, auto_mode=True,
+            input_ramp_lists=input_ramp_lists
+        )
+        print('combo command dict:')
+        print(combo_dict)
+
+        try:
+            combo(**combo_dict)
+        except Exception:
+            tb = traceback.format_exc()
+            print(combo_dict)
+            print(tb)
 
 
-def supermaster(date=None, incl_bulge=False):
+def supermaster(date=None, start_field=None, incl_bulge=False):
     if not date:
         chosendate = get_most_current_log_date()
     else:
@@ -145,20 +178,22 @@ def supermaster(date=None, incl_bulge=False):
         observations = get_fields_from_log(chosendate, no_bulge=False)
     else:
         observations = get_fields_from_log(chosendate, no_bulge=True)
-    full_processing_from_log(observations, chosendate)
+    full_processing_from_log(observations, chosendate, start_field=start_field)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Super-master script, designed to check the latest log and '
                                                  'process all targets observed over the night')
     parser.add_argument('-date', type=str, help='[str] optional, date of observation in yyyymmdd or similar '
-                                                'format', default=None)
+                                                'format, default is the most recent date in the list of logs', default=None)
+    parser.add_argument('-start_field', type=str, help='[str] optional, put field name (ex. "field1234") of field'
+                                                       ' you want the automated processing to start on', default=None)
     parser.add_argument('-bulge', action='store_true', help='Super-master currently prunes out the bulge '
-                                                            'fields by default, as we dont yet support stacking of bulge'
+                                                            'fields by default, as we dont yet support stacking of bulge '
                                                             'fields, if you want to include them anyway, use this flag')
     args, unknown = parser.parse_known_args()  # TODO: get default arguments from defaults dict
 
-    supermaster(args.date, args.bulge)
+    supermaster(args.date, args.start_field, args.bulge)
 
 
 if __name__ == "__main__":

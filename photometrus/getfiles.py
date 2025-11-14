@@ -39,10 +39,10 @@ log_folder_location = os.path.join(GET_DATA_SETTINGS['log_folder_location'], 'ra
 file_prefix = '{0:08d}'
 
 backup_lists = {
-    'ramp': ['ramp_fz', 'regen'],
+    'ramp': ['real_time_ramp', 'ramp_fz', 'regen'],
     'raw': ['raw_fz',],
     'raw_fz': ['raw',],
-    'ramp_fz': ['ramp', 'regen'],
+    'ramp_fz': ['ramp', 'real_time_ramp', 'regen'],
 }
 
 funpack_output_dir = path_replace(GET_DATA_SETTINGS['funpack_output_dir'])
@@ -270,9 +270,11 @@ def header_filter_file(filename, header_filter):
 
 
 def get_file_names(
-    file_numbers, nframes, backup_file_types, cameras=defaults['chip'], ftype=defaults['ftype'],
+    file_numbers, nframes, backup_file_types=None, cameras=defaults['chip'], ftype=defaults['ftype'],
     funpack_fz=defaults['funpack_fz'], header_filter=None
 ):
+    if backup_file_types is None:
+        backup_file_types = backup_lists[ftype]
     filenames = []
     missing_filenames = []
     filtered_filenames = []

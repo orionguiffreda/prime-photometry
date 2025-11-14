@@ -322,7 +322,7 @@ def main():
                  rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, no_download=args.no_download,
                  sky_override_path=args.sky_override, removal=args.removal, no_get_files=args.no_get_files,
                  no_mflat=args.no_mflat, rampnum=args.rampnum, bulge=args.bulge, auto_mode=args.auto, input_ramp_lists=args.ramplist,
-                 header_filter=header_filter)
+                 header_filter=args.header_filter)
 
 
 if __name__ == "__main__":

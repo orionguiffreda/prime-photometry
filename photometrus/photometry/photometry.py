@@ -653,6 +653,8 @@ def sex2(imageName, det_cut, catalogName):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
+            print('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
+                  '"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL" from this subprocess command to investigate.')
     else:
         try:
             # We are supplying SExtactor with the PSF model with the PSF_NAME option
@@ -662,6 +664,8 @@ def sex2(imageName, det_cut, catalogName):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
+            print('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
+                  '"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL" from this subprocess command to investigate.')
     return psfcatalogName
 
 

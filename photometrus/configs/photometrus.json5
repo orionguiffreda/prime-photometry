@@ -108,7 +108,7 @@
     'log_folder_location': '/nfs/prime01/work/LOG/Ramp_LOG',
     'funpack_output_dir': '/mnt/photometry/unarchived/C%CHIP%/%SERIAL_TRUNC%',
     'remote_file_formats': {
-      'ramp': [
+      'real_time_ramp': [
         '/nfs/home/prime/Data/ramp/%SERIAL%C1.fits.ramp',
         '/nfs/xion2/prime/Data/ramp/%SERIAL%C2.fits.ramp',
         '/nfs/xion3/prime/Data/ramp/%SERIAL%C3.fits.ramp',
@@ -130,6 +130,12 @@
         '/nfs/xion4/prime/ramp_fz/C2/%SERIAL_TRUNC%/%SERIAL%C2.fits.ramp.fz',
         '/nfs/xion3/prime/ramp_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.ramp.fz',
         '/nfs/xion4/prime/ramp_fz/C4/%SERIAL_TRUNC%/%SERIAL%C4.fits.ramp.fz'
+      ],
+      'ramp': [
+        '/nfs/xion3/prime/Data/reramp/C1/%SERIAL%C1.fits.ramp',
+        '/nfs/xion4/prime/Data/reramp/C2/%SERIAL%C2.fits.ramp',
+        '/nfs/xion3/prime/Data/reramp/C3/%SERIAL%C3.fits.ramp',
+        '/nfs/xion4/prime/Data/reramp/C4/%SERIAL%C4.fits.ramp'
       ]
     },
     'replace_list': [
