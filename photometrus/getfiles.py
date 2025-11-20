@@ -9,6 +9,7 @@ from astropy.io.fits import PrimaryHDU
 from pandas import read_csv, to_datetime
 from astropy.io import fits
 import numpy as np
+import fitsio
 
 from photometrus.utils.defaults import FILE_DEFAULTS
 from photometrus.settings import GET_DATA_SETTINGS
@@ -43,6 +44,7 @@ backup_lists = {
     'raw': ['raw_fz',],
     'raw_fz': ['raw',],
     'ramp_fz': ['ramp', 'real_time_ramp', 'regen'],
+    'real_time_ramp': ['ramp', 'ramp_fz', 'regen']
 }
 
 funpack_output_dir = path_replace(GET_DATA_SETTINGS['funpack_output_dir'])
@@ -189,12 +191,17 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
     darklim = f"darklim/darklim.C{chip}.fits.{date}"
     superbias = f"bias/superbias_minRMS.C{chip}.fits.{date}"
     satulim = f"satulim/satulim.C{chip}.fits.{date}"
+    cal_files = [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
+    sb = cal_files[0]
+    if not os.path.isfile(sb):
+        cal_files[0] = sb.replace('bias/superbias_minRMS.', 'bias/super_bias')
     return [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
 
 
 def get_ramp_cal(header):
     cal_files = get_ramp_cal_files(header)
-    superbias, satulim, coe_R, coe_D, darklim = [fits.getdata(f) for f in cal_files]
+    print(cal_files)
+    superbias, satulim, coe_R, coe_D, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
     coe_R_tr = np.transpose(coe_R, (1, 2, 0)).copy(order='C')
     coe_D_tr = np.transpose(coe_D, (1, 2, 0)).copy(order='C')
     Adarklim, Fdarklim = calc_darklim(coe_D_tr, darklim)
@@ -221,7 +228,13 @@ def update_header(header, f0_num, fl_num):
 
 def make_ramp_fits(ramp, header, out_file, f0_num, fl_num):
     header = update_header(header, f0_num, fl_num)
-    fits.HDUList([PrimaryHDU(ramp.astype(np.float32, header))]).writeto(out_file, overwrite=True)
+    out_dir = os.path.dirname(out_file)
+    if not os.path.isdir(out_dir) and out_dir != '':
+        os.makedirs(out_dir)
+    if not isinstance(header, fits.Header):  # nlc ramp fit code uses fitsio instead of astropy.io.fits
+        fitsio.write(out_file, ramp.astype(np.float32), header=header, clobber=True)
+    else:
+        fits.HDUList([PrimaryHDU(ramp.astype(np.float32), header)]).writeto(out_file, overwrite=True)
     print(f"make {out_file}")
 
 
@@ -244,8 +257,9 @@ def regen_ramp(file_number, nframe, camera):
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
-    make_ramp_fits(ramp, header, output_dir, file_numbers[0], file_numbers[-1])
-    return output_dir
+    output_file = os.path.join(output_dir, os.path.basename(raw_files[0]).replace('.fz', '').replace('.fits', '.ramp.fits'))
+    make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])
+    return output_file
 
 
 def get_backup_file(file_number, nframe, backup_types, camera, funpack_fz=defaults['funpack_fz']):

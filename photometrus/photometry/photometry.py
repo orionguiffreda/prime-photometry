@@ -24,7 +24,7 @@ from astropy.nddata import Cutout2D
 from bs4 import BeautifulSoup
 from regions import CircleSkyRegion
 import base64
-from astropy.table import Column
+from astropy.table import Column, MaskedColumn
 from astropy.table import Table
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
@@ -36,13 +36,14 @@ from datetime import datetime as dt
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
-                                  AB_OFFSET_DICT, get_weight_thresh)
+                                  AB_OFFSET_DICT, PRIME_FILTERS_DICT, get_weight_thresh)
 
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 # %%
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings(action="ignore", module="scipy", message="^One or more")
+warnings.filterwarnings(action="ignore", module="numpy", message="Warning: 'partition' will ignore the 'mask' of the MaskedColumn.")
 
 
 # Read LDAC tables
@@ -71,17 +72,17 @@ def get_table_from_ldac(filename, frame=1):
 
 
 def ab_convert(mag, band, survey=None, revert=False):
+    mag = np.asarray(mag)
     # jy zero points
     # from 2MASS
     offset_dict = AB_OFFSET_DICT
 
     if survey == '2MASS':
+        print(' 2MASS to AB')
         zp_dict = {'zp_J': 1594, 'zp_H': 1024}
         pick_zp = 'zp_' + band
 
-        for k, v in zp_dict.items():
-            if k == pick_zp:
-                zp = v
+        zp = zp_dict[pick_zp]
 
         flx = zp * 10 ** (-mag / 2.5)
         ab_mag = -2.5 * np.log10(flx / 3631)
@@ -92,26 +93,30 @@ def ab_convert(mag, band, survey=None, revert=False):
             return vega_mag
 
     elif 'UKIDSS' in survey:
+        print(' UKIDSS to AB')
         # for ukirt conversion: https://adsabs.harvard.edu/full/2006MNRAS.367..454H
-        for k, v in offset_dict['UKIDSS'].items():
-            if k == band:
-                offset = v
+
+        offset = offset_dict['UKIDSS'][band]
+
         ab_mag = mag+offset
         if revert:
             # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
             vega_mag = mag - offset
             return vega_mag
-    elif (survey == 'DES_Z' or survey == 'DES_Y' or survey == 'Skymapper' or survey == 'SDSS' or survey == 'PanSTARRS'
-          or survey == 'PanSTARRS_Z' or survey == 'PRIME'):
-        print('Survey %s is already reported in AB mag, no offset required.' % survey)
+
+    elif survey in (
+            "DES_Z", "DES_Y", "Skymapper", "SDSS",
+            "PanSTARRS", "PanSTARRS_Z", "PRIME"
+    ):
+        print(' Survey %s is already reported in AB mag, no offset required.' % survey)
         ab_mag = mag
 
     else:
         # for vista (AB-Vega offsets): https://www.aanda.org/articles/aa/full_html/2015/03/aa24973-14/T3.html
+        print(' VISTA to AB')
 
-        for k, v in offset_dict['VISTA'].items():
-            if k == band:
-                offset = v
+        offset = offset_dict['VISTA'][band]
+
         ab_mag = mag+offset
         if revert:
             # print('Temporarily reverting PRIME mags to Vega to compare to survey (for GRB or plotting)')
@@ -119,6 +124,100 @@ def ab_convert(mag, band, survey=None, revert=False):
             return vega_mag
 
     return ab_mag
+
+
+# efficiency calculation
+def gen_efficiency(imageName, PSFSources, band):
+    """
+    Calculates median efficiency for stacked image and adds to image header
+
+    Parameters
+    ----------
+    imageName: str
+        Filename of stacked image
+    PSFSources: str
+        Full PRIME source catalog for image
+    band: str
+        Filter of observation
+    """
+
+    coadd_hdr = fits.getheader(imageName)
+
+    conv_facs = [kword for kword in coadd_hdr if 'CONV_FAC_PSF' in kword or 'CONV_FAC_AUTO' in kword]
+
+    efficiencies = []
+
+    if conv_facs:
+        for conv_fac_name in conv_facs:
+
+            mag_type_name = conv_fac_name.replace('CONV_FAC_', '')
+
+            conv_fac = coadd_hdr[conv_fac_name] * (u.microjansky / u.adu)
+
+            # all variables
+            diam_tel = 1.8 * u.m
+            diam_obstruct = 0.8 * u.m
+            exp_time = 2.86 * u.s
+            gain = 1.8 * (u.electron / u.adu)
+            c = 3*10**8 * (u.m / u.s) # m/s
+            h = 6.626*10**-34 * (u.J * u.s)  # J*s
+            band_lambda = PRIME_FILTERS_DICT[band]['lambda'] * u.nm    # m
+            band_fwhm = PRIME_FILTERS_DICT[band]['fwhm'] * u.nm     # m
+            band_freq = (c / band_lambda).to(u.Hz)   # hz
+
+            # telescope area
+            a_tel = np.pi * (diam_tel / 2) ** 2 - np.pi * (diam_obstruct / 2) ** 2 # area of telescope, m^2
+
+            eta = (gain * h * band_lambda) / (conv_fac * exp_time * band_fwhm * a_tel)
+            eta = eta.decompose().value
+            # print('throughput = ',eta)
+
+            # fluxes
+            if 'PSF' in conv_fac_name:
+                mag_flxs = PSFSources['PSF_FLUX_DENSITY']          # flux calculated from mag col
+                meas_flxs = PSFSources['FLUX_POINTSOURCE']     # measured flux
+            else:
+                mag_flxs = PSFSources['AUTO_FLUX_DENSITY']          # flux calculated from mag col
+                meas_flxs = PSFSources['FLUX_AUTO']     # measured flux
+
+            si_mag_flxs = mag_flxs.to(u.W / (u.m**2 * u.Hz))
+
+            # bandwidth
+            # J_bandwidth = c / (J_lambda - 0.5 * J_fwhm) - c / (J_lambda + 0.5 * J_fwhm)     # hz
+            bandwidth = ((c * band_fwhm) / band_lambda ** 2).to(u.Hz)   # hz
+
+            # counts
+            J_n_photons = (si_mag_flxs * a_tel * bandwidth) / (h * band_freq)    # num of photons
+            # PSFSources['Photon Rate'] = J_n_photons.to(1 / u.s)
+
+            meas_flxs = meas_flxs * (u.adu / u.ct)
+            J_n_elec = meas_flxs * gain / exp_time
+            # PSFSources['Electron Rate'] = J_n_elec.to(u.electron / u.s)
+
+            efficiency = J_n_elec / J_n_photons
+            # PSFSources['Efficiency'] = efficiency.decompose().value
+
+            med_efficiency = round(np.nanmedian(efficiency.decompose().value), 5)
+            efficiencies.append(med_efficiency)
+
+            with fits.open(imageName, mode='update') as hdul:
+                hdr = hdul[0].header
+                hdr.set(f'EFF_{mag_type_name}', med_efficiency, 'e- rate / exp. photon rate',
+                             after=conv_fac_name)
+                hdul.close()
+
+            print(f'Med {mag_type_name} efficiency :', med_efficiency)
+        return efficiencies
+    else:
+        print('No applicable conversion factors found!  Cannot calculate efficiency!')
+
+
+# convert ab mag to microjansky
+def ab_to_microjy(m_ab):
+    """Convert AB magnitude(s) to microjanskys
+    """
+    f_microjy = (3631 * u.Jy * 10**(-0.4 * m_ab)).to(u.microjansky)
+    return f_microjy
 
 #%%
 # import img and get wcs
@@ -816,6 +915,10 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         magcolname = colnames[2]
         magerrcolname = colnames[3]
 
+    print('Converting Vega surveys to AB to ensure correctness!')
+    good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
+    ab_cat_stars = good_cat_stars
+
     # getting adjusted apertures
     apers_str = fits.getheader(imageName)['APERS']
     aper_arr = apers_str.split(',')
@@ -856,7 +959,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
             clipped = sigma_clip(offsets, sigma=sigma)
             offsets = offsets[~clipped.mask]
             weights = np.array(weights_noclip[~clipped.mask])
-            print('Zero point source offsets clipped by %s sigma, total clipped offset # = %s' % (sigma, len(offsets)))
+            print('\nZero point source offsets clipped by %s sigma, total clipped offset # = %s' % (sigma, len(offsets)))
 
             # Compute statistics
             # zero_psfmean = np.average(psfoffsets, weights=psfweights)
@@ -874,8 +977,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
             calmag = zero_mean + PSFSources[mag_col_name]
             calmagerr = np.sqrt(PSFSources[mag_err_col_name] ** 2 + zero_std ** 2)
 
-            print('Converting mags from Vega to AB for all sources! (if not already in AB)')
-            calmag = ab_convert(calmag, band=band, survey=survey)
+            # print('Converting mags from Vega to AB for all sources! (if not already in AB)')
+            # calmag = ab_convert(calmag, band=band, survey=survey)
 
             if 'POINTSOURCE' in mag_col_name:
                 zero_psfmean = zero_mean
@@ -891,6 +994,19 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                     autoweights_noclip = []
                     auto_clipped = []
 
+                tempmagcol = MaskedColumn(calmag, name=cal_mag_name, unit=u.ABmag)
+                psfflux = ab_to_microjy(tempmagcol)
+                psffluxcol = MaskedColumn(psfflux, name='PSF_FLUX_DENSITY', unit=u.microjansky)
+                PSFSources.add_column(psffluxcol)
+
+                # image / col data conversion to uJy
+                conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']  # u = uJy / adu
+                conv_factor = np.nanmedian(conv_factor_all)
+
+                fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
+                fluxerrujycol = MaskedColumn(fluxerr_ujy, name='E_PSF_FLUX_DENSITY', unit=u.microjansky)
+                PSFSources.add_column(fluxerrujycol)
+
                 with fits.open(imageName, mode='update') as hdul:
                     hdr = hdul[0].header
                     try:
@@ -898,7 +1014,12 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                     except KeyError:
                         hdr.set('ZP_PSF', zero_psfmean, 'PSF Zero Point Offset')
                     hdr.set('e_ZP_PSF', zero_psfstd, 'PSF Zero Point Offset Error', after='ZP_PSF')
+
+                    # hdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
+                    hdr.set('CONV_FAC_PSF', conv_factor, 'uJy / ADU PSF Conversion Factor, multiply img by this to get in uJy', after='EXTEND')
+                    print('Conversion of ADU to uJy calculated for PSF, med conversion factor: %.4f' % conv_factor)
                     hdul.close()
+
             else:
                 cal_mag_name = '%sMAG_AUTO' % band
                 cal_mag_err_name = 'e_%sMAG_AUTO' % band
@@ -906,6 +1027,19 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
                 autoweights_noclip = weights_noclip
                 auto_clipped = clipped
+
+                tempmagcol = MaskedColumn(calmag, name=cal_mag_name, unit=u.ABmag)
+                autoflux = ab_to_microjy(tempmagcol)
+                autofluxcol = MaskedColumn(autoflux, name='AUTO_FLUX_DENSITY', unit=u.microjansky)
+                PSFSources.add_column(autofluxcol)
+
+                # image / col data conversion to uJy
+                auto_conv_factor_all = autofluxcol / PSFSources['FLUX_AUTO']  # u = uJy / adu
+                auto_conv_factor = np.nanmedian(auto_conv_factor_all)
+
+                auto_fluxerr_ujy = PSFSources['FLUXERR_AUTO'] * auto_conv_factor
+                auto_fluxerrujycol = MaskedColumn(auto_fluxerr_ujy, name='E_AUTO_FLUX_DENSITY', unit=u.microjansky)
+                PSFSources.add_column(auto_fluxerrujycol)
 
                 with fits.open(imageName, mode='update') as hdul:
                     hdr = hdul[0].header
@@ -917,40 +1051,44 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                         except KeyError:
                             hdr.set('ZP_AUTO', zero_mean, 'Auto Aperture Zero Point Offset')
                     hdr.set('e_ZP_AUTO', zero_std, 'Auto Aperture Zero Point Offset Error', after='ZP_AUTO')
+
+                    # hdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
+                    hdr.set('CONV_FAC_AUTO', auto_conv_factor, 'uJy / ADU AUTO Conversion Factor, multiply img by this to get in uJy', after='EXTEND')
+                    print('Conversion of ADU to uJy calculated for AUTO, med conversion factor: %.4f' % auto_conv_factor)
                     hdul.close()
-
-            magcol = Column(calmag, name=cal_mag_name, unit=u.ABmag)
-            magerrcol = Column(calmagerr, name=cal_mag_err_name, unit=u.ABmag)
-
-            PSFSources.add_column(magcol)
-            PSFSources.add_column(magerrcol)
 
             # real unit flux conversion
 
-            if not 'FLUX_DENSITY' in PSFSources.colnames:
+            # if not 'FLUX_DENSITY' in PSFSources.colnames:
+            #
+            #     psfflux = magcol.to(u.microjansky)
+            #     psffluxcol = MaskedColumn(psfflux, name='PSF_FLUX_DENSITY', unit=u.microjansky)
+            #     PSFSources.add_column(psffluxcol)
+            #
+            #     # image / col data conversion to uJy
+            #     conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']  # u = uJy / adu
+            #     conv_factor = np.nanmedian(conv_factor_all)
+            #
+            #     fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
+            #     fluxerrujycol = MaskedColumn(fluxerr_ujy, name='E_PSF_FLUX_DENSITY', unit=u.microjansky)
+            #     PSFSources.add_column(fluxerrujycol)
+            #
+            #     with fits.open(imageName, mode='update') as imagehdu:
+            #         imagehdr = imagehdu[0].header
+            #         # if you replace the pix values, put the if statement back in
+            #         # imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
+            #         imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
+            #         imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor, multiply img by this to get in uJy', after='BUNIT')
+            #         print('Conversion of ADU to uJy calculated, med conversion factor: %.4f' % conv_factor)
+            #
+            #         # print('BUNIT found already in header, skipping conversion.')
+            #         imagehdu.close()
 
-                psfflux = magcol.to(u.microjansky)
-                psffluxcol = Column(psfflux, name='FLUX_DENSITY', unit=u.microjansky)
-                PSFSources.add_column(psffluxcol)
+            magcol = MaskedColumn(calmag, name=cal_mag_name, unit=u.ABmag)
+            magerrcol = MaskedColumn(calmagerr, name=cal_mag_err_name, unit=u.ABmag)
 
-                # image / col data conversion to uJy
-                conv_factor_all = psffluxcol / PSFSources['FLUX_POINTSOURCE']  # u = uJy / adu
-                conv_factor = np.nanmedian(conv_factor_all)
-
-                fluxerr_ujy = PSFSources['FLUXERR_POINTSOURCE'] * conv_factor
-                fluxerrujycol = Column(fluxerr_ujy, name='E_FLUX_DENSITY', unit=u.microjansky)
-                PSFSources.add_column(fluxerrujycol)
-
-                with fits.open(imageName, mode='update') as imagehdu:
-                    imagehdr = imagehdu[0].header
-                    # if you replace the pix values, put the if statement back in
-                    # imagehdu[0].data = imagehdu[0].data * conv_factor  # adu * (uJy / adu) = uJy
-                    imagehdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
-                    imagehdr.set('CONV_FAC', conv_factor, 'uJy / ADU Conversion Factor, multiply img by this to get in uJy', after='BUNIT')
-                    print('Conversion of ADU to uJy calculated, med conversion factor: %.4f' % conv_factor)
-
-                    # print('BUNIT found already in header, skipping conversion.')
-                    imagehdu.close()
+            PSFSources.add_column(magcol)
+            PSFSources.add_column(magerrcol)
 
         else:   # vector column MAG_APER zp calc
 
@@ -968,7 +1106,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
             zero_aperstds = []
             aper_clipped_all = []
 
-            print('Fixed aperture ZPs below:')
+            print('\nFixed aperture ZPs below:')
             for i in range(aperoffsets.shape[1]):
                 aperoffsets_i = aperoffsets[:, i]
                 aperweights_i = aperweights_noclip[:, i]
@@ -995,13 +1133,14 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
             apermags = []
             for i in range(cal_apermags.shape[1]):
-                apmag = ab_convert(cal_apermags[:, i], band=band, survey=survey)
+                # apmag = ab_convert(cal_apermags[:, i], band=band, survey=survey)
+                apmag = cal_apermags[:, i]
                 apermags.append(apmag)
 
             apermags = np.column_stack(apermags)
 
-            apermagcol = Column(apermags, name='%sMAG_APER' % band, unit=u.ABmag)
-            apermagerrcol = Column(apermagerrs, name='e_%sMAG_APER' % band, unit=u.ABmag)
+            apermagcol = MaskedColumn(apermags, name='%sMAG_APER' % band, unit=u.ABmag)
+            apermagerrcol = MaskedColumn(apermagerrs, name='e_%sMAG_APER' % band, unit=u.ABmag)
 
             PSFSources.add_column(apermagcol)
             PSFSources.add_column(apermagerrcol)
@@ -1010,7 +1149,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     # print('PSF Mean ZP: %.2f\nPSF Median ZP: %.2f\nPSF STD ZP: %.2f'%(zero_psfmean, zero_psfmed, zero_psfstd))
 
     # writing zp to header
-    print('Writing ZP info to image header...')
+    print('\nWriting ZP info to image header...')
     with fits.open(imageName, mode='update') as hdul:
         hdr = hdul[0].header
         hdr.set('N_CRSMCH', len(idx_psfimage), 'Number of Crossmatches', after='NINT')
@@ -1031,6 +1170,9 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
         PSFSources['FLUX_RADIUS_90'].unit = u.arcsec
         PSFSources['FLUX_RADIUS_90'].description = '90% flux radius'
     print('Total PRIME source # = ', len(PSFSources))
+
+    # efficiency calculation
+    gen_efficiency(imageName, PSFSources, band)
 
     # col descriptions
     PSFSources['%sMAG_PSF' % band].description = f'{band} band PSF model magnitude'
@@ -1060,9 +1202,9 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
     # catalog conversion to AB
 
-    print('Converting Vega surveys to AB to ensure correctness!')
-    good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
-    ab_cat_stars = good_cat_stars
+    # print('Converting Vega surveys to AB to ensure correctness!\n')
+    # good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
+    # ab_cat_stars = good_cat_stars
 
     return (cleanPSFSources, PSFSources, psfweights_noclip, psf_clipped, ab_cat_stars, aperweights_noclip, aper_clipped_all,
             autoweights_noclip, auto_clipped)
@@ -2079,6 +2221,88 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                   'alter sextractor params?' % (ra, dec))
 
 
+# WLS fit calculations
+
+def photometric_fit_calc(cleanPSFsources, band, good_cat_stars, idx_psfmass, idx_psfimage,
+                         psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all,
+                         autoweights_noclip, auto_clipped, with_plots=False):
+    """Calculates WLS fit lines used for determining the goodness of the photometry"""
+
+    # appropriate mag column
+    colnames = good_cat_stars.colnames
+    if len(colnames) > 4:
+        magcol = f'{band}MAG_PSF'
+        magerrcol = f'e_{band}MAG_PSF'
+    else:
+        magcol = colnames[2]
+        magerrcol = colnames[3]
+
+    # residual fits
+    x = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]
+    y = good_cat_stars['%s' % magcol][idx_psfmass]
+    x_const = sm.add_constant(x)
+    # model = sm.WLS(y, x, weights=psfweights).fit()
+    model2 = sm.WLS(y, x_const, weights=psfweights_noclip).fit()
+
+    avg2 = np.average(model2.resid, weights=psfweights_noclip)
+    var2 = np.average((model2.resid - avg2) ** 2, weights=psfweights_noclip)
+
+    # residual fit - 3 sigma clip
+    x_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    y_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
+    x_const_sig = sm.add_constant(x_sig)
+    model_sig = sm.WLS(y_sig, x_const_sig, weights=psfweights_noclip[~psf_clipped.mask]).fit()
+    m_sig = model_sig.params[1]
+    m_sigerr = model_sig.bse[1]
+    b_sig = model_sig.params[0]
+    b_sigerr = model_sig.bse[0]
+    model_sig_resid = model_sig.resid
+
+    print('# of crossmatched sources used in PSF %s sig fit: %i'
+          % (sigma, len(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask])))
+    print(' %s sig fit: slope = %.4f +/- %.4f' % (sigma, m_sig, m_sigerr))
+    print(' %s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_sig, b_sigerr))
+
+    # sigma residual fit for auto aperture photometry
+    x_auto = good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask]
+    y_auto = cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask]
+    x_const_auto = sm.add_constant(x_auto)
+    model_auto = sm.WLS(y_auto, x_const_auto, weights=autoweights_noclip[~auto_clipped.mask]).fit()
+    m_auto = model_auto.params[1]
+    m_autoerr = model_auto.bse[1]
+    b_auto = model_auto.params[0]
+    b_autoerr = model_auto.bse[0]
+    model_auto_resid = model_auto.resid
+
+    print('# of crossmatched sources used in auto aperture %s sig fit: %i'
+          % (sigma, len(cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask])))
+    print(' %s sig fit: slope = %.4f +/- %.4f' % (sigma, m_auto, m_autoerr))
+    print(' %s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_auto, b_autoerr))
+
+    aperweights_noclip = []
+    # sigma clipped resids for aper mags, disabled right now
+    if len(aperweights_noclip) > 0:
+        aperweights_noclip = aperweights_noclip.tolist()
+        aper_model_sigs= []
+        for idx, (aperweight_nc, aperclipped) in enumerate(zip(aperweights_noclip, aper_clipped_all)):
+            x_sig_ap = good_cat_stars['%s' % magcol][idx_psfmass][~aperclipped.mask]
+            y_sig_ap = cleanPSFsources['%sMAG_APER' % band][:,idx][idx_psfimage][~aperclipped.mask]
+            x_const_sig_ap = sm.add_constant(x_sig_ap)
+            model_sig_ap = sm.WLS(y_sig_ap, x_const_sig_ap, weights=aperweight_nc[~aperclipped.mask]).fit()
+            aper_model_sigs.append(model_sig_ap)
+
+    else:
+        aper_model_sigs = 0
+
+    if with_plots:
+        return model2, model_sig, model_sig_resid, model_auto, model_auto_resid, aper_model_sigs
+    else:
+        return m_sig, b_sig, round(3 * m_sigerr, 4)
+        # TODO to run calibration based on auto aperture photom, uncomment line below, comment above
+        # return m_auto, b_auto, round(3 * b_autoerr, 4)
+
+
+
 # %% optional plots
 
 def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band, good_cat_stars, idx_psfmass, idx_psfimage,
@@ -2101,10 +2325,6 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     apers_str = fits.getheader(imageName)['APERS']
     aper_arr = apers_str.split(',')
 
-    # survey AB conversion for plot correctness
-    # print('Converting Vega surveys to AB to ensure plot correctness!')
-    # good_cat_stars[magcol] = ab_convert(good_cat_stars[magcol], band=band, survey=survey)
-
     chip = imageName[-6]
     if len(imageName) <= 16:
         num = 'img'
@@ -2114,88 +2334,22 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     def predict_y_for(x, m, b):
         return m * x + b
 
-    plt.close('all')
-    # mag comparison plot
-    plt.figure(1, figsize=(8, 8))
-    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass],
-             'r.', markersize=14, markeredgecolor='black')
-    plt.xlim(10, 22)
-    plt.ylim(10, 22)
-    plt.title('PRIME Mags vs %s Mags' % survey)
-    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
-    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
-    plt.grid()
-    # plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
-    plt.clf()
-    # print('Saved mag comparison plot to dir!')
+    # PHOTOMETRIC FIT LINE MODELS
 
-    # PRIME flux vs catalog AB mag for crossmatches
-    x_flx_lin = cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask]
-    x_flx = np.log(x_flx_lin)
-    y_flx = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
-    x_const_flx = sm.add_constant(x_flx)
-    model_flx = sm.WLS(y_flx, x_const_flx, weights=psfweights_noclip[~psf_clipped.mask]).fit()
-    # print(model_flx.params)
-    m_flx = model_flx.params[1]
-    m_flxerr = model_flx.bse[1]
-    b_flx = model_flx.params[0]
-    b_flxerr = model_flx.bse[0]
+    model2, model_sig, model_sig_resid, model_auto, model_auto_resid, aper_model_sigs = (
+        photometric_fit_calc(cleanPSFsources, band, good_cat_stars, idx_psfmass, idx_psfimage,
+                         psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all,
+                         autoweights_noclip, auto_clipped, with_plots=True))
 
-    x_grid = np.linspace(x_flx_lin.min(), x_flx_lin.max(), 100)
-    log_x_grid = np.log(x_grid)
-    log_x_grid_const = sm.add_constant(log_x_grid)
-    y_pred = model_flx.predict(log_x_grid_const)
-
-    plt.figure(9, figsize=(8, 8))
-    plt.plot(cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask],
-             good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
-             'r.', markersize=14, markeredgecolor='black')
-    plt.plot(x_grid, y_pred, c='b')
-
-    flx_txt = ('slope = %.4f' % m_flx + '\nslope err = %.4f' % m_flxerr +
-           '\nint = %.4f' % b_flx + '\nint err = %.4f' % b_flxerr)
-
-    plt.xlim(10, 50000)
-    plt.ylim(12, 20.5)
-    plt.title('PRIME Flux Density vs %s AB mag - %s Sigma Clip' % (survey, sigma))
-    plt.xlabel(r'PRIME Flux Density ($\mu$Jy)', fontsize=15)
-    plt.ylabel('%s %s AB Mags' % (survey, band), fontsize=15)
-    plt.grid()
-    plt.xscale('log')
-    flx_box = dict(facecolor='white')
-    plt.text(1000, 19, flx_txt, fontsize=12, bbox=flx_box)
-    plt.savefig('%s_C%s_flux_mag_plot_sig_%s.png' % (survey, chip, num))
-    plt.clf()
-    print('Saved flux v. mag plot to dir!')
-
-    # residual fits
-    x = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage]
-    y = good_cat_stars['%s' % magcol][idx_psfmass]
-    x_const = sm.add_constant(x)
-    # model = sm.WLS(y, x, weights=psfweights).fit()
-    model2 = sm.WLS(y, x_const, weights=psfweights_noclip).fit()
-    # m = model.params[0]
-    # merr = model.bse[0]
     m2 = model2.params[1]
     m2err = model2.bse[1]
     b2 = model2.params[0]
     b2err = model2.bse[0]
-    # rsquare = model.rsquared
-    # rss = model.ssr
-    # res_err = np.std(model.resid)
     rsquare2 = model2.rsquared
     rss2 = model2.ssr
-
     avg2 = np.average(model2.resid, weights=psfweights_noclip)
-    var2 = np.average((model2.resid - avg2)**2, weights=psfweights_noclip)
-    res2_err = np.sqrt(var2)
-    # res2_err = np.std(model2.resid)
+    var2 = np.average((model2.resid - avg2) ** 2, weights=psfweights_noclip)
 
-    # residual fit - 3 sigma clip
-    x_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
-    y_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
-    x_const_sig = sm.add_constant(x_sig)
-    model_sig = sm.WLS(y_sig, x_const_sig, weights=psfweights_noclip[~psf_clipped.mask]).fit()
     m_sig = model_sig.params[1]
     m_sigerr = model_sig.bse[1]
     b_sig = model_sig.params[0]
@@ -2204,17 +2358,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     rss_sig = model_sig.ssr
     model_sig_resid = model_sig.resid
 
-    print('# of crossmatched sources used in PSF %s sig fit: %i'
-          % (sigma, len(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask])))
-    print(' %s sig fit: slope = %.4f +/- %.4f' % (sigma, m_sig, m_sigerr))
-    print(' %s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_sig, b_sigerr))
-
-    # sigma residual fit for auto aperture photometry
-    if len(autoweights_noclip) > 0:
-        x_auto = good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask]
-        y_auto = cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask]
-        x_const_auto = sm.add_constant(x_auto)
-        model_auto = sm.WLS(y_auto, x_const_auto, weights=autoweights_noclip[~auto_clipped.mask]).fit()
+    if model_auto:
         m_auto = model_auto.params[1]
         m_autoerr = model_auto.bse[1]
         b_auto = model_auto.params[0]
@@ -2223,94 +2367,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         rss_auto = model_auto.ssr
         model_auto_resid = model_auto.resid
 
-        print('# of crossmatched sources used in auto aperture %s sig fit: %i'
-              % (sigma, len(cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask])))
-        print(' %s sig fit: slope = %.4f +/- %.4f' % (sigma, m_auto, m_autoerr))
-        print(' %s sig fit: y-int = %.4f +/- %.4f' % (sigma, b_auto, b_autoerr))
-
-    # chosen population
-    # rserr = np.nanstd(model_auto_resid)
-    # print(rserr)
-    # rsmed = np.nanmedian(model_auto_resid)
-    # rspopidx = np.where(model_auto_resid < -1*rserr)
-    # rspopcrs = cleanPSFsources[idx_psfimage][~auto_clipped.mask][rspopidx]
-    # rspop = model_auto_resid[rspopidx]
-    # print(rspop)
-    # print(len(rspop))
-    #
-    # newtext = open(f'chosenpop_C{chip}.reg', 'w+')
-    # newtext.write('fk5')
-    # for a, d, rad in zip(rspopcrs['ALPHA_J2000'], rspopcrs['DELTA_J2000'],
-    #                 rspopcrs['FLUX_RADIUS']):
-    #     newtext.write(f'\ncircle({a}, {d}, {rad}") # color=red')
-    # print('Chosen pop source location reg file saved!')
-    #
-    # rspopcrs.write(f'chosenpop_C{chip}.ecsv', overwrite=True)
-
-
-
-    # sigma clipped resids for aper mags
-    if len(aperweights_noclip) > 0:
-        aperweights_noclip = aperweights_noclip.tolist()
-        aper_model_sigs= []
-        for idx, (aperweight_nc, aperclipped) in enumerate(zip(aperweights_noclip, aper_clipped_all)):
-            print(aperweight_nc)
-            print(aperclipped)
-            x_sig_ap = good_cat_stars['%s' % magcol][idx_psfmass][~aperclipped.mask]
-            y_sig_ap = cleanPSFsources['%sMAG_APER' % band][:,idx][idx_psfimage][~aperclipped.mask]
-            x_const_sig_ap = sm.add_constant(x_sig_ap)
-            model_sig_ap = sm.WLS(y_sig_ap, x_const_sig_ap, weights=aperweight_nc[~aperclipped.mask]).fit()
-            aper_model_sigs.append(model_sig_ap)
-            # m_sig_ap = model_sig_ap.params[1]
-            # m_sigerr_ap = model_sig_ap.bse[1]
-            # b_sig_ap = model_sig_ap.params[0]
-            # b_sigerr_ap = model_sig_ap.bse[0]
-            # rsquare_sig_ap = model_sig_ap.rsquared
-            # rss_sig_ap = model_sig_ap.ssr
-            # model_sig_resid_ap = model_sig_ap.resid
-
-    # sigma-clipped data
-    # x_sig = cleanPSFsources['%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
-    # y_sig = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
-    #
-    # # errors
-    # x_err = cleanPSFsources['e_%sMAG_PSF' % band][idx_psfimage][~psf_clipped.mask]
-    # y_err = good_cat_stars['%s' % magerrcol][idx_psfmass][~psf_clipped.mask]
-    #
-    # # define linear function for ODR
-    # def linear_func(B, x):
-    #     return B[0] * x + B[1]  # B[0]=slope, B[1]=intercept
-    #
-    # linear_model = odr.Model(linear_func)
-    #
-    # # create RealData object with x, y and their errors
-    # odr_data = odr.RealData(x_sig, y_sig, sx=x_err, sy=y_err)
-    #
-    # # set up ODR with initial guess [slope, intercept] = [1, 0]
-    # odr_obj = odr.ODR(odr_data, linear_model, beta0=[1.0, 0.0])
-    #
-    # # run ODR fit
-    # odr_out = odr_obj.run()
-    #
-    # m_sig, b_sig = odr_out.beta
-    # m_sigerr, b_sigerr = odr_out.sd_beta
-    #
-    # # residuals
-    # model_sig_resid = y_sig - (m_sig * x_sig + b_sig)
-    # model_sig_resid = np.array(model_sig_resid, dtype=float)
-    #
-    # # RSS (residual sum of squares)
-    # rss_sig = np.sum(model_sig_resid ** 2)
-    #
-    # # R squared
-    # y_mean = np.mean(y_sig)
-    # ss_tot = np.sum((y_sig - y_mean) ** 2)
-    # rsquare_sig = 1 - rss_sig / ss_tot
-    #
-    # print('# of crossmatched sources used in ODR fit:', len(x_sig))
-    # print('ODR fit: slope = %.4f +/- %.4f' % (m_sig, m_sigerr))
-    # print('ODR fit: y-int = %.4f +/- %.4f' % (b_sig, b_sigerr))
-
+    # BINNED RESIDUAL STATISTICS
     # residual fit 3 sig clip - bin errors and stats
     mags = range(10,22)
     res_errs = []
@@ -2345,7 +2402,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     res_errs_max = np.max(res_errs)
 
     # auto aperture residual fit 3 sig clip - bin errors and stats
-    if len(autoweights_noclip) > 0:
+    if model_auto:
         auto_res_errs = []
         auto_res_means = []
         auto_res_ranges = []
@@ -2443,6 +2500,62 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
             aper_res_nums_all.append(ap_res_nums)
             aper_res_max_min_all.append(ap_res_max_min)
 
+    # ALL PLOTS
+
+    plt.close('all')
+    # mag comparison plot
+    plt.figure(1, figsize=(8, 8))
+    plt.plot(cleanPSFsources['%sMAG_PSF' % band][idx_psfimage], good_cat_stars['%s' % magcol][idx_psfmass],
+             'r.', markersize=14, markeredgecolor='black')
+    plt.xlim(10, 22)
+    plt.ylim(10, 22)
+    plt.title('PRIME Mags vs %s Mags' % survey)
+    plt.xlabel('PRIME %s Mags' % band, fontsize=15)
+    plt.ylabel('%s %s Mags' % (survey, band), fontsize=15)
+    plt.grid()
+    # plt.savefig('%s_C%s_mag_comp_plot_%s.png' % (survey, chip, num))
+    plt.clf()
+    # print('Saved mag comparison plot to dir!')
+
+    # PRIME flux vs catalog AB mag for crossmatches
+    x_flx_lin = cleanPSFsources['PSF_FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask]
+    x_flx = np.log(x_flx_lin)
+    y_flx = good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask]
+    x_const_flx = sm.add_constant(x_flx)
+    model_flx = sm.WLS(y_flx, x_const_flx, weights=psfweights_noclip[~psf_clipped.mask]).fit()
+    # print(model_flx.params)
+    m_flx = model_flx.params[1]
+    m_flxerr = model_flx.bse[1]
+    b_flx = model_flx.params[0]
+    b_flxerr = model_flx.bse[0]
+
+    x_grid = np.linspace(x_flx_lin.min(), x_flx_lin.max(), 100)
+    log_x_grid = np.log(x_grid)
+    log_x_grid_const = sm.add_constant(log_x_grid)
+    y_pred = model_flx.predict(log_x_grid_const)
+
+    plt.figure(9, figsize=(8, 8))
+    plt.plot(cleanPSFsources['PSF_FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask],
+             good_cat_stars['%s' % magcol][idx_psfmass][~psf_clipped.mask],
+             'r.', markersize=14, markeredgecolor='black')
+    plt.plot(x_grid, y_pred, c='b')
+
+    flx_txt = ('slope = %.4f' % m_flx + '\nslope err = %.4f' % m_flxerr +
+           '\nint = %.4f' % b_flx + '\nint err = %.4f' % b_flxerr)
+
+    plt.xlim(10, 50000)
+    plt.ylim(12, 20.5)
+    plt.title('PRIME Flux Density vs %s AB mag - %s Sigma Clip' % (survey, sigma))
+    plt.xlabel(r'PRIME Flux Density ($\mu$Jy)', fontsize=15)
+    plt.ylabel('%s %s AB Mags' % (survey, band), fontsize=15)
+    plt.grid()
+    plt.xscale('log')
+    flx_box = dict(facecolor='white')
+    plt.text(1000, 19, flx_txt, fontsize=12, bbox=flx_box)
+    plt.savefig('%s_C%s_flux_mag_plot_sig_%s.png' % (survey, chip, num))
+    plt.clf()
+    print('Saved flux v. mag plot to dir!')
+
 
     # residual plot - y int forced to zero
     """
@@ -2520,7 +2633,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     elif len(idx_psfimage) <= 1000:
         bin_num_int = 50
 
-    alpha = 0.7 if len(autoweights_noclip) > 0 else None
+    alpha = 0.7 if model_auto else None
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 8), sharey=True)
     fig.subplots_adjust(wspace=0.12)
@@ -2551,7 +2664,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
             + '\nintercept = %.3f +/- %.3f' % (b_sig, b_sigerr)
             + '\nR$^{2}$ = %.3f' % rsquare_sig
             + '\nRSS = %d' % rss_sig
-            + '\nn_sources = %i' % len(cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask])
+            + '\nn_sources = %i' % len(cleanPSFsources['PSF_FLUX_DENSITY'][idx_psfimage][~psf_clipped.mask])
     )
 
     ax1.text(10.5, 0.5, infohist, fontsize=9,
@@ -2560,7 +2673,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     ax1.legend([psfsig], [psfsig.get_label()], loc='lower left', markerscale=0.5)
 
     # AUTO PANEL
-    if len(autoweights_noclip) > 0:
+    if model_auto:
 
         autohist = ax2.hist2d(
             x=good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask],y=model_auto_resid,
@@ -2590,7 +2703,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
                 + '\nintercept = %.3f +/- %.3f' % (b_auto, b_autoerr)
                 + '\nR$^{2}$ = %.3f' % rsquare_auto
                 + '\nRSS = %d' % rss_auto
-                + '\nn_sources = %i' % len(cleanPSFsources['FLUX_DENSITY'][idx_psfimage][~auto_clipped.mask])
+                + '\nn_sources = %i' % len(cleanPSFsources['AUTO_FLUX_DENSITY'][idx_psfimage][~auto_clipped.mask])
         )
 
         ax2.text(10.5, 0.5, infoauto, fontsize=9,
@@ -2723,7 +2836,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
              bbox=dict(facecolor='white', edgecolor='black'))
 
     # AUTO PANEL
-    if len(autoweights_noclip) > 0:
+    if model_auto:
         autohist = ax2.hist2d(
             x=good_cat_stars['%s' % magcol][idx_psfmass][~auto_clipped.mask],
             y=cleanPSFsources['%sMAG_AUTO' % band][idx_psfimage][~auto_clipped.mask],
@@ -2756,7 +2869,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # flux vs mag plot - histogram vers.
     plt.figure(10, figsize=(8, 8))
-    plt.hist2d(x=cleanPSFsources['FLUX_DENSITY'][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
+    plt.hist2d(x=cleanPSFsources['PSF_FLUX_DENSITY'][idx_psfimage], y=good_cat_stars['%s' % magcol][idx_psfmass],
               bins=[bin_num, bin_num], range=[[100, 50000],[12, 20.5]], cmap='gist_heat_r')
     plt.colorbar(label='Density')
     plt.xlim(10, 50000)
@@ -2814,7 +2927,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     psflimmag = plt.axvline(limmag, color='b', linewidth=2, label='PSF Limiting Mag = %s' % round(limmag, 1))
 
     autohalf = autolimmag = []
-    if len(autoweights_noclip) > 0:
+    if model_auto:
         psflimmag.set_color('maroon')
         psfhalf.set_color('maroon')
         auto_mags = PSFsources[PSFsources['%sMAG_AUTO' % band] < 25]
@@ -2847,6 +2960,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
     plt.clf()
 
     # Crossmatch location check plot
+    # if not os.path.isfile('%s_C%s_source_check_plot_%s.png' % (survey, chip, num)):
     mean, median, sigma_plot = sigma_clipped_stats(data)
 
     fig = plt.figure(figsize=(10, 10))
@@ -2897,15 +3011,15 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         hdr.set('PSF_fit_b', b_sig, 'WLS %s sig fit intercept' % sigma, after='e_PSF_fit_m')
         hdr.set('e_PSF_fit_b', b_sigerr, 'Error in WLS %s sig fit intercept' % sigma, after='PSF_fit_b')
         hdr.set('Lim_Mag', limmag, 'Source Histogram FWHM Limiting Mag', after='e_PSF_fit_b')
-        if len(autoweights_noclip) > 0:
+        if model_auto:
             hdr.set('auto_fit_m', m_auto, 'WLS %s sig fit slope' % sigma, after='e_PSF_fit_b')
             hdr.set('e_auto_fit_m', m_autoerr, 'Error in WLS %s sig fit slope' % sigma, after='auto_fit_m')
             hdr.set('auto_fit_b', b_auto, 'WLS %s sig fit intercept' % sigma, after='e_auto_fit_m')
             hdr.set('e_auto_fit_b', b_autoerr, 'Error in WLS %s sig fit intercept' % sigma, after='auto_fit_b')
         hdul.close()
 
-    return m_sig, b_sig, 0.1
-    # TODO to run calibration based on auto aperture photom, uncomment line below
+    return m_sig, b_sig, round(3 * m_sigerr, 4)
+    # TODO to run calibration based on auto aperture photom, uncomment line below, comment above
     # return m_auto, b_auto, round(3 * b_autoerr, 4)
 
 #%% automatic grb threshold calculation
@@ -2931,14 +3045,17 @@ def grb_rad_convert(rad):
 
 
 def int_calibration(
-        name, directory, band, chip, crop, sigma, given_catalog, survey,
+        name, directory, band, chip, crop, sigma, Q, chosen_survey, given_catalog, survey,
         mag_low_lim, mag_high_lim, grb_ra, grb_dec,
-        grb_coordlist, grb_radius, grb_name, max_int, comp_lvl
+        grb_coordlist, grb_radius, grb_name, max_int, comp_lvl, make_plots=False
 ):
     print('3 sigma fit y-intercept > %s! Redoing photometry w/ sigma = %s, mag low cutoff = %s\n' % (max_int, sigma, mag_low_lim))
     data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
-    Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
-                                             mag_upper_lim=mag_high_lim, bulge=bulge, no_check=True)
+    # Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
+    #                                          mag_upper_lim=mag_high_lim, bulge=bulge, no_check=True)
+    magcol = Q[0].colnames[2]
+    key0 = list(Q.keys())[0]
+    Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
 
     psfcatalogName = [f for f in os.listdir(directory) if f.endswith('.psf.cat') and 'C%i' % chip in f]
     psfcatalogName = ''.join(psfcatalogName)
@@ -2950,17 +3067,44 @@ def int_calibration(
     if grb_ra:
         if grb_radius > 60:
             newsourcesearch(grb_ra, grb_dec, grb_radius, directory, w, name, chosen_survey, band, ab_cat_stars,
-                            mag_low_lim=mag_low_cutoff, grbname=grb_name)
+                            mag_low_lim=mag_low_lim, grbname=grb_name)
             # GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory)
         else:
             GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
     elif grb_coordlist:
         GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
-    slope, intercept, int_err = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
-                                        idx_psfimage, psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all
-                                        , autoweights_noclip, auto_clipped)
 
-    return intercept, int_err
+    if make_plots:
+        slope, intercept, int_err = photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey, band, ab_cat_stars, idx_psfmass,
+                                            idx_psfimage, psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all
+                                            , autoweights_noclip, auto_clipped)
+        return intercept, int_err
+    else:
+        slope, intercept, int_err = photometric_fit_calc(cleanPSFSources, band, good_cat_stars, idx_psfmass,
+                                                         idx_psfimage,
+                                                         psfweights_noclip, psf_clipped, sigma, aperweights_noclip,
+                                                         aper_clipped_all,
+                                                         autoweights_noclip, auto_clipped)
+        plots_args_dict = dict(
+            cleanPSFsources=cleanPSFSources,
+            PSFsources=PSFsources,
+            data=data,
+            imageName=name,
+            survey=chosen_survey,
+            band=band,
+            good_cat_stars=good_cat_stars,
+            idx_psfmass=idx_psfmass,
+            idx_psfimage=idx_psfimage,
+            psfweights_noclip=psfweights_noclip,
+            psf_clipped=psf_clipped,
+            sigma=sigma,
+            aperweights_noclip=aperweights_noclip,
+            aper_clipped_all=aper_clipped_all,
+            autoweights_noclip=autoweights_noclip,
+            auto_clipped=auto_clipped
+        )
+
+        return intercept, int_err, plots_args_dict
 
 # %% optional removal of intermediate files
 
@@ -2983,7 +3127,7 @@ def photometry(
         full_filename=defaults['filepath'], band=defaults['band'], crop=defaults['crop'], sigma=defaults['sigma_photom'], given_catalog=defaults['catalog'], survey=defaults['survey'],
         mag_low_lim=defaults['mag_low'], mag_high_lim=defaults['mag_high'], no_plots=defaults['no_plots'],
         keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-        grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], int_cal=defaults['int_cal'], det_cut=defaults['det_cut']
+        grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'], det_cut=defaults['det_cut']
 ):
     start_time = dt.now()
 
@@ -2999,14 +3143,16 @@ def photometry(
     directory = directory + '/'
     name = os.path.basename(full_filename)
 
-    if grb_ra:
-        grb_thresh = grb_rad_convert(grb_radius)
-    else:
-        grb_thresh = grb_radius
+    if grb_ra or grb_dec or grb_radius != defaults['grb_radius']:
+        if not grb_dec or not grb_ra:
+            print('\n**WARNING: either -grb_ra or -grb_dec parameters are NOT recognized!**  '
+                      'Photometry will continue... but you must specify both to use w/ GRB functionality!\n')
+            if grb_only:
+                raise ValueError('\n**-grb_only flag used w/o correct parameters! Need -grb_ra and -grb_dec!**')
+
+    grb_thresh = grb_rad_convert(grb_radius)
 
     if grb_only:
-        if grb_dec is None:
-            sys.exit('Only GRB RA is found, GRB Dec is None!  Make sure the -grb_dec flag is correctly formatted!')
         os.chdir(directory)
         data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
@@ -3066,10 +3212,24 @@ def photometry(
                     GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
             elif grb_coordlist:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grb_coordlist, grbname=grb_name)
-            if not no_plots:
-                slope, intercept, int_err = photometry_plots(cleanPSFSources, PSFsources, data,  name, chosen_survey, band, ab_cat_stars, idx_psfmass,
-                                 idx_psfimage, psfweights_noclip, psf_clipped, sigma, aperweights_noclip, aper_clipped_all
-                                 , autoweights_noclip, auto_clipped)
+
+            if no_int_cal:
+                if no_plots:
+                    photometric_fit_calc(cleanPSFSources, band, good_cat_stars, idx_psfmass, idx_psfimage,
+                                             psfweights_noclip, psf_clipped, sigma, aperweights_noclip,
+                                             aper_clipped_all,
+                                             autoweights_noclip, auto_clipped)
+                else:
+                    photometry_plots(cleanPSFSources, PSFsources, data, name, chosen_survey,
+                                                                 band, ab_cat_stars, idx_psfmass,
+                                                                 idx_psfimage, psfweights_noclip, psf_clipped, sigma,
+                                                                 aperweights_noclip, aper_clipped_all
+                                                                 , autoweights_noclip, auto_clipped)
+            else:
+                slope, intercept, int_err = photometric_fit_calc(cleanPSFSources, band, good_cat_stars, idx_psfmass, idx_psfimage,
+                                             psfweights_noclip, psf_clipped, sigma, aperweights_noclip,
+                                             aper_clipped_all,
+                                             autoweights_noclip, auto_clipped)
                 if abs(intercept) >= 5:
                     print('Significant photometric intercept value!: %s' % intercept)
                     print('Photometric calibration likely unreliable! Is there an issue with the image, catalog, '
@@ -3084,17 +3244,22 @@ def photometry(
                         print('\nIntercept = %.4f\n' % intercept)
                         # sigma -= 0.5
                         mag_low_cutoff += 0.5
-                        new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
-                                                        mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist, grb_thresh, grb_name,
-                                                        max_int=int_err, comp_lvl=comp_lvl)
+                        new_intercept, new_int_err, plots_arg_dict = int_calibration(name, directory, band, chip, crop, sigma, Q,
+                                                                     chosen_survey, given_catalog, chosen_survey,
+                                                                     mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist,
+                                                                     grb_thresh, grb_name,max_int=int_err, comp_lvl=comp_lvl)
                         if abs(new_intercept) > abs(prev_intercept):
                             print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                   "redoing...\n" % (new_intercept, prev_intercept))
                             intercept = prev_intercept
                             mag_low_cutoff -= 0.5
-                            new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
-                                                            mag_low_cutoff, mag_high_lim, grb_ra,
-                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=int_err, comp_lvl=comp_lvl)
+                            new_intercept, new_int_err, _ = int_calibration(name, directory, band, chip, crop, sigma, Q,
+                                                                         chosen_survey, given_catalog,
+                                                                         chosen_survey,
+                                                                         mag_low_cutoff, mag_high_lim, grb_ra, grb_dec,
+                                                                         grb_coordlist,
+                                                                         grb_thresh, grb_name, max_int=int_err,
+                                                                         comp_lvl=comp_lvl)
                             revert_flag = True
                             break
                         else:
@@ -3109,6 +3274,7 @@ def photometry(
 
                     prev_intercept = intercept
                     revert_flag = False
+                    success_flag = False
                     leniency_val = 1.0 #1.1    # val above prev_intercept the new int. can be and still be accepted
 
                     while abs(intercept) > int_err and sigma > 1:  # ensure sigma doesn't go negative
@@ -3116,21 +3282,23 @@ def photometry(
                         print('\nIntercept = %.4f\n' % intercept)
                         step = 0.125 if sigma <= 1.5 else 0.5
                         sigma -= step
-                        new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog, chosen_survey,
-                                                        mag_low_cutoff, mag_high_lim, grb_ra, grb_dec, grb_coordlist,
-                                                        grb_thresh, grb_name,
-                                                        max_int=int_err, comp_lvl=comp_lvl)
+                        new_intercept, new_int_err, plots_arg_dict = int_calibration(name, directory, band, chip, crop, sigma, Q,
+                                                                     chosen_survey, given_catalog, chosen_survey,
+                                                                     mag_low_cutoff, mag_high_lim,  grb_ra, grb_dec, grb_coordlist,
+                                                                     grb_thresh, grb_name,max_int=int_err, comp_lvl=comp_lvl)
                         if abs(new_intercept) > abs(leniency_val*prev_intercept):
                             print("\nNew intercept: %.4f is higher than previous: %.4f! Reverting and "
                                   "redoing...\n" % (new_intercept, prev_intercept))
                             # revert
                             intercept = prev_intercept
                             sigma += step
-                            new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, given_catalog,
-                                                            chosen_survey,
-                                                            mag_low_cutoff, mag_high_lim, grb_ra,
-                                                            grb_dec, grb_coordlist, grb_thresh, grb_name, max_int=int_err,
-                                                            comp_lvl=comp_lvl)
+                            new_intercept, new_int_err = int_calibration(name, directory, band, chip, crop, sigma, Q,
+                                                                         chosen_survey, given_catalog,
+                                                                         chosen_survey,
+                                                                         mag_low_cutoff, mag_high_lim, grb_ra, grb_dec,
+                                                                         grb_coordlist,
+                                                                         grb_thresh, grb_name, max_int=int_err,
+                                                                         comp_lvl=comp_lvl, make_plots=True)
                             revert_flag = True
                             break
                         else:
@@ -3147,6 +3315,10 @@ def photometry(
                         print("Sigma loop stopped due to intercept reverting to the previous value: %.4f" % intercept)
                     else:
                         print(f"Final intercept after sigma tuning: %.4f" % intercept)
+                        success_flag = True
+                    if success_flag and not no_plots:
+                        print('\nSuccess! Re-running to generate plots...')
+                        photometry_plots(**plots_arg_dict)
 
             if not keep:
                 removal(directory)
@@ -3215,9 +3387,8 @@ def main():
     parser.add_argument('-grb_name', type=str,
                         help='[str] optional name for grb-related data products, default = "GRB"',
                         default=defaults["grb_name"])
-    parser.add_argument('-int_cal', action='store_true',
-                        help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
-                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
+    parser.add_argument('-no_int_cal', action='store_true',
+                        help='optional flag, use to STOP photometric fit intercept calibration, taking only the initial calc.',
                         default=defaults["int_cal"])
     parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
                                                      ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
@@ -3230,7 +3401,7 @@ def main():
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,
                args.mag_high, args.no_plots, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name,
-               args.int_cal, args.det_cut)
+               args.no_int_cal, args.det_cut)
 
 
 if __name__ == "__main__":

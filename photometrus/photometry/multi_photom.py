@@ -35,12 +35,12 @@ def fetchstacks(stackpath, chip=None):
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, grb_only, grb_name, int_cal, keep, det_cut):
+                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
-                           grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_only=grb_only, grb_name=grb_name, int_cal=int_cal,
+                           grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_only=grb_only, grb_name=grb_name, no_int_cal=no_int_cal,
                               keep=keep, det_cut=det_cut)
 
     if len(matchingstacks) == 4:
@@ -53,10 +53,10 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-                      grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], int_cal=defaults['int_cal'],
+                      grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'],
                       keep=defaults['keep'], det_cut=defaults['det_cut']):
     matchingstacks = fetchstacks(stackpath, chip)
-    multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, int_cal,
+    multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal,
                 keep, det_cut)
 
 
@@ -93,10 +93,9 @@ def main():
     parser.add_argument('-grb_only', action='store_true',
                         help='optional flag, use if running -grb again on already created catalog',
                         default=defaults['grb_only'])
-    parser.add_argument('-int_cal', action='store_true',
-                        help='optional flag, use to automatically improve 3 sigma fit y-int.  When y-int is >0.15, the '
-                             'low mag cutoff value is increased by 0.5, only stopping when y-int < 0.15.',
-                        default=defaults["int_cal"])
+    parser.add_argument('-no_int_cal', action='store_true',
+                        help='optional flag, use to STOP photometric fit intercept calibration, taking only the initial calc.',
+                        default=defaults["no_int_cal"])
     parser.add_argument('-keep', action='store_true',
                         help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
                              ' i.e. the ".cat" and ".psf" files', default=defaults['keep'])
@@ -105,9 +104,10 @@ def main():
                         default=defaults["det_cut"])
 
     args, unknown = parser.parse_known_args()
+    # print(args)
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
-                      args.grb_radius, args.grb_only, args.grb_name, args.int_cal, args.keep, args.det_cut)
+                      args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut)
 
 
 if __name__ == "__main__":
