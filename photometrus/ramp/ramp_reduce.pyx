@@ -1,8 +1,5 @@
 import os
-
 os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["OPENBLAS_NUM_THREADS"] = "1"
-os.environ["OMP_NUM_THREADS"] = "1"
 
 import time
 import numpy as np
@@ -16,8 +13,25 @@ cimport cython
 #from openmp cimport omp_get_max_threads
 @cython.boundscheck(False)
 @cython.wraparound(False)
+
 #@cython.nonecheck(False)
 #@cython.cdivision(True)
+
+cdef calc_cds(np.ndarray[np.float64_t, ndim=3] all_corr_data):
+    cdef:
+        int wz = <int>all_corr_data.shape[0]
+        int wy = <int>all_corr_data.shape[1]
+        int wx = <int>all_corr_data.shape[2]
+        int i, j, k
+        np.ndarray[np.float64_t, ndim=3] cds_list = np.empty((wz-1, wy, wx), dtype=np.float64)
+
+    with nogil:
+        for i in prange(wz-1, num_threads=8):
+            for j in range(4, wy-4):
+                for k in range(4, wx-4):
+                    cds_list[i, j, k] = all_corr_data[i+1, j, k] - all_corr_data[i, j, k]
+    return cds_list
+
 
 cdef void calc_ramp(
         np.ndarray[np.float64_t, ndim=2] ramp,
@@ -26,15 +40,16 @@ cdef void calc_ramp(
         np.ndarray[np.float64_t, ndim=2] sum_wy,
         np.ndarray[np.float64_t, ndim=2] sum_wxx,
         np.ndarray[np.float64_t, ndim=2] sum_wxy):
+   
     cdef:
-        int wy = <int> ramp.shape[0]
-        int wx = <int> ramp.shape[1]
+        int wy = <int>ramp.shape[0]
+        int wx = <int>ramp.shape[1]
         int i, j
         double deno
     with nogil:
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
-                deno = sum_w[i, j] * sum_wxx[i, j] - sum_wx[i, j] ** 2
+        for i in prange(4, wy-4, num_threads=8):
+            for j in range(4, wx-4):
+                deno = sum_w[i, j] * sum_wxx[i, j] - sum_wx[i, j]**2
                 if deno == 0.0:
                     ramp[i, j] = 65535.0
                 else:
@@ -53,13 +68,13 @@ cdef void calc_sum(
         double var_read,
         bint weight):
     cdef:
-        int wy = <int> sum_w.shape[0]
-        int wx = <int> sum_w.shape[1]
+        int wy = <int>sum_w.shape[0]
+        int wx = <int>sum_w.shape[1]
         int i, j
         double w, tx, cd
     with nogil:
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
+        for i in prange(4, wy-4, num_threads=8):
+            for j in range(4, wx-4):
                 tx = tmp_x[i, j]
                 cd = corr_data[i, j]
                 if weight:
@@ -70,8 +85,9 @@ cdef void calc_sum(
                 sum_w[i, j] += w
                 sum_wx[i, j] += w * tx
                 sum_wy[i, j] += w * cd
-                sum_wxx[i, j] += w * tx ** 2
+                sum_wxx[i, j] += w * tx**2
                 sum_wxy[i, j] += w * tx * cd
+
 
 cdef void subtract_dark(
         np.ndarray[np.float64_t, ndim=2] corr_data,
@@ -82,13 +98,13 @@ cdef void subtract_dark(
         np.ndarray[np.float64_t, ndim=2] total_dark,
         np.ndarray[np.uint8_t, ndim=2] mask):
     cdef:
-        int wy = <int> corr_data.shape[0]
-        int wx = <int> corr_data.shape[1]
+        int wy = <int>corr_data.shape[0]
+        int wx = <int>corr_data.shape[1]
         int i, j
         double deno
     with nogil:
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
+        for i in prange(4, wy-4, num_threads=8):
+            for j in range(4, wx-4):
                 deno = rpc[i, j] - tmp_rpc[i, j]
                 if deno != 0.0:
                     total_dark[i, j] += (Fdark[i, j] - tmp_Fdark[i, j]) / deno
@@ -96,24 +112,25 @@ cdef void subtract_dark(
                 tmp_Fdark[i, j] = Fdark[i, j]
                 corr_data[i, j] -= total_dark[i, j] * mask[i, j]
 
+
 def calc_darklim(
         np.ndarray[np.float64_t, ndim=3] coe_D,
         np.ndarray[np.float64_t, ndim=2] darklim,
         int wx=4096, int wy=4096):
     cdef:
-        int D_deg = <int> coe_D.shape[2]
+        int D_deg = <int>coe_D.shape[2]
         int i, j, k
         np.ndarray[np.float64_t, ndim=2] Adarklim = np.empty((wy, wx), dtype=np.float64)
         np.ndarray[np.float64_t, ndim=2] Fdarklim = np.empty((wy, wx), dtype=np.float64)
-        double dl, ad, fd, coe_di
+        double dl, fd, ad, coe_di
 
     with nogil:
-        for j in prange(4, wy - 4, num_threads=8):
-            for k in range(4, wx - 4):
+        for j in prange(4, wy-4, num_threads=8):
+            for k in range(4, wx-4):
                 dl = darklim[j, k]
                 fd = 0.0
                 ad = 0.0
-                for i in range(D_deg - 1, -1, -1):
+                for i in range(D_deg-1,-1,-1):
                     coe_di = coe_D[j, k, i]
                     ad = coe_di + ad * dl
                     fd = (fd + coe_di / (i + 1)) * dl
@@ -121,29 +138,30 @@ def calc_darklim(
                 Fdarklim[j, k] = fd
     return Adarklim, Fdarklim
 
-def do_nlc(
-        np.ndarray[np.float64_t, ndim=2] data,
-        np.ndarray[np.float64_t, ndim=3] coe_R,
-        np.ndarray[np.float64_t, ndim=3] coe_D,
-        np.ndarray[np.float64_t, ndim=2] darklim,
-        int wx=4096, int wy=4096):
+
+def do_nlc(np.ndarray[np.float64_t, ndim=2] data,
+           np.ndarray[np.float64_t, ndim=3] coe_R,
+           np.ndarray[np.float64_t, ndim=3] coe_D,
+           np.ndarray[np.float64_t, ndim=2] darklim,
+           int wx=4096, int wy=4096):
+
     cdef:
-        int R_deg = <int> coe_R.shape[2]
-        int D_deg = <int> coe_D.shape[2]
+        int R_deg = <int>coe_R.shape[2]
+        int D_deg = <int>coe_D.shape[2]
         int i, j, k
         np.ndarray[np.float64_t, ndim=2] Fdark = np.empty((wy, wx), dtype=np.float64)
         np.ndarray[np.float64_t, ndim=2] corr_data = np.empty((wy, wx), dtype=np.float64)
         double d, dl
         double cd, fd
     with nogil:
-        for j in prange(4, wy - 4, num_threads=8):
-            for k in range(4, wx - 4):
+        for j in prange(4, wy-4, num_threads=8):
+            for k in range(4, wx-4):
                 d = data[j, k]
                 dl = darklim[j, k]
                 cd = 0.0
                 fd = 0.0
                 if R_deg > D_deg:
-                    for i in range(R_deg - 1, -1, -1):
+                    for i in range(R_deg-1, -1, -1):
                         cd = (cd + coe_R[j, k, i]) * d
                         if i < D_deg:
                             if d > dl:
@@ -151,7 +169,7 @@ def do_nlc(
                             else:
                                 fd = (fd + coe_D[j, k, i] / (i + 1)) * d
                 else:
-                    for i in range(D_deg - 1, -1, -1):
+                    for i in range(D_deg-1,-1,-1):
                         if d > dl:
                             fd = (fd + coe_D[j, k, i] / (i + 1)) * dl
                         else:
@@ -160,61 +178,106 @@ def do_nlc(
                             cd = (cd + coe_R[j, k, i]) * d
                 corr_data[j, k] = cd
                 Fdark[j, k] = fd
-
+                
     return corr_data, Fdark
 
-def do_mask(
-        np.ndarray[np.float64_t, ndim=2] rpc,
-        np.ndarray[np.float64_t, ndim=2] satulim,
-        np.ndarray[np.uint8_t, ndim=2] mask,
-        np.ndarray[np.uint8_t, ndim=2] satu_mask):
+
+def do_nlc2(np.ndarray[np.float64_t, ndim=2] data,
+            np.ndarray[np.float64_t, ndim=3] coe_R,
+            np.ndarray[np.float64_t, ndim=3] coe_D,
+            np.ndarray[np.float64_t, ndim=2] darklim,
+            np.ndarray[np.float64_t, ndim=2] Adarklim,
+            np.ndarray[np.float64_t, ndim=2] Fdarklim,
+            int wx=4096, int wy=4096):
+
     cdef:
-        int wy = <int> rpc.shape[0]
-        int wx = <int> rpc.shape[1]
+        int R_deg = <int>coe_R.shape[2]
+        int D_deg = <int>coe_D.shape[2]
+        int i, j, k
+        np.ndarray[np.float64_t, ndim=2] Fdark = np.empty((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] corr_data = np.empty((wy, wx), dtype=np.float64)
+        double d, dl
+        double cd, fd
+    with nogil:
+        for j in prange(4, wy-4, num_threads=4):
+            for k in range(4, wx-4):
+                d = data[j, k]
+                dl = darklim[j, k]
+                cd = 0.0
+                fd = 0.0
+                if (R_deg < D_deg) and (d < dl):
+                    for i in range(D_deg-1,-1,-1):
+                            fd = (fd + coe_D[j, k, i] / (i + 1)) * d
+                            if i < R_deg:
+                                cd = (cd + coe_R[j, k, i]) * d
+                else:
+                    if d < dl:
+                        for i in range(R_deg-1,-1,-1):
+                            cd = (cd + coe_R[j, k, i]) * d
+                            if i < D_deg:
+                                fd = (fd + coe_D[j, k, i] / (i + 1)) * d
+                    else:
+                        fd = Fdarklim[j, k] + Adarklim[j, k] * (d - dl)
+                        for i in range(R_deg-1,-1,-1):
+                            cd = (cd + coe_R[j, k, i]) * d
+
+                corr_data[j, k] = cd
+                Fdark[j, k] = fd
+                
+    return corr_data, Fdark
+
+
+def do_mask(np.ndarray[np.float64_t, ndim=2] rpc,
+            np.ndarray[np.float64_t, ndim=2] satulim,
+            np.ndarray[np.uint8_t, ndim=2] mask,
+            np.ndarray[np.uint8_t, ndim=2] satu_mask):
+
+    cdef:
+        int wy = <int>rpc.shape[0]
+        int wx = <int>rpc.shape[1]
         int i, j, m
 
     with nogil:
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
+        for i in prange(4, wy-4, num_threads=4):
+            for j in range(4, wx-4):
                 if rpc[i, j] > satulim[i, j]:
                     satu_mask[i, j] = 0
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
-                m = mask[i, j] & satu_mask[i, j] & satu_mask[i - 1, j] & satu_mask[i + 1, j] & satu_mask[i, j - 1] & \
-                    satu_mask[i, j + 1]
+        for i in prange(4, wy-4, num_threads=4):
+            for j in range(4, wx-4):
+                m = mask[i, j] & satu_mask[i, j] & satu_mask[i-1, j] & satu_mask[i+1, j] & satu_mask[i, j-1] & satu_mask[i, j+1]
                 rpc[i, j] *= m
 
     return satu_mask, rpc
 
-cdef void make_mask(
-        np.ndarray[np.float64_t, ndim=2] rpc,
-        np.ndarray[np.float64_t, ndim=2] satulim,
-        np.ndarray[np.uint8_t, ndim=2] mask,
-        np.ndarray[np.uint8_t, ndim=2] satu_mask,
-        np.ndarray[np.uint8_t, ndim=2] master_mask,
-        np.ndarray[np.uint8_t, ndim=2] tmp_x):
+
+cdef void make_mask(np.ndarray[np.float64_t, ndim=2] rpc,
+                    np.ndarray[np.float64_t, ndim=2] satulim,
+                    np.ndarray[np.uint8_t, ndim=2] mask,
+                    np.ndarray[np.uint8_t, ndim=2] satu_mask,
+                    np.ndarray[np.uint8_t, ndim=2] master_mask,
+                    np.ndarray[np.uint8_t, ndim=2] tmp_x):
+
     cdef:
-        int wy = <int> rpc.shape[0]
-        int wx = <int> rpc.shape[1]
+        int wy = <int>rpc.shape[0]
+        int wx = <int>rpc.shape[1]
         int i, j, m
 
     with nogil:
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
+        for i in prange(4, wy-4, num_threads=4):
+            for j in range(4, wx-4):
                 if rpc[i, j] > satulim[i, j]:
                     satu_mask[i, j] = 0
-        for i in prange(4, wy - 4, num_threads=8):
-            for j in range(4, wx - 4):
-                m = satu_mask[i, j] & satu_mask[i - 1, j] & satu_mask[i + 1, j] & satu_mask[i, j - 1] & satu_mask[
-                    i, j + 1]
+        for i in prange(4, wy-4, num_threads=4):
+            for j in range(4, wx-4):
+                m = satu_mask[i, j] & satu_mask[i-1, j] & satu_mask[i+1, j] & satu_mask[i, j-1] & satu_mask[i, j+1]
                 master_mask[i, j] = m
                 rpc[i, j] *= m
                 tmp_x[i, j] += m
 
-def do_rpc(
-        np.ndarray[np.float64_t, ndim=2] data,
-        np.ndarray[np.float64_t, ndim=2] superbias,
-        int nframe, int wx=4096, int wy=4096, int rpc_width=128):
+
+def do_rpc(np.ndarray[np.float64_t, ndim=2] data,
+           np.ndarray[np.float64_t, ndim=2] superbias,
+           int nframe, int wx=4096, int wy=4096, int rpc_width=128):
     cdef:
         np.ndarray[np.float64_t, ndim=2] sub_data = np.empty((wy, wx), dtype=np.float64)
         int nout = wx // rpc_width
@@ -228,6 +291,7 @@ def do_rpc(
             sub_data[:, l:r] -= np.nanmedian([sub_data[4092:4096, l:r], sub_data[0:4, l:r]])
     return sub_data
 
+
 def do_ramp(list raw_paths,
             np.ndarray[np.float64_t, ndim=2] superbias,
             np.ndarray[np.float64_t, ndim=2] satulim,
@@ -235,6 +299,8 @@ def do_ramp(list raw_paths,
             np.ndarray[np.float64_t, ndim=3] coe_R_cube,
             np.ndarray[np.float64_t, ndim=3] coe_D_cube,
             np.ndarray[np.float64_t, ndim=2] darklim,
+            np.ndarray[np.float64_t, ndim=2] Adarklim,
+            np.ndarray[np.float64_t, ndim=2] Fdarklim,
             int hdu_idx,
             double gain_inv = 1.0 / 1.8, double var_read=25.0,
             int wx=4096, int wy=4096,
@@ -261,7 +327,7 @@ def do_ramp(list raw_paths,
     for raw_path in raw_paths:
         try:
             with fitsio.FITS(raw_path) as fits:
-                raw_data = fits[hdu_idx].read()[:, 6:4096 + 6].astype(np.float64)
+                raw_data = fits[hdu_idx].read()[:,6:4096+6].astype(np.float64)
                 tmp_header = fits[hdu_idx].read_header()
             #hdu = fits.open(raw_path)
         except FileNotFoundError:
@@ -275,11 +341,62 @@ def do_ramp(list raw_paths,
         #raw_data = hdu[hdu_idx].data[:,6:4096+6].astype(np.float64)
         rpc = do_rpc(raw_data, superbias, nframe)
         make_mask(rpc, satulim, mask, satu_mask, master_mask, tmp_x)
-        corr_data, Fdark = do_nlc(rpc, coe_R_cube, coe_D_cube, darklim)
+        corr_data, Fdark = do_nlc2(rpc, coe_R_cube, coe_D_cube, darklim, Adarklim, Fdarklim)
         #do_nlc_void(corr_data, Fdark, rpc, coe_R_cube, coe_D_cube, darklim, wx, wy)
 
         subtract_dark(corr_data, Fdark, tmp_Fdark, rpc, tmp_rpc, total_dark, master_mask)
         calc_sum(corr_data, tmp_x, sum_w, sum_wx, sum_wy, sum_wxx, sum_wxy, master_mask, gain_inv, var_read, weight)
     calc_ramp(ramp, sum_w, sum_wx, sum_wy, sum_wxx, sum_wxy)
-    print (f"end loop: {time.time() - ts}s")
+    print (f"end loop: {time.time()-ts}s")
     return header, ramp
+
+
+def make_CDS_list(list raw_paths,
+                  np.ndarray[np.float64_t, ndim=2] superbias,
+                  np.ndarray[np.float64_t, ndim=2] satulim,
+                  np.ndarray[np.uint8_t, ndim=2] mask,
+                  np.ndarray[np.float64_t, ndim=3] coe_R_cube,
+                  np.ndarray[np.float64_t, ndim=3] coe_D_cube,
+                  np.ndarray[np.float64_t, ndim=2] darklim,
+                  np.ndarray[np.float64_t, ndim=2] Adarklim,
+                  np.ndarray[np.float64_t, ndim=2] Fdarklim,
+                  int hdu_idx,
+                  double gain_inv = 1.0 / 1.8, double var_read=25.0,
+                  int wx=4096, int wy=4096):
+
+    cdef:
+        np.ndarray[np.float64_t, ndim=2] raw_data = np.empty((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] corr_data = np.empty((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] Fdark = np.empty((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] rpc = np.empty((wy, wx), dtype=np.float64)
+        np.ndarray[np.uint8_t, ndim=2] satu_mask = np.ones((wy, wx), dtype=np.uint8)
+        np.ndarray[np.uint8_t, ndim=2] master_mask = np.ones((wy, wx), dtype=np.uint8)
+        np.ndarray[np.float64_t, ndim=2] tmp_rpc = np.zeros((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] tmp_Fdark = np.zeros((wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=2] total_dark = np.zeros((wy, wx), dtype=np.float64)
+        np.ndarray[np.uint8_t, ndim=2] tmp_x = np.zeros((wy, wx), dtype=np.uint8)
+        int nframe
+        int nraw = len(raw_paths)
+        np.ndarray[np.float64_t, ndim=3] all_corr_data = np.empty((nraw, wy, wx), dtype=np.float64)
+        np.ndarray[np.float64_t, ndim=3] cds_list = np.empty((nraw-1, wy, wx), dtype=np.float64)
+
+    for raw_path in raw_paths:
+        try:
+            with fitsio.FITS(raw_path) as fits:
+                raw_data = fits[hdu_idx].read()[:,6:4096+6].astype(np.float64)
+                tmp_header = fits[hdu_idx].read_header()
+        except FileNotFoundError:
+            print (f"{raw_path} is not found")
+            break
+        nframe = int(tmp_header["FRAME"])
+        if nframe == 0:
+            header = tmp_header
+        rpc = do_rpc(raw_data, superbias, nframe)
+        make_mask(rpc, satulim, mask, satu_mask, master_mask, tmp_x)
+        corr_data, Fdark = do_nlc(rpc, coe_R_cube, coe_D_cube, darklim)
+
+        subtract_dark(corr_data, Fdark, tmp_Fdark, rpc, tmp_rpc, total_dark, master_mask)
+        all_corr_data[nframe, :, :] = corr_data
+    
+    return header, calc_cds(all_corr_data)
+
