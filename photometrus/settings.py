@@ -53,6 +53,25 @@ CHIP_ZPS = {'Z': [23.88], 'Y': [23.88], 'J': [23.88], 'H': [24.111]}
 
 WEIGHT_SIGMA_THRESHOLDS = {'C1': 2.0, 'C2': 2.0, 'C3': 2.0, 'C4': 1.0}
 
+PRIME_FILTERS_DICT = {
+    'Z': {
+        'lambda': 890,
+        'fwhm': 80
+    },
+    'Y': {
+        'lambda': 1022.5,
+        'fwhm': 105
+    },
+    'J': {
+        'lambda': 1250,
+        'fwhm': 160
+    },
+    'H': {
+        'lambda': 1635,
+        'fwhm': 290
+    }
+}
+
 GET_DATA_SETTINGS = dict(
     replace_list = [
         ('all sky grid', 'all_sky_grid'),

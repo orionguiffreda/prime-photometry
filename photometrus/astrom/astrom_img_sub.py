@@ -52,7 +52,6 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
     base_epoch_dir, base_epoch_name = os.path.split(base_epoch_path)
     os.chdir(base_epoch_dir)
     base_epoch_hdr = fits.getheader(base_epoch_path)
-    chip = base_epoch_hdr['CHIP']
     # if len(base_epoch_hdr['FILTER2']) > 1:
     #     band = 'Z'
     # else:
@@ -61,6 +60,10 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
     match_epoch_dir, match_epoch_name = os.path.split(matching_epoch_path)
     match_epoch_new_path = os.path.join(base_epoch_dir, match_epoch_name)
     shutil.copyfile(matching_epoch_path, match_epoch_new_path)
+    match_epoch_hdr = fits.getheader(match_epoch_new_path)
+
+    base_chip = base_epoch_hdr['CHIP']
+    match_chip = match_epoch_hdr['CHIP']
 
     # print(f'Running photometry on {base_epoch_path}')
     # photometry(full_filename=base_epoch_path, band=band)
@@ -79,11 +82,11 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
     # match_cat.write(match_cat_path, format='fits', overwrite=True)
 
     print(f'Sextracting base epoch: {base_epoch_name}...')
-    base_cat_path = swarp_sx(imgpath=base_epoch_path, chip=chip)
+    base_cat_path = swarp_sx(imgpath=base_epoch_path, chip=base_chip)
     print(f'Sextracting matching epoch: {match_epoch_name}...')
-    match_cat_path = swarp_sx(imgpath=match_epoch_new_path, chip=chip)
+    match_cat_path = swarp_sx(imgpath=match_epoch_new_path, chip=match_chip)
     multi_epoch_scamp(input_epoch_cat_path=match_cat_path, base_epoch_cat_path=base_cat_path)
-    swarp_missfits(imgpath=match_epoch_new_path, chip=chip)
+    swarp_missfits(imgpath=match_epoch_new_path, chip=match_chip)
 
 
 def main():

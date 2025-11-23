@@ -225,14 +225,17 @@ def superflatgen(date, band, chip=None):
 
     print('%s band mflats found: %s' % (band, matched_dates))
     all_matches = []
-    for date in matched_dates:
-        if chip:
-            mflat = gen_mflat_file_name(band, chip, date=date)
-            all_matches.append(mflat)
-        else:
-            for i in range(1,5):
-                mflat = gen_mflat_file_name(band, i, date=date)
+    try:
+        for date in matched_dates:
+            if chip:
+                mflat = gen_mflat_file_name(band, chip, date=date)
                 all_matches.append(mflat)
+            else:
+                for i in range(1,5):
+                    mflat = gen_mflat_file_name(band, i, date=date)
+                    all_matches.append(mflat)
+    except ValueError:
+        print('Cannot retrieve mflats, did you specify a band?')
 
     if chip:
         matches = [mf for mf in all_matches if '.C%s' % chip in mf]

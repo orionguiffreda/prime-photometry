@@ -909,11 +909,11 @@ def shift(
                                                               eff_boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
                                                               iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits,
                                                               catname=catname, bulge=bulge, adv=adv_solve)
-    except ValueError:
+    except ValueError as e:
         ultimate_shift_x = ultimate_shift_y = 0
-        print('Error in generating xy shifts, assuming 0')
+        print(f'Error in generating xy shifts, assuming 0, error: {e}')
     except Exception as e:
-        print(f'Error in final shift generation, assuming 0: {e}')
+        print(f'Error in final shift generation, assuming 0, error: {e}')
         ultimate_shift_x = ultimate_shift_y = 0
 
     if not test:
