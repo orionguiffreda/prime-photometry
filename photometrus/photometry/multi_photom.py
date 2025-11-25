@@ -35,13 +35,13 @@ def fetchstacks(stackpath, chip=None):
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut):
+                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut, no_plots):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
                            grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_only=grb_only, grb_name=grb_name, no_int_cal=no_int_cal,
-                              keep=keep, det_cut=det_cut)
+                              keep=keep, det_cut=det_cut, no_plots=no_plots)
 
     if len(matchingstacks) == 4:
         ellipticity_logger.logger(directory=stackpath)
@@ -54,10 +54,10 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
                       grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'],
-                      keep=defaults['keep'], det_cut=defaults['det_cut']):
+                      keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots']):
     matchingstacks = fetchstacks(stackpath, chip)
     multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal,
-                keep, det_cut)
+                keep, det_cut, no_plots)
 
 
 def main():
@@ -96,6 +96,9 @@ def main():
     parser.add_argument('-no_int_cal', action='store_true',
                         help='optional flag, use to STOP photometric fit intercept calibration, taking only the initial calc.',
                         default=defaults["no_int_cal"])
+    parser.add_argument('-no_plots', action='store_true',
+                        help='optional flag, stops creation of mag comparison plot betw. PRIME and survey, '
+                             'along with residual plot w/ statistics, lim mag plot', default=defaults['no_plots'])
     parser.add_argument('-keep', action='store_true',
                         help='optional flag, use if you DONT want to remove intermediate products after getting photom,'
                              ' i.e. the ".cat" and ".psf" files', default=defaults['keep'])
@@ -107,7 +110,7 @@ def main():
     # print(args)
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
-                      args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut)
+                      args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut, args.no_plots)
 
 
 if __name__ == "__main__":

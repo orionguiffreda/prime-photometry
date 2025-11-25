@@ -900,21 +900,30 @@ def shift(
                                                                  maglow=mag_low_cutoff, maghigh=mag_high_cutoff, adv=adv_solve)
     print('PRIME Source Num = ', len(inner_primesources))
     print('Catalog Source Num = ', len(inner_catsources))
-    first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
-    agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, length)
-    try:
-        xy_shifts = xyshifts(agreeing_pairs, inner_primesources, inner_catsources, iters)
 
-        ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, filter_used,
-                                                              eff_boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
-                                                              iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits,
-                                                              catname=catname, bulge=bulge, adv=adv_solve)
-    except ValueError as e:
+    source_num_ratio = (np.min([len(inner_primesources), len(inner_catsources)]) /
+                        np.max([len(inner_primesources), len(inner_catsources)]))
+    if abs(source_num_ratio) < 0.1:
+        print(f'\nLarge disparity in source number betw. PRIME & survey, min/max ratio: {round(source_num_ratio,3)}, '
+              f'\nShift very likely to be inaccurate, assuming 0 shifts & skipping this image...')
         ultimate_shift_x = ultimate_shift_y = 0
-        print(f'Error in generating xy shifts, assuming 0, error: {e}')
-    except Exception as e:
-        print(f'Error in final shift generation, assuming 0, error: {e}')
-        ultimate_shift_x = ultimate_shift_y = 0
+
+    else:
+        first_primecoords, first_catcoords = prep_tables(inner_primesources, inner_catsources, num)
+        agreeing_pairs, dists = find_agreeing_distances(first_primecoords, first_catcoords, length)
+        try:
+            xy_shifts = xyshifts(agreeing_pairs, inner_primesources, inner_catsources, iters)
+
+            ultimate_shift_x, ultimate_shift_y = iterate_and_test(xy_shifts, directory, header, data, imagename, filter_used,
+                                                                  eff_boxsize, crop, coords, catNum, magcol, thresh_low, thresh_high,
+                                                                  iters, maglow=mag_low_cutoff, maghigh=mag_high_cutoff, errbits=errbits,
+                                                                  catname=catname, bulge=bulge, adv=adv_solve)
+        except ValueError as e:
+            print(f'Error in generating xy shifts, assuming 0, error: {e}')
+            ultimate_shift_x = ultimate_shift_y = 0
+        except Exception as e:
+            print(f'Error in final shift generation, assuming 0, error: {e}')
+            ultimate_shift_x = ultimate_shift_y = 0
 
     if not test:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
@@ -923,6 +932,8 @@ def shift(
 
     end_time = dt.now()
     print('astrometric shift correction time:', (end_time - start_time).total_seconds())
+
+    return ultimate_shift_x, ultimate_shift_y
 
 
 def main():

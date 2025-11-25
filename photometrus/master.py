@@ -230,13 +230,25 @@ def shift(subpath, band, adv=False, old=False):
     all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     imgname = all_fits[0]
 
-    print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
-          (subpath, imgname, band))
-
     if old:
+        imgname = all_fits[0]
         astrom_shift.shift(directory=subpath, imagename=imgname, band=band)
     else:
-        astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
+        shift_x = shift_y = None
+        good_fits = None
+        for imgname in all_fits:
+            print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
+                  (subpath, imgname, band))
+            shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
+            if (shift_x != 0) or (shift_y != 0):
+                good_fits = fits
+                break
+
+        if good_fits is None:
+            print('No adequate fits image found in directory for astrom_shift!  Assuming no shift!')
+
+        return shift_x, shift_y
+
 
 
 # %% better astrometry
@@ -280,11 +292,13 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
     while True:
         # Initial shift attempt
         astrom_angle(astromdir, subdir, chip, chosen_rot_val)
-        try:
-            shift(astromdir, band)
-        except (IndexError, ValueError) as e:
-            print("Shift algorithm (initial) encountered an error: %s" % e)
+
+        shift_x, shift_y = shift(astromdir, band)
+        if shift_x == 0 and shift_y == 0:
+            print("Shift algorithm (initial) could not solve")
             print("Skipping to ROTOFF verification...")
+        else:
+            break
 
         # check if shift succeeded
         shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
