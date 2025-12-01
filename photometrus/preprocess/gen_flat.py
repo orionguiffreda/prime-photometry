@@ -1,26 +1,35 @@
 """
 Creates master flat
 """
-from photometrus.getfiles import (get_log_file, get_data_files)
-from photometrus.settings import gen_pipeline_file_name
-from photometrus.master import getchiplist
-
 from pandas import to_datetime
+from collections import Counter
 from astropy.io import fits
 import os
 import numpy as np
 import argparse
 import sys
 
+from photometrus.getfiles import (get_log_file, get_data_files)
+from photometrus.settings import gen_pipeline_file_name
+from photometrus.master import getchiplist
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
 #%% getting lists of flats for beginning and end of night
 
 
-def flatlistdownload(date, chip, band=None):
-    os.chdir(gen_pipeline_file_name())
+def initflatlist_check(date, band=None, flat_col=defaults['flat_col']):
+    """
+    Checks for any flats (all chips) taken in band (if applicable) during date, returns list of flat files
+    """
+
+    if flat_col != defaults['flat_col']:
+        flat_val = 'Flat'
+    else:
+        flat_val = 'FLAT'
 
     if not band:
         try:
-            flatlists, m_lists = get_data_files(date=date, objname='FLAT')
+            flatlists, m_lists = get_data_files(date=date, **{flat_col: flat_val})
             if any(lst for lst in m_lists):
                 print('Missing files!: ', m_lists)
         except FileNotFoundError:
@@ -28,7 +37,7 @@ def flatlistdownload(date, chip, band=None):
     else:
         if band == 'Z':
             try:
-                flatlists, m_lists = get_data_files(date=date, objname='FLAT', filter1=band,
+                flatlists, m_lists = get_data_files(date=date, **{flat_col: flat_val}, filter1=band,
                                                         filter2='Open')
                 if any(lst for lst in m_lists):
                     print('Missing files!: ', m_lists)
@@ -36,14 +45,26 @@ def flatlistdownload(date, chip, band=None):
                 print('Error fetching data!')
         else:
             try:
-                flatlists, m_lists = get_data_files(date=date, objname='FLAT', filter1='Open',
+                flatlists, m_lists = get_data_files(date=date, **{flat_col: flat_val}, filter1='Open',
                                                         filter2=band)
                 if any(lst for lst in m_lists):
                     print('Missing files!: ', m_lists)
             except FileNotFoundError:
                 print('Error fetching data!')
 
+    return flatlists
+
+
+def flatlistdownload(date, chip, band=None):
+    os.chdir(gen_pipeline_file_name())
+
+    flatlists = initflatlist_check(date, band)
     flatlist = getchiplist(flatlists, chip)
+
+    if not flatlist:
+        flatlists = initflatlist_check(date, band, flat_col='objtype')
+        flatlist = getchiplist(flatlists, chip)
+
     return flatlist
 
 
@@ -51,25 +72,6 @@ def flatlists(date, flatlist, chip):
     if flatlist is None:
         raise FileNotFoundError('No flat fields found in storage dir for date? Are you sure you have the right date? '
                                 'Or were there missing files in the flat generation?')
-
-    # redundancy check to confirm correct band (protection against 1st file being a diff filter)
-    hdulist = fits.open(flatlist[0])
-    if len(hdulist) > 1:
-        ext = 1
-    else:
-        ext = 0
-    firsthdr = fits.getheader(flatlist[0], ext=ext)
-    firstband = firsthdr['FILTER2']
-    sechdr = fits.getheader(flatlist[1], ext=ext)
-    secband = sechdr['FILTER2']
-
-    if firstband != secband:
-        print('First file is taken in different band! Going with 2nd file band... Recommend examining the log!')
-        flat_filter = secband
-        start_idx = 1
-    else:
-        flat_filter = firstband
-        start_idx = 0
 
     datetime = to_datetime(date)
     date = datetime.strftime('%Y-%m-%d')
@@ -93,6 +95,34 @@ def flatlists(date, flatlist, chip):
                        any(logfile in flatlistfile for logfile in log_start_names)]
     log_end_flats = [flatlistfile for flatlistfile in flatlist if
                      any(logfile in flatlistfile for logfile in log_end_names)]
+
+    # redundancy check to confirm correct band (protection against some files being named w/ diff band)
+    hdulist = fits.open(flatlist[0])
+    if len(hdulist) > 1:
+        ext = 1
+    else:
+        ext = 0
+
+    if log_start_flats:
+        flatpop = log_start_flats
+    else:
+        flatpop = log_end_flats
+
+    flatlistbands = []
+    for flt in flatpop:
+        hdr = fits.getheader(flt, ext=ext)
+        bnd = hdr['FILTER2']
+        flatlistbands.append(bnd)
+
+    all_same = len(set(flatlistbands)) == 1
+    if all_same:
+        flat_filter = fits.getheader(flatlist[0], ext=ext)
+        start_idx = 0
+    else:
+        majority_band = Counter(flatlistbands).most_common(1)[0][0]
+        start_idx = next((i for i in range(1, len(flatlistbands)) if flatlistbands[i] != flatlistbands[i - 1]), None)
+        print(f'Some starting files taken in diff band!, Majority band: {majority_band}, skipping bad indices...')
+        flat_filter = majority_band
 
     if log_start_flats:
         if log_end_flats:
