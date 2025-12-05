@@ -55,6 +55,14 @@ def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], ch
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
                       grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'],
                       keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots']):
+
+    cmd_str = f'\nEquivalent argparse cmd: photometrus photometry -stackpath {stackpath} -band {band} -chip {chip}'
+    if grb_ra:
+        grb_str = f' -grb_ra {grb_ra} -grb_dec {grb_dec}'
+    else:
+        grb_str = ''
+    print(cmd_str + grb_str)
+
     matchingstacks = fetchstacks(stackpath, chip)
     multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal,
                 keep, det_cut, no_plots)

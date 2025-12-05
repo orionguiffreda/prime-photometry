@@ -97,11 +97,11 @@ def flatlists(date, flatlist, chip):
                      any(logfile in flatlistfile for logfile in log_end_names)]
 
     # redundancy check to confirm correct band (protection against some files being named w/ diff band)
-    hdulist = fits.open(flatlist[0])
-    if len(hdulist) > 1:
-        ext = 1
+    flat_hdulist = fits.open(flatlist[0])
+    if len(flat_hdulist) > 1:
+        flat_ext = 1
     else:
-        ext = 0
+        flat_ext = 0
 
     if log_start_flats:
         flatpop = log_start_flats
@@ -110,13 +110,13 @@ def flatlists(date, flatlist, chip):
 
     flatlistbands = []
     for flt in flatpop:
-        hdr = fits.getheader(flt, ext=ext)
+        hdr = fits.getheader(flt, ext=flat_ext)
         bnd = hdr['FILTER2']
         flatlistbands.append(bnd)
 
     all_same = len(set(flatlistbands)) == 1
     if all_same:
-        flat_filter = fits.getheader(flatlist[0], ext=ext)
+        flat_filter = fits.getheader(flatlist[0], ext=flat_ext)
         start_idx = 0
     else:
         majority_band = Counter(flatlistbands).most_common(1)[0][0]

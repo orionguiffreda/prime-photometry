@@ -8,6 +8,8 @@ Settings for pipeline
 # %% Config File Names
 import os
 from pathlib import Path
+from astroquery.vizier import Vizier, Conf
+import warnings
 
 import pandas as pd
 from datetime import datetime
@@ -71,6 +73,16 @@ PRIME_FILTERS_DICT = {
         'fwhm': 290
     }
 }
+
+VIZIER_MIRRORS = [
+    "vizier.cds.unistra.fr",
+    "vizier.cfa.harvard.edu",
+    "vizier.idia.ac.za",
+    "vizier.nao.ac.jp",
+    "vizier.iucaa.in",
+    "vizier.inasan.ru",
+    "vizier.china-vo.org"
+]
 
 GET_DATA_SETTINGS = dict(
     replace_list = [
@@ -180,6 +192,9 @@ def update_settings(settings_file='photometrus.json5'):
     global PHOTOMETRY_LIM_MAGS
     global GB_QUERY_CATALOGS
     global CHIP_ZPS
+    global WEIGHT_SIGMA_THRESHOLDS
+    global PRIME_FILTERS_DICT
+    global VIZIER_MIRRORS
     global GET_DATA_SETTINGS
 
     PIPELINE_DEFAULT_DIR = settings['PIPELINE_DEFAULT_DIR']
@@ -192,6 +207,8 @@ def update_settings(settings_file='photometrus.json5'):
     GB_QUERY_CATALOGS = settings['GB_QUERY_CATALOGS']
     CHIP_ZPS = settings['CHIP_ZPS']
     WEIGHT_SIGMA_THRESHOLDS = settings['WEIGHT_SIGMA_THRESHOLDS']
+    PRIME_FILTERS_DICT = settings['PRIME_FILTERS_DICT']
+    VIZIER_MIRRORS = settings['VIZIER_MIRRORS']
     GET_DATA_SETTINGS = settings['GET_DATA_SETTINGS']
 
 
@@ -284,69 +301,36 @@ def gen_sflat_file_name(band, chip, date=None):
     print('Getting latest sflat: ', filename)
     return os.path.join(flat_dir, filename)
 
+
 def get_weight_thresh(chip):
     chosen_thresh = WEIGHT_SIGMA_THRESHOLDS['C%i' % chip]
     return chosen_thresh
 
-#%%
-"""
-# Settings for list of directory+filenames
-object = 'field4057'
-filter = 'H'
-chip = 4
 
+# vizier mirror automated check
+def set_vizier_mirror():
+    """
+    Checks vizier mirrors and auto picks working one, then updates astroquery's config.
+    """
 
-def flist(Object=object, Filter=filter, Chip=chip):
-    log = pd.read_csv('/mnt/d/PRIME_photometry_test_files/ramp_fit_log_2023-12-10.clean.dat',
-                      delimiter=' ')  # reads in csv
-    if Filter == 'Z':
-        fnames = log['filename'][
-            log['CHIP'] == Chip & log['OBJNAME'].str.contains(str(Object)) & ~log['OBJNAME'].str.contains('test') & log[
-                'FILTER1'].str.contains('Z')
-            & log['Open'].str.contains(str(Filter))]
-        fnames = fnames.tolist()
-        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
-        fullnames = [dir + x for x in sorted(fnames)]
+    mirrors = VIZIER_MIRRORS
+
+    test_cat = 'II/246/'
+
+    for url in mirrors:
+        old = Conf.server
+        try:
+            Conf.server = url
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                Vizier(columns=["*"], row_limit=1).query_constraints(catalog=test_cat)
+
+            print(f'Vizier mirror: {url}')
+            break
+
+        except Exception as e:
+            print(f' {url} mirror check failed: {e}')
+            Conf.server = old
     else:
-        # screening log w/ constraints
-        fnames = log['filename'][log['OBJNAME'].str.contains(str(Object)) & ~log['OBJNAME'].str.contains('test') & log[
-            'FILTER1'].str.contains('Open')
-                                 & log['FILTER2'].str.contains(str(Filter)) & log['OBSERVER'].str.contains('NASA')]
-        fnames = fnames.tolist()
-        # adding path
-        dir = ('/mnt/d/PRIME_photometry_test_files/C{}/'.format(Chip))
-        fullnames = [dir + x for x in sorted(fnames)]
-        # fullnames = fnames
-    fullnames = [f.replace('fits.ramp', 'ramp.fits') for f in fullnames]
-    fullnames = [f.replace('C1', 'C%s' % chip) for f in fullnames]
-    if not fullnames:
-        print('No files found for specified fields!')
-    return fullnames
-"""
-
-# a = flist()
-# %% make directories
-
-# directory creation
-
-
-
-
-
-# flat field directory creation, probably outdated
-
-"""
-def makedirsFF(basedir, chip):
-    # os.chdir(basedir)
-    FF = os.path.join(basedir, 'C%i_FF' % chip)
-    skyexists = os.path.exists(FF)
-    if not skyexists:
-        os.mkdir(FF)
-        print(FF)
-    if skyexists:
-        print(FF + ' already exists!')
-    # dirnames = os.listdir('.')
-    # FFdir = [i for i in dirnames if i.endswith(FF)]
-    # FFname = ' '.join(FFdir)
-    return FF
-"""
+        raise RuntimeError('No working Vizier mirror found!')

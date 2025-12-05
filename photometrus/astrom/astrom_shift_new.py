@@ -23,7 +23,7 @@ import math
 import sys
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS)
+                                  GB_QUERY_CATALOGS, set_vizier_mirror)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):
@@ -220,7 +220,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     # current columns
     v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%s1ap3' % band,
-                        '%smag' % band, "%smag3" % band, '%smag' % band.lower(),
+                        '%smag' % band, "%smag3" % band, "%smag1" % band, '%smag' % band.lower(),
                         '%sPSF' % band.lower(), '%spmag' % band.lower()])
                # column_filters={'%sap3' % band: not_null, '%smag' % band: not_null, "%smag3" % band: not_null
                #     ,'%smag' % band.lower(): not_null, '%sPSF' % band.lower(): not_null, '%spmag' % band.lower(): not_null
@@ -866,6 +866,8 @@ def shift(
         filter_used = band
 
     start_time = dt.now()
+
+    set_vizier_mirror()
 
     maglow = 12
     maghigh = 14

@@ -54,19 +54,25 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
         print('No Airmass value in sky header')
         airmass_sky = 0
     for f in image_fnames:
-        with fits.open(f) as hdul:
+        with fits.open(f, mode='update') as hdul:
             image = hdul[0].data
             header = hdul[0].header
             cropimage = image
-            # CRPIX1 = (header['CRPIX1'])  # changing ref pixels to work w/ cropped imgs (NOT NECESSARY IF NO ASTROM)
-            # CRPIX2 = (header['CRPIX2'])
-            # header.set('CRPIX1', value=CRPIX1 - 4)
-            # header.set('CRPIX2', value=CRPIX2 - 4)
+
+            try:
+                header.set('SKY_FILE', sky, 'Utilized sky file', after='TMPHD2T')
+            except KeyError:
+                header.set('SKY_FILE', sky, 'Utilized sky file')
+
+            header.set('SKY_FAC', np.nanmedian(cropimage), 'Sky scaling factor', after='SKY_FILE')
+
             try:
                 airmass_sci = header['AIRMASS']
             except KeyError:
                 print('No Airmass value in sci header')
                 airmass_sci = 0
+
+            hdul.close()
         reduced_image = (cropimage-cropsky*np.nanmedian(cropimage))
         # if not airmass_sky or not airmass_sci:
         #     print('Airmasses not found in either sci or sky, defaulting to normal scaling')
