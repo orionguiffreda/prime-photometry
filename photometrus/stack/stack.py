@@ -8,6 +8,8 @@ import argparse
 import subprocess
 import sys
 from astropy.io import fits
+import astropy.units as u
+from astropy.coordinates import SkyCoord
 import numpy as np
 import fnmatch
 
@@ -44,6 +46,48 @@ def badpixmask(parent, subpath, chip):
     return otherdir
 
 
+def astrom_check(imgdir):
+    """
+    Check to determine if all images are w/in the same area in the sky before attempting stacking.
+
+    Parameters
+    ----------
+    imgdir: str
+        Directory where input images are stored
+    """
+
+    image_fnames = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if
+                    f.endswith('.flat.fits') or f.endswith('.flat.new')]
+
+    image_hdrs = [fits.getheader(img) for img in image_fnames]
+
+    image_ras = [(float(hdr['CRVAL1'])) for hdr in image_hdrs]
+    image_decs = [(float(hdr['CRVAL2'])) for hdr in image_hdrs]
+    image_coords = SkyCoord(ra=image_ras, dec=image_decs, frame='icrs', unit='degree')
+
+    med_ra = np.nanmedian(image_ras)
+    med_dec = np.nanmedian(image_decs)
+    med_coords = SkyCoord(ra=med_ra, dec=med_dec, frame='icrs', unit='degree')
+
+    med_dith_rad = np.nanmedian([(float(hdr['DITHRAD'])) for hdr in image_hdrs])
+    acc_radius = (2 * med_dith_rad) * u.arcsec
+
+    seps = image_coords.separation(med_coords)
+
+    acc_mask = seps < acc_radius
+
+    if not acc_mask.all():
+        print(' Pre-stacking astrom check shows 1 or more images are *NOT* w/in acceptable area!')
+        bad_idxs = np.where(~acc_mask)[0]
+        bad_imgs = image_fnames[bad_idxs]
+        bad_img_names = [os.path.split(img)[1] for img in bad_imgs]
+        print(f' Recommend checking quality / astrometry on offending images: {bad_img_names}')
+        print(' Renaming offending images to avoid stacking issues...')
+        for img_name in bad_imgs:
+            os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
+
+
+
 def swarp(imgdir, finout):
     image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     image_fnames.sort()
@@ -78,7 +122,7 @@ def swarp(imgdir, finout):
     print('Co-added image created, all done!')
 
 
-def swarp_increm(imgdir, finout,im_num):
+def swarp_increm(imgdir, finout, im_num):
     batch_size = im_num
     files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
     total_files = len(files)
@@ -259,11 +303,14 @@ def astromfin(directory, chip):
 #%%
 
 
-def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False):
+def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False, mosaic=False):
     # if args.mask:
         # otherdir = badpixmask(args.parent,args.sub,args.chip)
         # print('removing temp dir...')
         # shutil.rmtree(otherdir)
+    if not mosaic:
+        astrom_check(subpath)
+
     if no_astrom:
         swarp(subpath, stackpath)
     elif astrom_only:
@@ -275,6 +322,9 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
         swarp_alt(subpath, stackpath)
         astromfin(stackpath, chip)
     else:
+        if not chip:
+            raise ValueError('Remember to specify chip number using default stacking behavior!  It is required for '
+                             'absolute astrometry check!')
         swarp(subpath, stackpath)
         astromfin(stackpath, chip)
 
@@ -289,6 +339,9 @@ def main():
                         help='optional flag, use if you want to generate a stacked img from increments of images, ex. 5 stack, then 10 stack, etc.')
     parser.add_argument('-alt', action='store_true',
                         help='create 2 stacked images from 1 set of data, alternating images used')
+    parser.add_argument('-mosaic', action='store_true',
+                        help='Use this flag if you are attempting to make a large mosaic, will disable the default '
+                             'image location screening')
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
     parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by')
@@ -296,7 +349,7 @@ def main():
     parser.add_argument('-chip', type=int, help='*USE ONLY W/O -no_astrom FLAG* [int] Detector chip number', default=None)
     args, unknown = parser.parse_known_args()
 
-    stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt)
+    stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt, args.mosaic)
 
 
 if __name__ == "__main__":

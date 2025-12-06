@@ -235,7 +235,7 @@ def superflatgen(date, band, chip=None):
                     mflat = gen_mflat_file_name(band, i, date=date)
                     all_matches.append(mflat)
     except ValueError:
-        print('Cannot retrieve mflats, did you specify a band?')
+        raise ValueError('Cannot retrieve mflats, did you specify a band?')
 
     if chip:
         matches = [mf for mf in all_matches if '.C%s' % chip in mf]

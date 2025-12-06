@@ -21,6 +21,7 @@ from astropy.stats import sigma_clip, sigma_clipped_stats
 from astropy.io import fits
 from astropy.io import ascii
 from astropy.nddata import Cutout2D
+from astropy.utils.data import Conf
 from bs4 import BeautifulSoup
 from regions import CircleSkyRegion
 import base64
@@ -36,7 +37,7 @@ from datetime import datetime as dt
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
-                                  AB_OFFSET_DICT, PRIME_FILTERS_DICT, get_weight_thresh)
+                                  AB_OFFSET_DICT, PRIME_FILTERS_DICT, get_weight_thresh, set_vizier_mirror)
 
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
@@ -48,8 +49,6 @@ warnings.filterwarnings(action="ignore", module="numpy", message="Warning: 'part
 magtype = defaults['magtype']
 
 # Read LDAC tables
-
-
 def get_table_from_ldac(filename, frame=1):
     """
     Load an astropy table from a fits_ldac by frame (Since the ldac format has column
@@ -70,8 +69,6 @@ def get_table_from_ldac(filename, frame=1):
     return tbl
 
 #%% vega to AB mag conversion
-
-
 def ab_convert(mag, band, survey=None, revert=False):
     mag = np.asarray(mag)
     # jy zero points
@@ -225,7 +222,9 @@ def ab_to_microjy(m_ab):
     """Convert AB magnitude(s) to microjanskys
     """
     m_ab = m_ab.value
-    f_microjy = (3631 * u.Jy * 10**(-0.4 * m_ab)).to(u.microjansky)
+    # f_microjy = (3631 * u.Jy * 10**(-0.4 * m_ab)).to(u.microjansky)
+    f_jy = (10 ** (23 - (m_ab + 48.6) / 2.5)) * u.jansky
+    f_microjy = f_jy.to(u.microjansky)
     return f_microjy
 
 #%%
@@ -3133,7 +3132,7 @@ def int_calibration(
                                             , autoweights_noclip, auto_clipped)
         return intercept, int_err
     else:
-        slope, intercept, int_err = photometric_fit_calc(cleanPSFSources, band, good_cat_stars, idx_psfmass,
+        slope, intercept, int_err = photometric_fit_calc(cleanPSFSources, band, ab_cat_stars, idx_psfmass,
                                                          idx_psfimage,
                                                          psfweights_noclip, psf_clipped, sigma, aperweights_noclip,
                                                          aper_clipped_all,
@@ -3145,7 +3144,7 @@ def int_calibration(
             imageName=name,
             survey=chosen_survey,
             band=band,
-            good_cat_stars=good_cat_stars,
+            good_cat_stars=ab_cat_stars,
             idx_psfmass=idx_psfmass,
             idx_psfimage=idx_psfimage,
             psfweights_noclip=psfweights_noclip,
@@ -3204,6 +3203,8 @@ def photometry(
     global magtype
 
     start_time = dt.now()
+
+    set_vizier_mirror()
 
     magtype = defaults['magtype']
 
@@ -3322,6 +3323,41 @@ def photometry(
                                              psfweights_noclip, psf_clipped, sigma, aperweights_noclip,
                                              aper_clipped_all,
                                              autoweights_noclip, auto_clipped)
+                grb_arg_dict = dict(
+                    ra=grb_ra,
+                    dec=grb_dec,
+                    imageName=name,
+                    survey=chosen_survey,
+                    band=band,
+                    thresh=grb_thresh,
+                    massCatCoords=massCatCoords,
+                    good_cat_stars=ab_cat_stars,
+                    directory=directory,
+                    chip=chip,
+                    coordlist=grb_coordlist,
+                    grbname=grb_name,
+                    mag_low_lim=PHOTOMETRY_MAG_LOWER_LIMIT
+                )
+
+                plots_arg_dict = dict(
+                    cleanPSFsources=cleanPSFSources,
+                    PSFsources=PSFsources,
+                    data=data,
+                    imageName=name,
+                    survey=chosen_survey,
+                    band=band,
+                    good_cat_stars=ab_cat_stars,
+                    idx_psfmass=idx_psfmass,
+                    idx_psfimage=idx_psfimage,
+                    psfweights_noclip=psfweights_noclip,
+                    psf_clipped=psf_clipped,
+                    sigma=sigma,
+                    aperweights_noclip=aperweights_noclip,
+                    aper_clipped_all=aper_clipped_all,
+                    autoweights_noclip=autoweights_noclip,
+                    auto_clipped=auto_clipped
+                )
+
                 if abs(intercept) >= 5:
                     print('Significant photometric intercept value!: %s' % intercept)
                     print('Photometric calibration likely unreliable! Is there an issue with the image, catalog, '
