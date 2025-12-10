@@ -227,10 +227,8 @@ def sexback(imgdir,outdir):
 #%%
 
 
-def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False, reverse=False, poly=False):
-    if no_flat:
-        subtract_sky_and_normalize(in_path,out_path,sky_path)
-    elif sex:
+def sky_sub(in_path, out_path, sky_path=None, sex=False, reverse=False, poly=False):
+    if sex:
         sexback(in_path, out_path)
     elif reverse:
         sky_add(sky_img_data_dir=out_path, sky_path=sky_path)
@@ -242,7 +240,6 @@ def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False, reverse=
 
 def main():
     parser = argparse.ArgumentParser(description='Crops and subtracts sky from files in dir, can also divide out flat')
-    parser.add_argument('-no_flat', action='store_true', help='put optional arg if you DIDNT flat field previously')
     parser.add_argument('-poly', action='store_true', help='optional arg to use polynomial model fitting to '
                                                            'generate the sky, then subtract it as normal')
     parser.add_argument('-reverse', action='store_true', help='optional arg to add sky BACK IN, to be used w/'
@@ -254,7 +251,7 @@ def main():
     parser.add_argument('-sky_path', type=str, help='[str] input sky image path (for sky sub')
     args, unknown = parser.parse_known_args()
 
-    sky_sub(args.in_path, args.out_path, args.sky_path, args.no_flat, args.sex, args.reverse, args.poly)
+    sky_sub(args.in_path, args.out_path, args.sky_path, args.sex, args.reverse, args.poly)
 
 
 if __name__ == "__main__":
