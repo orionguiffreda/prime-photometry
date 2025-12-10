@@ -56,7 +56,6 @@ for _k, _v in remote_file_formats.items():
 
 replace_list = GET_DATA_SETTINGS['replace_list']
 
-
 class NoCalError(Exception):
     pass
 
@@ -183,8 +182,16 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
     picks the appropriate calibration files based on the chip, temperature and date
     """
     chip = header['CHIP']
-    temperature = header['TEMPDET']
     date = to_datetime(header['DATE'])
+    try:
+        temperature = header['TEMPDET']
+    except KeyError:
+        try:
+            date_str = date.strftime('%Y%m%d')
+            temperature = GET_DATA_SETTINGS['date_temperature_dict'][date_str]
+        except KeyError:
+            print(GET_DATA_SETTINGS)
+            raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
     date = get_temperature_date(date, temperature)
     coe_R = f"coe_R/coe_R.C{chip}.fits.cube.{date}"
     coe_D = f"coe_D/coe_D.C{chip}.fits.cube.{date}"
@@ -200,7 +207,6 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
 
 def get_ramp_cal(header):
     cal_files = get_ramp_cal_files(header)
-    print(cal_files)
     superbias, satulim, coe_R, coe_D, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
     coe_R_tr = np.transpose(coe_R, (1, 2, 0)).copy(order='C')
     coe_D_tr = np.transpose(coe_D, (1, 2, 0)).copy(order='C')
@@ -252,12 +258,18 @@ def regen_ramp(file_number, nframe, camera):
         return 'does not exist'
     ext_dict = {'.fz': 1, '.fits': 0, '.ramp': 0}
     extension = ext_dict[os.path.splitext(raw_files[0])[1]]
+    output_file = os.path.join(output_dir, os.path.basename(raw_files[0]).replace('.fz', '').replace('.fits', '.ramp.fits'))
+    if os.path.isfile(output_file):
+        try:
+            fits.getdata(output_file)
+            return output_file
+        except OSError:
+            print('{} exists, but seems to be corrupted. Regenerating file...')
     try:
         superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
-    output_file = os.path.join(output_dir, os.path.basename(raw_files[0]).replace('.fz', '').replace('.fits', '.ramp.fits'))
     make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])
     return output_file
 
