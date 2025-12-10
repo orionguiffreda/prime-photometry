@@ -228,9 +228,13 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     try:
         result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs], frame=chosen_frame)
         test = result[0]
-    except IndexError:
-        print('Sadly, no current surveys available in current area in %s band' % band)
-        sys.exit('No surveys available.')
+    except IndexError as e:
+        # in case of strange failure in query, default to a 2mass query attempt
+        try:
+            result = v.query_region(coords, width=str(checkwidth) + 'm', catalog='II/246/',
+                                    frame=chosen_frame)
+        except IndexError as e:
+            raise Exception(f'Sadly, no current surveys available in current area in {band} band: {e}')
 
     keys = result.format_table_list()
 

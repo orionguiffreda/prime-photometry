@@ -80,15 +80,22 @@ def flatlists(date, flatlist, chip):
     log_start = log.iloc[:int(len(log)/2)]
     log_end = log.iloc[int(len(log)/2):]
 
+    if flatlist[0].endswith('.ramp.fits'):
+        orig_ext = 'fits.ramp'
+        new_ext = 'ramp.fits'
+    else:
+        orig_ext = ''
+        new_ext = ''
+
     log_start_orig_names = list(log_start['filename'][log_start['OBJNAME']=='FLAT'])
     log_start_names = []
     for file in log_start_orig_names:
-        new = file.replace('C1.', 'C%i.' % chip)
+        new = file.replace('C1.'+orig_ext, f'C{chip}.'+new_ext)
         log_start_names.append(new)
     log_end_orig_names = list(log_end['filename'][log_end['OBJNAME']=='FLAT'])
     log_end_names = []
     for file in log_end_orig_names:
-        new = file.replace('C1.', 'C%i.' % chip)
+        new = file.replace('C1.'+orig_ext, f'C{chip}.'+new_ext)
         log_end_names.append(new)
 
     log_start_flats = [flatlistfile for flatlistfile in flatlist if
@@ -116,7 +123,7 @@ def flatlists(date, flatlist, chip):
 
     all_same = len(set(flatlistbands)) == 1
     if all_same:
-        flat_filter = fits.getheader(flatlist[0], ext=flat_ext)
+        flat_filter = flatlistbands[0]
         start_idx = 0
     else:
         majority_band = Counter(flatlistbands).most_common(1)[0][0]
