@@ -178,15 +178,10 @@ def sky(astrompath, skypath, sigma, chip):
             pass
     if not filelist:
         print('generating sky...')
-        FFstring = '_FF'
-        if FFstring in astrompath:
-            no_flat = False
-        else:
-            no_flat = True
 
         print('\nEquivalent argparse cmd: photometrus process gensky -in_path %s -sky_path %s -sigma %s ' % (astrompath, skypath, sigma))
 
-        gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma, no_flat=no_flat)
+        gen_sky.sky_gen(in_path=astrompath, sky_path=skypath, sigma=sigma)
 
 
 # %% sky sub
@@ -203,22 +198,17 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
                     skyfile = file
                     skyfilepath = os.path.join(skypath, skyfile)
     print('cropping and subtracting sky...')
-    FFstring = '_FF'
-    if FFstring in astrompath:
-        no_flat = False
-    else:
-        no_flat = True
 
     if sex:
         print('\nEquivalent argparse cmd: photometrus process skysub -sex -in_path %s -out_path %s' %
               (astrompath, subpath))
 
-        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, no_flat=no_flat, sex=True)
+        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sex=True)
     else:
         print('\nEquivalent argparse cmd: photometrus process skysub -in_path %s -out_path %s -sky_path %s' %
               (astrompath, subpath, skyfilepath))
 
-        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath, no_flat=no_flat)
+        sky_sub.sky_sub(in_path=astrompath, out_path=subpath, sky_path=skyfilepath)
 
 
 # %% astrometry shift
