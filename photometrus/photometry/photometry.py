@@ -1040,7 +1040,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                     hdr.set('e_ZP_PSF', zero_psfstd, 'PSF Zero Point Offset Error', after='ZP_PSF')
 
                     # hdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
-                    hdr.set('CONV_FAC_PSF', conv_factor, 'uJy / ADU PSF Conversion Factor, multiply img by this to get in uJy', after='EXTEND')
+                    hdr.set('CONV_FAC_PSF', conv_factor, 'uJy / ADU PSF Conversion Factor, multiply img by this to get in uJy', before='EQUINOX')
                     print('Conversion of ADU to uJy calculated for PSF, med conversion factor: %.4f' % conv_factor)
                     hdul.close()
 
@@ -2945,12 +2945,15 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
             all_sources.append(number)
 
         # plotting
-        idxmax = all_sources.index(max(all_sources))
+        idx_arr = np.where(np.isclose(bin_vals, 12.5))
+        min_x_idx = idx_arr[0][0]   # avoid saturated <12.5 mag sources from affecting maximum
 
+        filtered_sources = all_sources[min_x_idx:]
+        idxmax = filtered_sources.index(max(filtered_sources)) + min_x_idx
         split_sources = all_sources[idxmax:]
 
-        halfmax = max(all_sources) / 2
-        halfmaxpt = list(min(enumerate(split_sources), key=lambda x: abs(halfmax - x[1])))
+        halfmax = max(filtered_sources) / 2
+        halfmaxpt = list(max(enumerate(split_sources), key=lambda x: -abs(halfmax - x[1])))
         halfmaxpt = [halfmaxpt[0] + idxmax, halfmaxpt[1]]
 
         limmag = round(bin_vals[halfmaxpt[0]], 1)

@@ -18,6 +18,8 @@ from datetime import datetime as dt
 import matplotlib.pyplot as plt
 import warnings
 
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 #%%
@@ -185,9 +187,74 @@ def gen_mean_flat_sky_image(science_data_directory,output_directory, sky_group_s
         [fits.PrimaryHDU(header=header, data=sky)]).writeto(os.path.join(output_directory, save_name), overwrite=True)
 
 
+def gen_poly_fit(sky_img_path, poly_deg=defaults['poly_deg']):
+    """
+    Generate polynomial sky image.
+
+    Parameters
+    ----------
+    imagedata: 2D numpy array
+        FITS image data to construct fit
+    poly_deg: int
+        Degree of polynomial for sky fit
+
+    Returns
+    ----------
+    model: 2D numpy array
+        Fitted polynomial data
+    coeffs: numpy array
+        Polynomial coeffs
+    """
+
+    try:
+        skydata = fits.getdata(sky_img_path)
+    except FileNotFoundError or IndexError:
+        raise Exception('Cannot get initial sky data for poly sky, is the path correct and or is the fits image intact?')
+    skyhdr = fits.getheader(sky_img_path)
+
+    imagedata_arr = skydata
+    ny, nx = imagedata_arr.shape
+
+    # make coord grids / flatten
+    x = np.arange(nx)
+    y = np.arange(ny)
+    X, Y = np.meshgrid(x, y)
+    x_flat = X.flatten()
+    y_flat = Y.flatten()
+    z_flat = imagedata_arr.flatten()
+
+    # matrix for poly fit
+    terms = []
+    for i in range(poly_deg + 1):
+        for j in range(poly_deg + 1 - i):
+            terms.append((x_flat ** i) * (y_flat ** j))
+
+    A = np.column_stack(terms)
+
+    # least squares fit
+    coeffs, resids, rank, s = np.linalg.lstsq(A, z_flat, rcond=None)
+
+    # gen fitted model
+    model_flat = A @ coeffs
+    model = model_flat.reshape(ny, nx)
+
+    print(f" Polynomial coefficients: {coeffs}")
+
+    # writing new sky image to sky path
+    sky_dir = os.path.split(sky_img_path)[0]
+    poly_sky_name = os.path.split(sky_img_path)[1].replace('sky.Open', 'poly.sky.Open')
+    poly_sky_path = os.path.join(sky_dir, poly_sky_name)
+    fits.HDUList(fits.PrimaryHDU(header=skyhdr, data=model)).writeto(poly_sky_path, overwrite=True)
+
+    return model, coeffs, poly_sky_path
+
+
 def checkplot(output_directory, save_name):
     print('Generating histogram check plot!\n')
-    skypath = os.path.join(output_directory, save_name)
+    if os.path.isfile(save_name):
+        skypath = save_name
+    else:
+        skypath = os.path.join(output_directory, save_name)
     skyimg = fits.getdata(skypath)
     flat_sky = skyimg.flatten()
 
@@ -199,9 +266,10 @@ def checkplot(output_directory, save_name):
     plt.savefig('%s.check_plot.png' % skypath, dpi=300)
 
 
-def sky_gen(in_path, sky_path, sigma, no_flat=False):
-    if no_flat:
-        gen_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,sigma=sigma)
+def sky_gen(in_path, sky_path, sigma, poly=False):
+    if poly:
+        model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_path, poly_deg=defaults['poly_deg'])
+        checkplot(output_directory=sky_path, save_name=poly_sky_path)
     else:
         save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
                                        sigma=sigma)
@@ -212,14 +280,15 @@ def sky_gen(in_path, sky_path, sigma, no_flat=False):
 
 def main():
     parser = argparse.ArgumentParser(description='Generates sky for given filter and dataset')
-    parser.add_argument('-no_flat',  action='store_true', help='if you had NOT flat-fielded, use this')
+    parser.add_argument('-poly', action='store_true', help='Optional arg, use to generate polynomial sky '
+                                                           'image from initial sky.')
     # parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
     parser.add_argument('-sky_path', type=str, help='[str] output sky path')
-    parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping',default=None)
+    parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping',default=defaults['sigma'])
     args, unknown = parser.parse_known_args()
 
-    sky_gen(args.in_path, args.sky_path, args.sigma, args.no_flat)
+    sky_gen(args.in_path, args.sky_path, args.sigma, args.poly)
 
 
 if __name__ == "__main__":

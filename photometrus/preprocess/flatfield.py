@@ -28,7 +28,10 @@ def flatfield(science_data, output_data_dir, flat):
                 os.system('funpack -F %s' % flatnewpath)
             else:
                 filename = imagepath[-20:]
-                flatnewname = filename.replace('.fits.ramp', '.flat.fits')
+                if filename.endswith('.ramp.fits'):
+                    flatnewname = filename.replace('.ramp.fits', '.flat.fits')
+                else:
+                    flatnewname = filename.replace('.fits.ramp', '.flat.fits')
                 flatnewpath = os.path.join(output_data_dir, flatnewname)
                 shutil.copyfile(imagepath, flatnewpath)
 

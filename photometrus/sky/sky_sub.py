@@ -11,6 +11,8 @@ import sys
 
 from photometrus.settings import gen_config_file_name
 from photometrus.sky.gen_sky import checkplot
+from photometrus.sky.gen_sky import gen_poly_fit
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
 
@@ -86,7 +88,91 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
         fits.HDUList(fits.PrimaryHDU(header=header, data=reduced_image)).writeto(output_fname, overwrite=True)
     print('Sky sub on FF imgs completed!')
 
-#%%
+
+def sky_add(sky_img_data_dir, sky_path):
+    """
+    Reverse sky subtraction, looks at image header keywords and adds scaled skies back in. To be used w/ poly sky gen.
+
+    Parameters
+    ----------
+    sky_img_data_dir: str
+        Directory of sky subbed images
+    sky_path: str
+        Full filepath to sky image
+    """
+
+    image_fnames = [os.path.join(sky_img_data_dir, f) for f in os.listdir(sky_img_data_dir) if f.endswith('.sky.flat.fits')]
+    image_fnames.sort()
+    try:
+        test = fits.getdata(image_fnames[0])
+    except FileNotFoundError or IndexError:
+        raise Exception('Cannot get image data?  Is path correct and or is fits image intact?')
+
+    for f in image_fnames:
+        with fits.open(f) as hdul:
+            image = hdul[0].data
+            header = hdul[0].header
+
+            try:
+                skydata = fits.getdata(header['SKY_FILE'])
+            except FileNotFoundError:
+                try:
+                    skydata = fits.getdata(sky_path)
+                except FileNotFoundError or IndexError:
+                    raise Exception('Cannot get sky image data?  Is path correct and or is fits image intact?')
+
+            skyfac = header['SKY_FAC']
+
+            hdul.close()
+
+        sky_added_image = (image + skydata*skyfac)
+
+        fits.HDUList(fits.PrimaryHDU(header=header, data=sky_added_image)).writeto(f, overwrite=True)
+    print('Initial sky sub reversed!')
+
+
+def sub_poly_sky(input_sub_dir, sky_img_path, poly_deg=defaults['poly_deg']):
+    """
+    Generate polynomial sky image, subtract from appropriate fits images in directory.
+
+    Parameters
+    ----------
+    input_sub_dir: str
+        Directory of images to sky subtract
+    sky_img_path: str
+        Full file path to initial sky image
+    poly_deg: int
+        Degree of polynomial for sky fit
+    """
+
+    image_fnames = [os.path.join(input_sub_dir, f) for f in os.listdir(input_sub_dir) if
+                    f.endswith('.flat.fits')]
+    print(os.listdir(input_sub_dir))
+    try:
+        test = fits.getdata(image_fnames[0])
+    except FileNotFoundError or IndexError:
+        raise Exception('Cannot get image data for poly sky, is the path correct and or is the fits image intact?')
+
+    # generate polynomial model
+    print('Generating polynomial sky model!')
+    model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_img_path, poly_deg=poly_deg)
+
+    # subtract model from all images
+    for img in image_fnames:
+        with fits.open(img, mode='update') as hdul:
+            data = hdul[0].data
+            hdr = hdul[0].header
+
+        subtr_data = data - model
+
+        try:
+            hdr.set('POLY_SKY_FILE', poly_sky_path, 'Utilized poly sky file', after='TMPHD2T')
+        except KeyError:
+            hdr.set('POLY_SKY_FILE', poly_sky_path, 'Utilized poly sky file')
+
+        fits.HDUList(fits.PrimaryHDU(header=hdr, data=subtr_data)).writeto(img, overwrite=True)
+
+    print('Polynomial sky sub complete!')
 
 
 def sexback(imgdir,outdir):
@@ -141,11 +227,15 @@ def sexback(imgdir,outdir):
 #%%
 
 
-def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False):
+def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False, reverse=False, poly=False):
     if no_flat:
         subtract_sky_and_normalize(in_path,out_path,sky_path)
     elif sex:
         sexback(in_path, out_path)
+    elif reverse:
+        sky_add(sky_img_data_dir=out_path, sky_path=sky_path)
+    elif poly:
+        sub_poly_sky(input_sub_dir=in_path, sky_img_path=sky_path)
     else:
         sky_flat_and_normalize(in_path, out_path, sky_path)
 
@@ -153,6 +243,10 @@ def sky_sub(in_path, out_path, sky_path=None, no_flat=False, sex=False):
 def main():
     parser = argparse.ArgumentParser(description='Crops and subtracts sky from files in dir, can also divide out flat')
     parser.add_argument('-no_flat', action='store_true', help='put optional arg if you DIDNT flat field previously')
+    parser.add_argument('-poly', action='store_true', help='optional arg to use polynomial model fitting to '
+                                                           'generate the sky, then subtract it as normal')
+    parser.add_argument('-reverse', action='store_true', help='optional arg to add sky BACK IN, to be used w/'
+                                                              'poly sky gen.')
     parser.add_argument('-sex', action='store_true', help='optional arg to use sxtrctr background sub instead, '
                                                           'outputs .cats and sky subbed imgs')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
@@ -160,7 +254,7 @@ def main():
     parser.add_argument('-sky_path', type=str, help='[str] input sky image path (for sky sub')
     args, unknown = parser.parse_known_args()
 
-    sky_sub(args.in_path, args.out_path, args.sky_path, args.no_flat, args.sex)
+    sky_sub(args.in_path, args.out_path, args.sky_path, args.no_flat, args.sex, args.reverse, args.poly)
 
 
 if __name__ == "__main__":
