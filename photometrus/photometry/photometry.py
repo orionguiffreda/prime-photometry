@@ -944,9 +944,12 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     ab_cat_stars = good_cat_stars
 
     # getting adjusted apertures
-    apers_str = fits.getheader(imageName)['APERS']
-    aper_arr = apers_str.split(',')
-    aper_arr = [float(ap) for ap in aper_arr]
+    try:
+        apers_str = fits.getheader(imageName)['APERS']
+        aper_arr = apers_str.split(',')
+        aper_arr = [float(ap) for ap in aper_arr]
+    except KeyError:
+        apers_str = aper_arr = 0
 
     # calculating zp for all appropriate mag columns
 
@@ -956,9 +959,9 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     if 'MAG_POINTSOURCE' in PSFSources.colnames:
         prime_psf_mags.append(cleanPSFSources['MAG_POINTSOURCE'][idx_psfimage])
         primeerr.append(cleanPSFSources['MAGERR_POINTSOURCE'][idx_psfimage])
-    if 'MAG_APER' in PSFSources.colnames:
-        prime_psf_mags.append(cleanPSFSources['MAG_APER'][idx_psfimage])
-        primeerr.append(cleanPSFSources['MAGERR_APER'][idx_psfimage])
+    # if 'MAG_APER' in PSFSources.colnames:
+    #     prime_psf_mags.append(cleanPSFSources['MAG_APER'][idx_psfimage])
+    #     primeerr.append(cleanPSFSources['MAGERR_APER'][idx_psfimage])
 
     cat_mags = good_cat_stars[magcolname][idx_psfmass]
     caterr = good_cat_stars[magerrcolname][idx_psfmass]
@@ -2369,8 +2372,9 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
         magerrcol = colnames[3]
 
     # aperture sizes
-    apers_str = fits.getheader(imageName)['APERS']
-    aper_arr = apers_str.split(',')
+    if len(aperweights_noclip) > 0:
+        apers_str = fits.getheader(imageName)['APERS']
+        aper_arr = apers_str.split(',')
 
     chip = imageName[-6]
     if len(imageName) <= 16:
