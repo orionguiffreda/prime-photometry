@@ -57,14 +57,14 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
         airmass_sky = 0
     for f in image_fnames:
         with fits.open(f, mode='update') as hdul:
-            image = hdul[0].data
-            header = hdul[0].header
+            image = hdul[0].data.copy()
+            header = hdul[0].header.copy()
             cropimage = image
 
             try:
-                header.set('SKY_FILE', sky, 'Utilized sky file', after='TMPHD2T')
+                header.set('SKY_FILE', os.path.split(sky)[1], 'Utilized sky file', after='TMPHD2T')
             except KeyError:
-                header.set('SKY_FILE', sky, 'Utilized sky file')
+                header.set('SKY_FILE', os.path.split(sky)[1], 'Utilized sky file')
 
             header.set('SKY_FAC', np.nanmedian(cropimage), 'Sky scaling factor', after='SKY_FILE')
 
@@ -131,7 +131,7 @@ def sky_add(sky_img_data_dir, sky_path):
     print('Initial sky sub reversed!')
 
 
-def sub_poly_sky(input_sub_dir, sky_img_path, poly_deg=defaults['poly_deg']):
+def sub_poly_sky(input_sub_dir, output_sub_dir, sky_img_path):
     """
     Generate polynomial sky image, subtract from appropriate fits images in directory.
 
@@ -139,38 +139,45 @@ def sub_poly_sky(input_sub_dir, sky_img_path, poly_deg=defaults['poly_deg']):
     ----------
     input_sub_dir: str
         Directory of images to sky subtract
+    output_sub_dir: str
+        Directory to place poly sky-subbed images
     sky_img_path: str
-        Full file path to initial sky image
-    poly_deg: int
-        Degree of polynomial for sky fit
+        Full file path to polynomial sky image
     """
 
-    image_fnames = [os.path.join(input_sub_dir, f) for f in os.listdir(input_sub_dir) if
-                    f.endswith('.flat.fits')]
-    print(os.listdir(input_sub_dir))
+    image_fnames = [f for f in os.listdir(input_sub_dir) if f.endswith('.flat.fits')]
     try:
-        test = fits.getdata(image_fnames[0])
+        fits.getdata(os.path.join(input_sub_dir,image_fnames[0]))
+    except FileNotFoundError or IndexError:
+        raise Exception('Cannot get image data for input images, is the path correct and or is the fits image intact?')
+
+    # retrieve sky model
+    try:
+        model = fits.getdata(sky_img_path)
     except FileNotFoundError or IndexError:
         raise Exception('Cannot get image data for poly sky, is the path correct and or is the fits image intact?')
 
-    # generate polynomial model
-    print('Generating polynomial sky model!')
-    model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_img_path, poly_deg=poly_deg)
-
     # subtract model from all images
     for img in image_fnames:
-        with fits.open(img, mode='update') as hdul:
-            data = hdul[0].data
-            hdr = hdul[0].header
+        with fits.open(os.path.join(input_sub_dir, img), mode='update') as hdul:
+            data = hdul[0].data.copy()
+            hdr = hdul[0].header.copy()
 
-        subtr_data = data - model
+            try:
+                hdr.set('POLY_SKY_FILE', os.path.split(sky_img_path)[1], 'Utilized poly sky file', after='TMPHD2T')
+            except KeyError:
+                hdr.set('POLY_SKY_FILE', os.path.split(sky_img_path)[1], 'Utilized poly sky file')
 
-        try:
-            hdr.set('POLY_SKY_FILE', poly_sky_path, 'Utilized poly sky file', after='TMPHD2T')
-        except KeyError:
-            hdr.set('POLY_SKY_FILE', poly_sky_path, 'Utilized poly sky file')
+            hdr.set('POLY_SKY_FAC', np.nanmedian(data), 'Sky scaling factor', after='POLY_SKY_FILE')
 
-        fits.HDUList(fits.PrimaryHDU(header=hdr, data=subtr_data)).writeto(img, overwrite=True)
+        hdul.close()
+
+        subtr_data = (data - model * np.nanmedian(data))
+
+        output_fname = img.replace('.flat.fits', '.sky.flat.fits')
+        output_fpath = os.path.join(output_sub_dir, output_fname)
+
+        fits.HDUList(fits.PrimaryHDU(header=hdr, data=subtr_data)).writeto(output_fpath, overwrite=True)
 
     print('Polynomial sky sub complete!')
 
@@ -233,7 +240,7 @@ def sky_sub(in_path, out_path, sky_path=None, sex=False, reverse=False, poly=Fal
     elif reverse:
         sky_add(sky_img_data_dir=out_path, sky_path=sky_path)
     elif poly:
-        sub_poly_sky(input_sub_dir=in_path, sky_img_path=sky_path)
+        sub_poly_sky(input_sub_dir=in_path, output_sub_dir=out_path, sky_img_path=sky_path)
     else:
         sky_flat_and_normalize(in_path, out_path, sky_path)
 

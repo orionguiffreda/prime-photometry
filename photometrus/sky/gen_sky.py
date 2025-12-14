@@ -212,6 +212,7 @@ def gen_poly_fit(sky_img_path, poly_deg=defaults['poly_deg']):
         raise Exception('Cannot get initial sky data for poly sky, is the path correct and or is the fits image intact?')
     skyhdr = fits.getheader(sky_img_path)
 
+    print('Generating polynomial sky model!')
     imagedata_arr = skydata
     ny, nx = imagedata_arr.shape
 
@@ -283,7 +284,8 @@ def main():
     parser.add_argument('-poly', action='store_true', help='Optional arg, use to generate polynomial sky '
                                                            'image from initial sky.')
     # parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
-    parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry)')
+    parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry), not necessary '
+                                                   'w/ -poly')
     parser.add_argument('-sky_path', type=str, help='[str] output sky path')
     parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping',default=defaults['sigma'])
     args, unknown = parser.parse_known_args()
