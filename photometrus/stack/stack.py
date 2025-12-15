@@ -12,9 +12,11 @@ import astropy.units as u
 from astropy.coordinates import SkyCoord
 import numpy as np
 import fnmatch
+import matplotlib.pyplot as plt
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
 from photometrus.astrom.astrometry import sextract, scamp
+from photometrus.photometry.photometry import photometry
 from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
 from photometrus.utils.utils import combine_header_and_fits
 
@@ -44,6 +46,22 @@ def badpixmask(parent, subpath, chip):
         data[~badmask] = np.nan
         fits.writeto(os.path.join(imgdir, i), data, hdr)
     return otherdir
+
+
+def astromfin(directory, chip):
+    if not chip:
+        raise ValueError('Specify a chip when using this functionality!')
+    print('Re-running astrometry on swarped image! Running sextractor...')
+    catpath = swarp_sx(directory, chip)
+    print('Applying 4th order scamp fit to stacked image...')
+    scamp(directory, swarpcat=catpath)
+    print('Combining scamp .head and stacked image...')
+    swarp_missfits(directory, chip)
+    try:
+        os.remove(catpath)
+    except Exception as e:
+        print(f"Error removing file: {catpath} - {e}")
+    print('Absolute astrometry complete!')
 
 
 def astrom_check(imgdir):
@@ -87,7 +105,6 @@ def astrom_check(imgdir):
             os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
 
 
-
 def swarp(imgdir, finout):
     image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     image_fnames.sort()
@@ -122,45 +139,84 @@ def swarp(imgdir, finout):
     print('Co-added image created, all done!')
 
 
-def swarp_increm(imgdir, finout, im_num):
+def swarp_increm(imgdir, finout, im_num=5):
     batch_size = im_num
     files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
     total_files = len(files)
 
-    for i in range(0, total_files, batch_size):
-        batch = files[:i + batch_size]
-        print(batch)
-        print('images taken = ', len(batch))
+    stack_files = [os.path.join(finout, f) for f in sorted(os.listdir(finout)) if f.startswith('coadd') and f.endswith('.fits')]
+    if len(stack_files) < 1 - round(total_files / batch_size):
 
-        image_fnames = batch
-        header = fits.getheader(image_fnames[-1])
-        filter1 = header.get('FILTER1', 'unknown')
-        filter2 = header.get('FILTER2', 'unknown')
-        ext = os.path.splitext(image_fnames[-1])[1]
-        if ext == '.new':
-            save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
-                                                            image_fnames[-1][-23:-15], image_fnames[0][-13])
-            print(save_name)
-            weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
-                                                               image_fnames[-1][-23:-15], image_fnames[0][-14])
-        elif ext == '.fits':
-            save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                            image_fnames[-1][-24:-16], image_fnames[0][-15])
-            print(save_name)
-            weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                               image_fnames[-1][-24:-16], image_fnames[0][-15])
-        os.chdir(str(finout))
-        sw = gen_config_file_name('default.swarp')
-        #save_name = 'coaddastr.fits'
-        #weight_name = 'coaddastrweight.fits'
-        image_list = (',').join(image_fnames)
-        com = ["swarp ", image_list, ' -c '+sw
-               , ' -IMAGEOUT_NAME '+save_name, ' -WEIGHTOUT_NAME '+weight_name]
-        s0 = ''
-        com = s0.join(com)
-        out = subprocess.Popen([com], shell=True)
-        out.wait()
-        print('Co-added image created, all done!')
+        for i in range(0, total_files, batch_size):
+            batch = files[:i + batch_size]
+            print(batch)
+            print('images taken = ', len(batch))
+
+            image_fnames = batch
+            header = fits.getheader(image_fnames[-1])
+            filter1 = header.get('FILTER1', 'unknown')
+            filter2 = header.get('FILTER2', 'unknown')
+            ext = os.path.splitext(image_fnames[-1])[1]
+            if ext == '.new':
+                save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                                image_fnames[-1][-23:-15], image_fnames[0][-14])
+                print(save_name)
+                weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
+                                                                   image_fnames[-1][-23:-15], image_fnames[0][-14])
+            elif ext == '.fits':
+                save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                                image_fnames[-1][-24:-16], image_fnames[0][-15])
+                print(save_name)
+                weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
+                                                                   image_fnames[-1][-24:-16], image_fnames[0][-15])
+            os.chdir(str(finout))
+            sw = gen_config_file_name('default.swarp')
+            #save_name = 'coaddastr.fits'
+            #weight_name = 'coaddastrweight.fits'
+            image_list = (',').join(image_fnames)
+            com = ["swarp ", image_list, ' -c '+sw
+                   , ' -IMAGEOUT_NAME '+save_name, ' -WEIGHTOUT_NAME '+weight_name]
+            s0 = ''
+            com = s0.join(com)
+            out = subprocess.Popen([com], shell=True)
+            out.wait()
+            print('Co-added image created, all done!')
+
+    stack_files = [os.path.join(finout, f) for f in sorted(os.listdir(finout)) if f.startswith('coadd') and f.endswith('.fits')]
+    total_stacks = len(stack_files)
+    band = fits.getheader(stack_files[0])['FILTER2']
+    if len(band) > 1:
+        band = 'Z'
+
+    ecsv_files = [f for f in sorted(os.listdir(finout)) if f.startswith('coadd') and f.endswith('.ecsv')]
+
+    lim_mags = []
+    for stack in stack_files:
+        if len(ecsv_files) < 1 - round(total_files / batch_size):
+            print(f'\nRunning photometry on {stack}\n')
+            photometry(full_filename=stack, band=band)
+        hdr = fits.getheader(stack)
+        lim_mag = hdr['lim_mag_auto']
+        lim_mags.append(lim_mag)
+
+    exptime = fits.getheader(files[0])['EXPTIMEC']
+    single_stack_exp = exptime * im_num
+    max_exp = (total_stacks * single_stack_exp)
+    exptimes_axis = np.arange(single_stack_exp, max_exp + single_stack_exp, single_stack_exp)
+
+    print('\nGenerating incremental lim mag plot!')
+    plt.figure(1, figsize=(10,8))
+    plt.plot(exptimes_axis, lim_mags, 'ro')
+    plt.grid()
+    plt.xticks(exptimes_axis, rotation=45, ha='right')
+    plt.xlabel('Exposure Time (s)')
+    plt.ylabel(f'{band}MAG_AUTO Limiting Magnitude (AB)')
+    plt.title('PRIME Limiting Magnitude Evolution')
+    plt.savefig(os.path.join(finout, 'lim_mag_increm.png'), dpi=200)
+    plt.clf()
+    print('Generated!')
+
+    plt.close('all')
 
 
 def swarp_alt(imgdir, imout):
@@ -283,23 +339,6 @@ def swarp_missfits(imgpath, chip):
         combine_header_and_fits(stackhdr, stackimg, remove_header_file=True)
 
 
-
-def astromfin(directory, chip):
-    if not chip:
-        sys.exit('Specify a chip when using this functionality!')
-    print('Re-running astrometry on swarped image! Running sextractor...')
-    catpath = swarp_sx(directory, chip)
-    print('Applying 4th order scamp fit to stacked image...')
-    scamp(directory, swarpcat=catpath)
-    print('Combining scamp .head and stacked image...')
-    swarp_missfits(directory, chip)
-    try:
-        os.remove(catpath)
-    except Exception as e:
-        print(f"Error removing file: {catpath} - {e}")
-    print('Absolute astrometry complete!')
-
-
 #%%
 
 
@@ -317,7 +356,6 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
         astromfin(stackpath, chip)
     elif increm:
         swarp_increm(subpath, stackpath, num)
-        astromfin(stackpath, chip)
     elif alt:
         swarp_alt(subpath, stackpath)
         astromfin(stackpath, chip)
@@ -344,7 +382,7 @@ def main():
                              'image location screening')
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
-    parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by')
+    parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by', default=5)
     #parser.add_argument('-parent', type=str, help='*USE ONLY W/ -MASK FLAG* [str] Parent directory where all img folders are stored', default=None)
     parser.add_argument('-chip', type=int, help='*USE ONLY W/O -no_astrom FLAG* [int] Detector chip number', default=None)
     args, unknown = parser.parse_known_args()
