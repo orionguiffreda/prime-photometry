@@ -256,7 +256,7 @@ def astromatic_astrometry(subpath, band=None, sex=None):
     #        print('Could not run with exit error %s' % err)
     # else:
 
-    print('\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path %s' % subpath)
+    print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path {subpath} -band {band}')
 
     astrometry.astrometry(path=subpath, band=band, double_solve=True)
 
