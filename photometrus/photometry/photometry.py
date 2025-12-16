@@ -1723,7 +1723,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
     def html_gen(data, directory, savename, threshname, band, survey, ra, dec, thresh, survname=None, primename=None):
         # building table
         newtbl = data.copy()
-        newtbl.remove_columns([f'{band}apMag', f'{band}apMag_Err'])
+        # newtbl.remove_columns([f'{band}apMag', f'{band}apMag_Err'])
 
         df = newtbl.to_pandas()
 
@@ -1882,8 +1882,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
                 grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
                 grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
-                grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
-                grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
+                # grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
+                # grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
                 grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][0]
                 grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][0]
 
@@ -1920,8 +1920,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%spsfMag' % band] = np.round(np.array([grb_mag]), decimals=3) * u.ABmag
                 grbdata['%spsfMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3) * u.ABmag
                 grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
-                grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
-                grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
+                # grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
+                # grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
                 grbdata['%sautoMag' % band] = np.round(np.array([grb_mag_auto]), decimals=3) * u.ABmag
                 grbdata['%sautoMag_Err' % band] = np.round(np.array([grb_magerr_auto]), decimals=3) * u.ABmag
                 grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
@@ -1937,8 +1937,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%spsfMag' % band].description = mag_ecsvcleanSources['%sMAG_PSF' % band].description
                 grbdata['%spsfMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_PSF' % band].description
                 grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
-                grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
-                grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
+                # grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
+                # grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
                 grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
                 grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
                 grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
@@ -1977,11 +1977,11 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][
                         idx_GRBcleanpsflist.index(i)]
                     mag_err_ar.append(grb_magerr)
-                    grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
-                    apmag_ar.append(grb_mag_aper)
-                    grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][
-                        idx_GRBcleanpsflist.index(i)]
-                    apmag_err_ar.append(grb_magerr_aper)
+                    # grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
+                    # apmag_ar.append(grb_mag_aper)
+                    # grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][
+                    #     idx_GRBcleanpsflist.index(i)]
+                    # apmag_err_ar.append(grb_magerr_aper)
                     grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
                     automag_ar.append(grb_mag_auto)
                     grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
@@ -2047,8 +2047,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%spsfMag' % band].description = mag_ecsvcleanSources['%sMAG_PSF' % band].description
                 grbdata['%spsfMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_PSF' % band].description
                 grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
-                grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
-                grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
+                # grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
+                # grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
                 grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
                 grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
                 grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
@@ -2070,8 +2070,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
             grb_mag = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_PSF' % band][0]
             grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][0]
-            grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
-            grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
+            # grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][0]
+            # grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][0]
             grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][0]
             grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][0]
 
@@ -2107,8 +2107,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%spsfMag' % band] = np.round(np.array([grb_mag]), decimals=3) * u.ABmag
             grbdata['%spsfMag_Err' % band] = np.round(np.array([grb_magerr]), decimals=3) * u.ABmag
             grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array([mag_diff_crs]), decimals=3) * u.ABmag
-            grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
-            grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
+            # grbdata['%sapMag' % band] = np.round(np.array([grb_mag_aper]), decimals=3) * u.ABmag
+            # grbdata['%sapMag_Err' % band] = np.round(np.array([grb_magerr_aper]), decimals=3) * u.ABmag
             grbdata['%sautoMag' % band] = np.round(np.array([grb_mag_auto]), decimals=3) * u.ABmag
             grbdata['%sautoMag_Err' % band] = np.round(np.array([grb_magerr_auto]), decimals=3) * u.ABmag
             grbdata['Radius'] = np.round(np.array([grb_rad]), decimals=2) * u.arcsec
@@ -2124,8 +2124,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%spsfMag' % band].description = mag_ecsvcleanSources['%sMAG_PSF' % band].description
             grbdata['%spsfMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_PSF' % band].description
             grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
-            grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
-            grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
+            # grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
+            # grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
             grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
             grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
             grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description
@@ -2170,12 +2170,12 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 mag_ar.append(grb_mag)
                 grb_magerr = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_PSF' % band][idx_GRBcleanpsflist.index(i)]
                 mag_err_ar.append(grb_magerr)
-                grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
-                apmag_ar.append(grb_mag_aper)
-                grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
-                apmag_err_ar.append(grb_magerr_aper)
-                grb_mag_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][
-                    idx_GRBcleanpsflist.index(i)]
+                # grb_mag_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
+                # apmag_ar.append(grb_mag_aper)
+                # grb_magerr_aper = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_APER' % band][idx_GRBcleanpsflist.index(i)]
+                # apmag_err_ar.append(grb_magerr_aper)
+                # grb_mag_aper2 = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_APER' % band][:, 0][
+                #     idx_GRBcleanpsflist.index(i)]
                 grb_mag_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['%sMAG_AUTO' % band][idx_GRBcleanpsflist.index(i)]
                 automag_ar.append(grb_mag_auto)
                 grb_magerr_auto = mag_ecsvcleanSources[idx_GRBcleanpsf]['e_%sMAG_AUTO' % band][
@@ -2242,8 +2242,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%spsfMag' % band].description = mag_ecsvcleanSources['%sMAG_PSF' % band].description
             grbdata['%spsfMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_PSF' % band].description
             grbdata['%sMag_Err_Crsmtch' % band].description = desc['mag_err_crsmtch']
-            grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
-            grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
+            # grbdata['%sapMag' % band].description = mag_ecsvcleanSources['%sMAG_APER' % band].description
+            # grbdata['%sapMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_APER' % band].description
             grbdata['%sautoMag' % band].description = mag_ecsvcleanSources['%sMAG_AUTO' % band].description
             grbdata['%sautoMag_Err' % band].description = mag_ecsvcleanSources['e_%sMAG_AUTO' % band].description
             grbdata['Radius'].description = mag_ecsvcleanSources['FLUX_RADIUS'].description

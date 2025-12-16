@@ -20,7 +20,7 @@ from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 
 def auto_mflat_gen(date, band, chip):
-    file = gen_mflat_file_name_new(band, chip, date)
+    file = gen_mflat_file_name_new(band, chip, date, sflat=True)
 
     # print("auto_mflat_gen date", date)
     # check = mflat_checker(date)
