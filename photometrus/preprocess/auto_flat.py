@@ -132,11 +132,19 @@ def new_mflat_checker(date, band=None, sflat=False):
             return False
 
 
-def gen_mflat_file_name_new(band, chip, date=None):
+def gen_mflat_file_name_new(band, chip, date=None, sflat=False):
     flat_dir = gen_flat_dir()
+
+    if sflat:
+        name = 'sflat'
+        length = 33
+    else:
+        name = 'mflat'
+        length = 24
+
     mflat_list = [
-        f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if 'C%s' % chip in f
-        if len(f) <= 24]
+        f for f in sorted(os.listdir(flat_dir)) if f.startswith(name) if f.endswith('.fits') if '.%s.' % band in f
+        if 'C%s' % chip in f if len(f) <= length]
 
     if date:
 
@@ -145,14 +153,13 @@ def gen_mflat_file_name_new(band, chip, date=None):
             target = datetime.strptime(target_date, "%Y%m%d")
 
             def extract_date(file):
-                return datetime.strptime(file.split(".")[2], "%Y%m%d")
+                if sflat:
+                    half = file.split("-")[0]
+                    return datetime.strptime(half.split(".")[2], "%Y%m%d")
+                else:
+                    return datetime.strptime(file.split(".")[2], "%Y%m%d")
 
-            filename = min(file_list, key=lambda f: (abs((extract_date(f) - target).days), extract_date(f)))
-            print('Getting mflat closest to given date: ', filename)
-            return filename
-
-        # filename = closest_file(mflat_list, date)
-        # print('Getting mflat closest to given date: ', filename)
+            return min(file_list, key=lambda f: (abs((extract_date(f) - target).days), extract_date(f)))
 
         def iterate_until_mflat(date):
             target_date = datetime.strptime(date, "%Y%m%d")
@@ -181,11 +188,15 @@ def gen_mflat_file_name_new(band, chip, date=None):
             new_mflat_list = [
                 f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if
                                                                                   'C%s' % chip in f
-                if len(f) <= 24]
+                if len(f) <= length]
             filename = [m for m in new_mflat_list if '.%s.%s.C%s' % (band, chosen_date, chip) in m]
             return filename[0]
 
-        filename = iterate_until_mflat(date)
+        if sflat:
+            filename = closest_file(mflat_list, date)
+            print(f'Getting {name} closest to given date: ', filename)
+        else:
+            filename = iterate_until_mflat(date)
 
     else:
         # if no date given, get latest mflat
