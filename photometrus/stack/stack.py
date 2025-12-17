@@ -66,7 +66,7 @@ def astromfin(directory, chip):
 
 def astrom_check(imgdir):
     """
-    Check to determine if all images are w/in the same area in the sky before attempting stacking.
+    Check to determine if all images are w/in the same area in the sky (2x dither rad) before attempting stacking.
 
     Parameters
     ----------
@@ -97,9 +97,15 @@ def astrom_check(imgdir):
     if not acc_mask.all():
         print(' Pre-stacking astrom check shows 1 or more images are *NOT* w/in acceptable area!')
         bad_idxs = np.where(~acc_mask)[0]
-        bad_imgs = image_fnames[bad_idxs]
+        bad_imgs = [item for index, item in enumerate(image_fnames) if index in bad_idxs]
         bad_img_names = [os.path.split(img)[1] for img in bad_imgs]
         print(f' Recommend checking quality / astrometry on offending images: {bad_img_names}')
+
+        if len(bad_imgs) > len(image_fnames) / 2:
+            raise Exception(f'*WARNING* {len(bad_imgs)}/{len(image_fnames)} images (> 1/2 total # of images) are NOT '
+                            f'in acceptable area, examine images!  Is there an issue with image acquisition tracking '
+                            f'or astrometry?')
+
         print(' Renaming offending images to avoid stacking issues...')
         for img_name in bad_imgs:
             os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
@@ -208,6 +214,8 @@ def swarp_increm(imgdir, finout, im_num=5):
     plt.figure(1, figsize=(10,8))
     plt.plot(exptimes_axis, lim_mags, 'ro')
     plt.grid()
+    # plt.yscale('log')
+    # plt.xscale('log')
     plt.xticks(exptimes_axis, rotation=45, ha='right')
     plt.xlabel('Exposure Time (s)')
     plt.ylabel(f'{band}MAG_AUTO Limiting Magnitude (AB)')
