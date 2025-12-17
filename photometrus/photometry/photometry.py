@@ -2030,8 +2030,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%spsfMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
                 grbdata['%spsfMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
                 grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
+                # grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
+                # grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
                 grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
                 grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
                 grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
@@ -2224,8 +2224,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%spsfMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
             grbdata['%spsfMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
             grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
+            # grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
+            # grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
             grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
             grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
             grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
