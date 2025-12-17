@@ -76,7 +76,10 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
     if band:
-        addition = f' -ASTREF_BAND {band}'
+        if band == 'Z' or band == 'Y':
+            addition = f' -ASTREF_BAND J'
+        else:
+            addition = f' -ASTREF_BAND {band}'
     else:
         addition = ''
     if swarpcat:
