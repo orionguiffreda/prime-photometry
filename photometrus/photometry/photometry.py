@@ -1043,7 +1043,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                     hdr.set('e_ZP_PSF', zero_psfstd, 'PSF Zero Point Offset Error', after='ZP_PSF')
 
                     # hdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
-                    hdr.set('CONV_FAC_PSF', conv_factor, 'uJy / ADU PSF Conversion Factor, multiply img by this to get in uJy', before='EQUINOX')
+                    hdr.set('CONV_FAC_PSF', conv_factor.item(), 'uJy / ADU PSF Conversion Factor, multiply img by this to get in uJy', before='EQUINOX')
                     print('Conversion of ADU to uJy calculated for PSF, med conversion factor: %.4f' % conv_factor)
                     hdul.close()
 
@@ -1089,7 +1089,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
                     hdr.set('e_ZP_AUTO', zero_std, 'Auto Aperture Zero Point Offset Error', after='ZP_AUTO')
 
                     # hdr.set('BUNIT', 'uJy', 'Physical units of the array values IF multiplied by conv_fac', after='EXTEND')
-                    hdr.set('CONV_FAC_AUTO', auto_conv_factor, 'uJy / ADU AUTO Conversion Factor, multiply img by this to get in uJy', after='EXTEND')
+                    hdr.set('CONV_FAC_AUTO', auto_conv_factor.item(), 'uJy / ADU AUTO Conversion Factor, multiply img by this to get in uJy', before='EQUINOX')
                     print('Conversion of ADU to uJy calculated for AUTO, med conversion factor: %.4f' % auto_conv_factor)
                     hdul.close()
 
@@ -2030,8 +2030,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['%spsfMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
                 grbdata['%spsfMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
                 grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
-                grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
+                # grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
+                # grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
                 grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
                 grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
                 grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
@@ -2224,8 +2224,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['%spsfMag' % band] = np.round(np.array(mag_ar), decimals=3) * u.ABmag
             grbdata['%spsfMag_Err' % band] = np.round(np.array(mag_err_ar), decimals=3) * u.ABmag
             grbdata['%sMag_Err_Crsmtch' % band] = np.round(np.array(diff_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
-            grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
+            # grbdata['%sapMag' % band] = np.round(np.array(apmag_ar), decimals=3) * u.ABmag
+            # grbdata['%sapMag_Err' % band] = np.round(np.array(apmag_err_ar), decimals=3) * u.ABmag
             grbdata['%sautoMag' % band] = np.round(np.array(automag_ar), decimals=3) * u.ABmag
             grbdata['%sautoMag_Err' % band] = np.round(np.array(automag_err_ar), decimals=3) * u.ABmag
             grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec

@@ -251,20 +251,24 @@ def gen_poly_fit(sky_img_path, poly_deg=defaults['poly_deg']):
 
 
 def checkplot(output_directory, save_name):
-    print('Generating histogram check plot!\n')
-    if os.path.isfile(save_name):
-        skypath = save_name
-    else:
-        skypath = os.path.join(output_directory, save_name)
-    skyimg = fits.getdata(skypath)
-    flat_sky = skyimg.flatten()
+    try:
+        print('Generating histogram check plot!\n')
+        if os.path.isfile(save_name):
+            skypath = save_name
+        else:
+            skypath = os.path.join(output_directory, save_name)
+        skyimg = fits.getdata(skypath)
+        flat_sky = skyimg.flatten()
 
-    plt.figure(figsize=(10, 8))
-    plt.hist(flat_sky, bins=100, density=True, edgecolor='black')
-    plt.xlabel('Pixel Value')
-    plt.ylabel('Normalized Frequency')
-    plt.title('Sky Image Histogram')
-    plt.savefig('%s.check_plot.png' % skypath, dpi=300)
+        plt.figure(figsize=(10, 8))
+        plt.hist(flat_sky, bins=100, density=True, edgecolor='black')
+        plt.xlabel('Pixel Value')
+        plt.ylabel('Normalized Frequency')
+        plt.title('Sky Image Histogram')
+        plt.savefig('%s.check_plot.png' % skypath, dpi=300)
+    except ValueError as e:
+        raise Exception(f'*WARNING* Issue with sky check plot generation!: {e}'
+                        f'\nPerhaps a critical issue with the flat?')
 
 
 def sky_gen(in_path, sky_path, sigma, poly=False):
