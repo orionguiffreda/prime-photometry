@@ -109,7 +109,7 @@ def get_fields_from_log(date=None, no_bulge=True):
         print('Running automatically on all applicable fields on', logdate)
         return structured_target_observations
     else:
-        sys.exit('No applicable fields were taken during %s!' % logdate)
+        raise FileNotFoundError('No applicable fields were taken during %s!' % logdate)
 
 
 #%%

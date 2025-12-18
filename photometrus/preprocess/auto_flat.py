@@ -24,7 +24,7 @@ def auto_flat_creation(date, band=None, chip=None):
         datetime = to_datetime(date)
         date = datetime.strftime('%Y%m%d')
     except AttributeError:
-        sys.exit('Date of observation not extracted, cannot move forward with flat gen & processing! '
+        raise ValueError('Date of observation not extracted, cannot move forward with flat gen & processing! '
                  'Did you specify a "-date" field correctly?')
 
     if not chip:
@@ -95,7 +95,7 @@ def autoflatgen(date, band=None, chip=None):
 def new_mflat_checker(date, band=None, sflat=False):
     base_dir = gen_pipeline_file_name()
     flat_dir = gen_flat_dir()
-    # flat_dir = '/home/alex/PycharmProjects/prime-photometry/photometrus/mflats/'
+
     if not band:
         mflat_list = [
             f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % date in f]
@@ -130,6 +130,51 @@ def new_mflat_checker(date, band=None, sflat=False):
             if sflat:
                 print('No master flat currently generated or flat data taken for this date and band!')
             return False
+
+
+def new_sflat_checker(date, band=None):
+    base_dir = gen_pipeline_file_name()
+    flat_dir = gen_flat_dir()
+
+    dt = datetime.strptime(date, "%Y%m%d")
+    first_day = dt.replace(day=1)
+    last_day = dt.replace(day=calendar.monthrange(dt.year, dt.month)[1])
+
+    name = 'mflat'
+
+    if isinstance(date, str):
+        target_date = datetime.strptime(date, "%Y%m%d")
+    else:
+        target_date = date
+
+    if not band:
+        print('Searching for all existing mflats between %s - %s' % (first_day, last_day))
+
+        matched_dates = []
+        current = first_day
+        while current <= last_day:
+            check_date_str = current.strftime("%Y%m%d")
+            if mflat_checker(check_date_str, sflat=True):
+                matched_dates.append(check_date_str)
+            current += timedelta(days=1)
+
+    else:
+        print('Searching for all existing mflats between %s - %s' % (first_day, last_day))
+
+        matched_dates = []
+        current = first_day
+        while current <= last_day:
+            check_date_str = current.strftime("%Y%m%d")
+            if mflat_checker(check_date_str, band=band, sflat=True):
+                matched_dates.append(check_date_str)
+            current += timedelta(days=1)
+
+    if len(matched_dates) > 3:
+        print(f'\n{len(matched_dates)} mflats exist in this month!, Checking for generated sflat...')
+        return True
+    else:
+        print('\n< 3 mflats currently generated for this month...')
+        return False
 
 
 def gen_mflat_file_name_new(band, chip, date=None, sflat=False):
@@ -192,7 +237,81 @@ def gen_mflat_file_name_new(band, chip, date=None, sflat=False):
             filename = [m for m in new_mflat_list if '.%s.%s.C%s' % (band, chosen_date, chip) in m]
             return filename[0]
 
+        def iterate_until_sflat(date):
+            given_date = datetime.strptime(date, "%Y%m%d")
+            days_in_month = calendar.monthrange(given_date.year, given_date.month)[1]
+            target_date = given_date.replace(day=days_in_month // 2)
+
+            if new_mflat_checker(date, band=band):
+                chosen_date = date
+            else:
+                offset = days_in_month
+                chosen_date = None
+                while chosen_date is None:
+                    for delta in (-offset, offset):
+                        check_date = target_date + timedelta(days=delta)
+                        days_in_check_month = calendar.monthrange(check_date.year, check_date.month)[1]
+                        check_date_str = check_date.strftime("%Y%m%d")
+                        print('\nChecking %s for existing mflats in %s band in that month...' % (check_date_str, band))
+                        if new_sflat_checker(check_date_str, band=band):
+                            chosen_date = check_date_str
+                            break
+                    offset += days_in_check_month
+
+            filenames = []
+            for f in mflat_list:
+                split_f = f.split("-")
+                start_date = datetime.strptime(split_f[0].split(".")[2], "%Y%m%d")
+                end_date = datetime.strptime(split_f[1].split(".")[0], "%Y%m%d")
+
+                if start_date <= datetime.strptime(chosen_date, "%Y%m%d") <= end_date:
+                    filenames.append(f)
+
+            if len(filenames) > 1:
+                filename = None
+                max_date_range = -1
+
+                for f in filenames:
+                    split_f = f.split("-")
+                    start_date = datetime.strptime(split_f[0].split(".")[2], "%Y%m%d")
+                    end_date = datetime.strptime(split_f[1].split(".")[0], "%Y%m%d")
+
+                    date_range = end_date - start_date
+                    if date_range > max_date_range:
+                        max_date_range = date_range
+                        filename = f
+
+                print(f'Multiple matching sflats found!, picking one w/ largest date range: {filename}')
+
+                return filename[0]
+
+            elif len(filenames) == 1:
+                print('Matching sflat found! : ', filenames)
+
+            else:
+
+                superflatgen(date=chosen_date, band=band)
+
+                new_sflat_list = [
+                    f for f in sorted(os.listdir(flat_dir)) if f.endswith('.fits') if '.%s.' % band in f if
+                                                                                      'C%s' % chip in f
+                    if len(f) <= length]
+
+                filename = []
+                for sflat in new_sflat_list:
+                    split_f = sflat.split("-")
+                    start_date = datetime.strptime(split_f[0].split(".")[2], "%Y%m%d")
+                    end_date = datetime.strptime(split_f[1].split(".")[0], "%Y%m%d")
+
+                    if start_date <= datetime.strptime(chosen_date, "%Y%m%d") <= end_date:
+                        filename.append(sflat)
+
+                return filename[0]
+
+            return filenames[0]
+
         if sflat:
+            # filename = iterate_until_sflat(date)
             filename = closest_file(mflat_list, date)
             print(f'Getting {name} closest to given date: ', filename)
         else:

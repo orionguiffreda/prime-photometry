@@ -63,7 +63,29 @@ def getchiplist(full_ramp_list, chip, rampnum=defaults["rampnum"]):
         if ramplist and f'C{chip}.' in ramplist[0]:
             print(f'C{chip} images:', ramplist)
             if rampnum != 0:
-                return ramplist[:rampnum]
+                try:
+                    split_num = rampnum.split(':')
+                    if len(split_num) == 1:
+                        split_num = int(''.join(split_num))
+                        return ramplist[:split_num]
+                    elif len(split_num) == 2:
+                        start_num = int(split_num[0])
+                        try:
+                            end_num = int(split_num[1])
+                            if end_num == -1:
+                                return ramplist[start_num:]
+                        except ValueError:
+                            return ramplist[start_num:]
+                        return ramplist[start_num:end_num]
+                    elif len(split_num) > 2:
+                        print('Format not recognized! Continuing w/o -rampnum...'
+                              '\nFormat -rampnum as either a single int (to specify amnt of ramp images to stack), ex. "-rampnum 10", '
+                              'or format as ex. "-rampnum 10:18" to specify specific indices to stack')
+                        return ramplist
+                except TypeError:
+                    print('Format not recognized! Continuing w/o -rampnum...'
+                          '\nFormat -rampnum as either a single int (to specify amnt of ramp images to stack), ex. "-rampnum 10", '
+                          'or format as ex. "-rampnum 10:18" to specify specific indices to stack')
             else:
                 return ramplist
     return None
@@ -524,8 +546,10 @@ def main():
     parser.add_argument('-sky_override', type=str, help='[str], Optional path to specify already generated '
                                                         'sky to use in sky sub, skipping sky gen. Input full file path.',
                         default=defaults['sky_override_path'])
-    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
-                                                   'your observation you want to include in the processing, helpful for '
+    parser.add_argument('-rampnum', type=str, help='[str], Format -rampnum as either a single int (to specify amnt of '
+                                                   'ramp images to stack), ex. "-rampnum 10" (idxs 0-10), '
+                                                    'or format as ex. "-rampnum 10:18" to specify specific indices to '
+                                                   'stack, helpful for '
                                                    'dodging bad individual images',
                         default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',
