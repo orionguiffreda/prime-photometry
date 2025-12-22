@@ -5,6 +5,7 @@ Runs processing and photometry on whole observation
 import os
 import shutil
 import argparse
+from datetime import datetime as dt
 
 from photometrus import multi_master
 from photometrus.photometry import multi_photom
@@ -23,6 +24,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
           ):
     # print('combo date', date)
+
     if parentdir != defaults['parent']:
         chosen_parent = parentdir
         stackpath = os.path.join(chosen_parent, 'stack')
@@ -37,11 +39,15 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
         chips = [int(f) for f in chips]
 
     for f in chips:
+        start_time = dt.now()
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
                                   sky_override_path, removal, no_get_files, no_mflat, rampnum, bulge, auto_mode=auto_mode,
                                   input_ramp_lists=input_ramp_lists, header_filter=header_filter)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra=grb_ra, grb_dec=grb_dec,
                                        grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name)
+
+        end_time = dt.now()
+        print(f'\nTotal C{f} pipeline processing time:', (end_time - start_time).total_seconds())
 
     if len(chips) == 4:
         catcheck = [f for f in sorted(os.listdir(stackpath)) if f.endswith('.ecsv') and f.startswith('coadd')]
@@ -94,8 +100,10 @@ def main():
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
                                                                ' exist', default=defaults['no_mflat'])
-    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
-                                                   'your observation you want to include in the processing, helpful for '
+    parser.add_argument('-rampnum', type=str, help='[str], Format -rampnum as either a single int (to specify amnt of '
+                                                   'ramp images to stack), ex. "-rampnum 10" (idxs 0-10), '
+                                                    'or format as ex. "-rampnum 10:18" to specify specific indices to '
+                                                   'stack, helpful for '
                                                    'dodging bad individual images',
                         default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',

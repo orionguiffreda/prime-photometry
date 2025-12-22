@@ -431,7 +431,7 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
                 test = result[0]
             except IndexError:
                 print('Sadly, no current surveys available in current area in %s band' % band)
-                sys.exit('No surveys available.')
+                raise Exception('No surveys available.')
 
             keys = result.format_table_list()
 
@@ -639,10 +639,10 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
                             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
                             '\n perhaps check DES coverage maps?')
                 else:
-                    sys.exit('DES only supports Z and Y band!')
+                    raise Exception('DES only supports Z and Y band!')
             else:
                 print('No supported survey found, currently use either 2MASS, VHS, VIKING, Skymapper, SDSS, UKIDSS, or DES')
-                sys.exit('No surveys found.')
+                raise Exception('No surveys found.')
 
     return Q, chosen_survey, mag_low_cutoff
 
@@ -805,7 +805,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
         except FileNotFoundError:
-            print(f'{psfcatalogName} not found! Require this file for -grb_only / int cal functionality! Rerun photometry w/ '
+            raise FileNotFoundError(f'{psfcatalogName} not found! Require this file for -grb_only / int cal functionality! Rerun photometry w/ '
                      f'the "-keep" flag.')
         if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
             r50 = psfsourceTable['FLUX_RADIUS'][:, 0]
@@ -857,7 +857,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
         except FileNotFoundError:
-            sys.exit(f'{psfcatalogName} not found! Require this file for -grb_only functionality! Rerun photometry w/ '
+            raise FileNotFoundError(f'{psfcatalogName} not found! Require this file for -grb_only functionality! Rerun photometry w/ '
                      f'the "-keep" flag.')
 
         if isinstance(psfsourceTable['FLUX_RADIUS'][0], np.ndarray):
@@ -3093,7 +3093,7 @@ def grb_rad_convert(rad):
         arcconvert = rad_f * 3600
     else:
         print('Only arcsec, arcmin, and deg are supported! Default = arcsec')
-        sys.exit('Use supported units.')
+        raise Exception('Use supported units.')
     return arcconvert
 
 

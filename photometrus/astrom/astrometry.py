@@ -160,8 +160,7 @@ def improved_scamp(imgdir, band, distortdeg=None, swarpcat=None, bulge=None):
             result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs])
             # print(result[0])
         except IndexError:
-            print('Sadly, no current surveys available in current area in %s band' % band)
-            sys.exit('No surveys available.')
+            raise IndexError('Sadly, no current surveys available in current area in %s band' % band)
 
         keys = result.format_table_list()
 

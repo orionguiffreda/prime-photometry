@@ -228,7 +228,7 @@ def sexback(imgdir,outdir):
         for thread in threads:
             thread.join()
     else:
-        sys.exit('No applicable flat-fielded .flat.fits files found!')
+        raise FileNotFoundError('No applicable flat-fielded .flat.fits files found!')
     print('Sxtrctr back sub complete!')
 
 #%%

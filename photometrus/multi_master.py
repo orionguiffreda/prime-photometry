@@ -58,8 +58,7 @@ def datalistdownload(parentdir, target, band, date, header_filter=None):
             if any(lst for lst in m_list):
                 print('Missing files!: ', m_list)
         except:
-            print('Error fetching data!')
-            sys.exit(0)
+            raise FileNotFoundError('Error fetching data!')
     else:
         full_ramp_list, m_list = get_data_files(date=date, objname=target, filter1='Open', filter2=band, header_filter=header_filter)
         if any(lst for lst in m_list):
@@ -193,17 +192,8 @@ def multi_master(
                     shutil.rmtree(field_dir, ignore_errors=True)
                 except FileNotFoundError:
                     print('Directory already no longer exists.')
-        if type(chips) is int:
-            if astromnet:
-                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                              fullramplist=None, rampnum=rampnum)
-            elif not no_shift:
-                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                              fullramplist=None, rampnum=rampnum)
-            else:
-                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                              fullramplist=None, rampnum=rampnum)
-        else:
+            if type(chips) is int:
+                chips = [chips]
             for f in chips:
                 if astromnet:
                     refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
@@ -237,26 +227,17 @@ def multi_master(
         #     print('Processing all chosen chips in parallel!')
         #     processparallel(target, date, band, chips)
         if type(chips) is int:
+            chips = [chips]
+        for f in chips:
             if astromnet:
-                refineprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
                               fullramplist=full_ramp_list, rampnum=rampnum)
             elif not no_shift:
-                shiftprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
                              fullramplist=full_ramp_list, rampnum=rampnum)
             else:
-                baseprocess(chosen_parent, chips, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
+                baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
                             fullramplist=full_ramp_list, rampnum=rampnum)
-        else:
-            for f in chips:
-                if astromnet:
-                    refineprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                  fullramplist=full_ramp_list, rampnum=rampnum)
-                elif not no_shift:
-                    shiftprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                 fullramplist=full_ramp_list, rampnum=rampnum)
-                else:
-                    baseprocess(chosen_parent, f, band, date, rot_val, sky_override_path, removal=removal, bulge=bulge,
-                                fullramplist=full_ramp_list, rampnum=rampnum)
 
 
 def main():
@@ -303,8 +284,10 @@ def main():
     parser.add_argument('-no_mflat', action='store_true', help='optional flag, use if you *DO NOT* want to'
                                                                ' automatically generate mflats for this night if none'
                                                                ' exist', default=defaults['no_mflat'])
-    parser.add_argument('-rampnum', type=int, help='[int], optional arg to specify how many ramp images from '
-                                                   'your observation you want to include in the processing, helpful for '
+    parser.add_argument('-rampnum', type=str, help='[str], Format -rampnum as either a single int (to specify amnt of '
+                                                   'ramp images to stack), ex. "-rampnum 10" (idxs 0-10), '
+                                                    'or format as ex. "-rampnum 10:18" to specify specific indices to '
+                                                   'stack, helpful for '
                                                    'dodging bad individual images',
                         default=defaults["rampnum"])
     parser.add_argument('-bulge', action='store_true',
