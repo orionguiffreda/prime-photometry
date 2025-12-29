@@ -7,6 +7,7 @@ import os
 import numpy as np
 from astropy.io import fits
 from astropy.stats import sigma_clip
+from astropy.modeling import models, fitting
 from scipy import ndimage
 from skimage.morphology import disk
 from skimage.filters import rank
@@ -216,41 +217,38 @@ def gen_poly_fit(sky_img_path, poly_deg=defaults['poly_deg']):
     imagedata_arr = skydata
     ny, nx = imagedata_arr.shape
 
+    x_max = skyhdr['NAXIS1']
+    y_max = skyhdr['NAXIS2']
+
     # make coord grids / flatten
     x = np.arange(nx)
     y = np.arange(ny)
     X, Y = np.meshgrid(x, y)
-    x_flat = X.flatten()
-    y_flat = Y.flatten()
-    z_flat = imagedata_arr.flatten()
 
-    # matrix for poly fit
-    terms = []
-    for i in range(poly_deg + 1):
-        for j in range(poly_deg + 1 - i):
-            terms.append((x_flat ** i) * (y_flat ** j))
+    # use Chebyshev2D model
+    cheb_init = models.Chebyshev2D(x_degree=poly_deg, y_degree=poly_deg, x_domain=[0, x_max], y_domain=[0, y_max])
 
-    A = np.column_stack(terms)
+    # LinearLSQFitter for fitting
+    fitter = fitting.LinearLSQFitter()
 
-    # least squares fit
-    coeffs, resids, rank, s = np.linalg.lstsq(A, z_flat, rcond=None)
+    # gen fitted model & get params
+    print(f'Fitting Chebyshev2D polynomial of degree {poly_deg}...')
+    cheb_model = fitter(cheb_init, X, Y, imagedata_arr)
+    model = cheb_model(X, Y)
 
-    # gen fitted model
-    model_flat = A @ coeffs
-    model = model_flat.reshape(ny, nx)
-
-    print(f" Polynomial coefficients: {coeffs}")
+    coeffs = cheb_model.parameters
+    print(f" Chebyshev coefficients: {coeffs}")
 
     # writing new sky image to sky path
     sky_dir = os.path.split(sky_img_path)[0]
-    poly_sky_name = os.path.split(sky_img_path)[1].replace('sky.Open', 'poly.sky.Open')
+    poly_sky_name = os.path.split(sky_img_path)[1].replace('sky.Open', f'cheb.{poly_deg}.sky.Open')
     poly_sky_path = os.path.join(sky_dir, poly_sky_name)
     fits.HDUList(fits.PrimaryHDU(header=skyhdr, data=model)).writeto(poly_sky_path, overwrite=True)
 
     return model, coeffs, poly_sky_path
 
 
-def checkplot(output_directory, save_name):
+def checkplot(output_directory, save_name, poly_deg=None):
     try:
         print('Generating histogram check plot!\n')
         if os.path.isfile(save_name):
@@ -260,12 +258,50 @@ def checkplot(output_directory, save_name):
         skyimg = fits.getdata(skypath)
         flat_sky = skyimg.flatten()
 
+        # basic histogram check plot
         plt.figure(figsize=(10, 8))
         plt.hist(flat_sky, bins=100, density=True, edgecolor='black')
         plt.xlabel('Pixel Value')
         plt.ylabel('Normalized Frequency')
         plt.title('Sky Image Histogram')
         plt.savefig('%s.check_plot.png' % skypath, dpi=300)
+
+        if not save_name.startswith('sky.'):
+            print(f'Generating self sky - cheb2d sky residual data!')
+            skyhdr = fits.getheader(skypath)
+            orig_skypath = skypath.replace(f'cheb.{poly_deg}.','')
+            orig_skyimg = fits.getdata(orig_skypath)
+            sky_resid_img = orig_skyimg - skyimg
+
+            fits.HDUList(fits.PrimaryHDU(header=skyhdr, data=sky_resid_img)).writeto(skypath.replace('cheb.','resid.'),
+                                                                                     overwrite=True)
+
+            n_pixels = orig_skyimg.size
+            n_params = 5
+
+            resid_std_err = np.nanstd(sky_resid_img) / np.sqrt(n_pixels)
+
+            print('Resid Std Err:', resid_std_err)
+
+            variance = np.nanstd(sky_resid_img)**2
+            chi_squared = np.sum(sky_resid_img ** 2 / variance)
+
+            # calculate reduced chi-squared
+            dof = n_pixels - n_params
+            reduced_chi_squared = chi_squared / dof
+            print('red_chi_sq:', reduced_chi_squared)
+
+            flat_sky_resid = sky_resid_img.flatten()
+            # residual hist check plot
+            plt.figure(figsize=(10, 8))
+            plt.hist(flat_sky_resid, bins=100, edgecolor='black')
+            plt.yscale('log')
+            plt.xlim(-0.3, 0.3)
+            plt.xlabel('Pixel Value')
+            plt.ylabel('Frequency')
+            plt.title(f'Self Sky - Cheb2d Sky ({poly_deg}: Residual Histogram')
+            plt.savefig('%s.resid_plot.png' % skypath, dpi=300)
+
     except ValueError as e:
         raise Exception(f'*WARNING* Issue with sky check plot generation!: {e}'
                         f'\nPerhaps a critical issue with the flat?')
@@ -274,7 +310,7 @@ def checkplot(output_directory, save_name):
 def sky_gen(in_path, sky_path, sigma, poly=False):
     if poly:
         model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_path, poly_deg=defaults['poly_deg'])
-        checkplot(output_directory=sky_path, save_name=poly_sky_path)
+        checkplot(output_directory=sky_path, save_name=poly_sky_path, poly_deg=defaults['poly_deg'])
     else:
         save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
                                        sigma=sigma)

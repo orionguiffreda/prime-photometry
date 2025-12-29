@@ -62,7 +62,12 @@ def getchiplist(full_ramp_list, chip, rampnum=defaults["rampnum"]):
     for ramplist in full_ramp_list:
         if ramplist and f'C{chip}.' in ramplist[0]:
             print(f'C{chip} images:', ramplist)
-            if rampnum != 0:
+            try:
+                rampnum_check = int(''.join(rampnum))
+            except ValueError:
+                rampnum_check = -1
+
+            if rampnum_check != 0:
                 try:
                     split_num = rampnum.split(':')
                     if len(split_num) == 1:
