@@ -334,3 +334,5 @@ def set_vizier_mirror():
             Conf.server = old
     else:
         raise RuntimeError('No working Vizier mirror found!')
+
+    return url

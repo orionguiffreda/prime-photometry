@@ -849,10 +849,12 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         DEC = colnames[1]
 
         mass_imCoords = w.all_world2pix(Q[0][RA], Q[0][DEC], 1)
-        good_cat_stars = Q[0][np.where(
+        crop_cat_stars = Q[0][np.where(
             (mass_imCoords[0] > crop) & (mass_imCoords[0] < (max_x - crop)) & (mass_imCoords[1] > crop) & (
                         mass_imCoords[1] < (max_y - crop)))]
-        print('Catalogue cropped, source total = ', len(good_cat_stars))
+        print('Approximate catalogue source total in image bounds = ',len(crop_cat_stars))
+
+        good_cat_stars = Q[0]
 
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
@@ -872,9 +874,12 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
             flux_radius = psfsourceTable['FLUX_RADIUS']
 
         PSFSources = psfsourceTable[
-            (psfsourceTable['XWIN_IMAGE'] < (max_x - crop)) & (psfsourceTable['XWIN_IMAGE'] > crop)
-            & (psfsourceTable['YWIN_IMAGE'] < (max_y) - crop) & (psfsourceTable['YWIN_IMAGE'] > crop)
-            & (flux_radius >= 1 / 0.498)]
+            (flux_radius >= 1 / 0.498)]
+
+        # PSFSources = psfsourceTable[
+        #     (psfsourceTable['XWIN_IMAGE'] < (max_x - crop)) & (psfsourceTable['XWIN_IMAGE'] > crop)
+        #     & (psfsourceTable['YWIN_IMAGE'] < (max_y) - crop) & (psfsourceTable['YWIN_IMAGE'] > crop) &
+        #     (flux_radius >= 1 / 0.498)]
 
         cleanPSFSources = psfsourceTable[
             (psfsourceTable['XWIN_IMAGE']< (max_x - crop)) & (psfsourceTable['XWIN_IMAGE'] > crop) &
@@ -929,7 +934,8 @@ def gal_match(raImage, decImage):
 # derive zero pt / put in swarped header
 
 
-def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma):
+def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma, data,
+           crop):
     colnames = good_cat_stars.colnames
 
     if len(colnames) > 4:
@@ -1232,7 +1238,14 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
     # catalog for clean sources
 
-    cleanPSFSources = PSFSources[(PSFSources['FLAGS'] == 0)]
+    crop = int(crop)
+    max_x = data.shape[0]
+    max_y = data.shape[1]
+
+    cleanPSFSources = PSFSources[
+        (PSFSources['XWIN_IMAGE'] < (max_x - crop)) & (PSFSources['XWIN_IMAGE'] > crop) &
+        (PSFSources['YWIN_IMAGE'] < (max_y) - crop) & (PSFSources['YWIN_IMAGE'] > crop) &
+        (PSFSources['FLAGS'] == 0)]
 
     PSFSources.write('%s.%s.ecsv' % (imageName, survey), overwrite=True)
     print('%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey))
@@ -3119,7 +3132,8 @@ def int_calibration(
                                                                                     crop, given_catalog)
     (cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars,
      aperweights_noclip, aper_clipped_all, autoweights_noclip, auto_clipped) = (
-        zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, chosen_survey, sigma))
+        zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, chosen_survey, sigma,
+               data, crop))
 
     if make_plots:
         if grb_ra:
@@ -3285,7 +3299,8 @@ def photometry(
         else:
             (cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars,
              aperweights_noclip, aper_clipped_all, autoweights_noclip, auto_clipped) = (
-                zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, chosen_survey, sigma))
+                zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, chosen_survey,
+                       sigma, data, crop))
             # if 'BUNIT' not in header:
             #     psfcatalogName = sex2(name, det_cut=det_thresh)
             #     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w,
