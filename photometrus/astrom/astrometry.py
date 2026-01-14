@@ -17,7 +17,7 @@ from datetime import datetime as dt
 from astropy.table import Table, Column
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
-from photometrus.settings import (gen_config_file_name, auto_bulge_detect, ASTROM_QUERY_CATALOGS)
+from photometrus.settings import (gen_config_file_name, auto_bulge_detect, ASTROM_QUERY_CATALOGS, set_vizier_mirror)
 from photometrus.utils.utils import combine_header_and_fits_list
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
@@ -75,6 +75,7 @@ def sexback(imgdir):
 def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
+    viz_url = set_vizier_mirror()
     if band:
         if band == 'Z' or band == 'Y':
             addition = f' -ASTREF_BAND J'
@@ -83,7 +84,7 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
     else:
         addition = ''
     if swarpcat:
-        command = ('scamp %s -c %s' % (swarpcat, sc))
+        command = ('scamp %s -c %s -REF_SERVER %s' % (swarpcat, sc, viz_url))
         command = command + addition
         # print('Executing command: %s' % command)
         subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -92,11 +93,11 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
         img_list = [os.path.join(imgdir, f) for f in img_list]
         img_list = ','.join(img_list)
         if distortdeg:
-            command = ('scamp %s -c %s -DISTORT_DEGREES %s' % (img_list, sc, distortdeg))
+            command = ('scamp %s -c %s -DISTORT_DEGREES %s -REF_SERVER %s' % (img_list, sc, distortdeg, viz_url))
             command = command + addition
             print('Executing command: %s' % command)
         else:
-            command = ('scamp %s -c %s' % (img_list, sc))
+            command = ('scamp %s -c %s -REF_SERVER %s' % (img_list, sc, viz_url))
             command = command + addition
             print('Executing command: %s' % command)
         subprocess.run(command.split(), check=True)
