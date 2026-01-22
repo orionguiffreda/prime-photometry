@@ -212,6 +212,10 @@ def gen_efficiency(imageName, PSFSources, band):
                     hdul.close()
 
                 print(f'Med {mag_type_name} efficiency :', med_efficiency)
+                
+                if med_efficiency > 0.7:
+                    print('\n*WARNING* Med efficiency larger than expected, investigation required!  Was the catalog '
+                          'AB conversion applied multiple times?\n')
         return efficiencies
     else:
         print('No applicable conversion factors found!  Cannot calculate efficiency!')
@@ -861,7 +865,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                         mass_imCoords[1] < (max_y - crop)))]
         print('Approximate catalogue source total in image bounds = ',len(crop_cat_stars))
 
-        good_cat_stars = Q[0]
+        good_cat_stars = Q[0].copy()
 
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
