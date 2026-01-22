@@ -212,10 +212,11 @@ def gen_efficiency(imageName, PSFSources, band):
                     hdul.close()
 
                 print(f'Med {mag_type_name} efficiency :', med_efficiency)
-                
-                if med_efficiency > 0.7:
-                    print('\n*WARNING* Med efficiency larger than expected, investigation required!  Was the catalog '
-                          'AB conversion applied multiple times?\n')
+
+        for eff in efficiencies:
+            if eff > 0.7:
+                raise ValueError(f'\n*WARNING* Med efficiency larger than expected!: {eff}, investigation '
+                                 f'required!  Was the catalog AB conversion applied multiple times?\n')
         return efficiencies
     else:
         print('No applicable conversion factors found!  Cannot calculate efficiency!')
