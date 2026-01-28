@@ -8,7 +8,7 @@ Settings for pipeline
 # %% Config File Names
 import os
 from pathlib import Path
-from astroquery.vizier import Vizier, Conf
+from astroquery.vizier import Vizier, conf
 import warnings
 
 import pandas as pd
@@ -318,20 +318,22 @@ def set_vizier_mirror():
     test_cat = 'II/246/'
 
     for url in mirrors:
-        old = Conf.server
+        old = conf.server
         try:
-            Conf.server = url
+            conf.server = url
 
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                Vizier(columns=["*"], row_limit=1).query_constraints(catalog=test_cat)
-
+                v = Vizier(columns=["*"],
+                           column_filters={'Jmag': '>12.5'},
+                           row_limit=1)
+                result = v.query_constraints(catalog=test_cat)
             print(f'Vizier mirror: {url}')
             break
 
         except Exception as e:
-            print(f' {url} mirror check failed: {e}')
-            Conf.server = old
+            print(f' {url} mirror check failed: \n{e}\n')
+            conf.server = old
     else:
         raise RuntimeError('No working Vizier mirror found!')
 

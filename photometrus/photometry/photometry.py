@@ -212,6 +212,11 @@ def gen_efficiency(imageName, PSFSources, band):
                     hdul.close()
 
                 print(f'Med {mag_type_name} efficiency :', med_efficiency)
+
+        for eff in efficiencies:
+            if eff > 0.7:
+                raise ValueError(f'\n*WARNING* Med efficiency larger than expected!: {eff}, investigation '
+                                 f'required!  Was the catalog AB conversion applied multiple times?\n')
         return efficiencies
     else:
         print('No applicable conversion factors found!  Cannot calculate efficiency!')
@@ -425,7 +430,8 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
                                 'e_%sap3' % band, '%smag' % band, '%smag3' % band, '%smag1' % band, 'e_%smag1' % band,
                                 'e_%smag' % band, 'e_%smag3' % band, '%smag' % band.lower(),'e_%smag' % band.lower(),
                                 '%sPSF' % band.lower(), 'e_%sPSF' % band.lower(),
-                                '%spmag' % band.lower(), 'e_%spmag' % band.lower()])
+                                '%spmag' % band.lower(), 'e_%spmag' % band.lower(),
+                                'Mclass'])
             try:
                 result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs])
                 test = result[0]
@@ -463,12 +469,17 @@ def query(raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4,
                             print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s'
                                   % (catNum, frame_long_str, frame_lat_str, width, mag_lims))
                             try:
-                                v = Vizier(columns=['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3]],
+                                if len(cols) == 4 or len(cols) < 4:
+                                    used_cols = ['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3]]
+                                elif len(cols) > 4:
+                                    used_cols = ['%s' % cols[0], '%s' % cols[1], '%s' % cols[2], '%s' % cols[3], '%s' % cols[4]]
+
+                                v = Vizier(columns=used_cols,
                                            column_filters={"%s" % cols[2]: mag_lims,
                                                            "%sFlag" % band.lower(): "<4",
                                                            "%sflags1" % band.lower(): "<16",
                                                            "%sperrbits" % band: '<256',
-                                                           "Mclass": '-1 | -2',
+                                                           # "Mclass": '-1 | -2',
                                                            }, row_limit=-1)
                                 Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
                                                    width=str(width) + 'm'
@@ -843,6 +854,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         idx_psfimage, idx_psfmass, d2d, d3d = massCatCoords.search_around_sky(psfsourceCatCoords,
                                                                               photoDistThresh * u.arcsec)
         print('Found %d good cross-matches' % len(idx_psfmass))
+
     else:
         colnames = Q[0].colnames
         RA = colnames[0]
@@ -854,7 +866,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                         mass_imCoords[1] < (max_y - crop)))]
         print('Approximate catalogue source total in image bounds = ',len(crop_cat_stars))
 
-        good_cat_stars = Q[0]
+        good_cat_stars = Q[0].copy()
 
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
@@ -904,7 +916,16 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                                                               photoDistThresh * u.arcsec)
         # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
 
-        print('Found %d good cross-matches' % len(idx_psfmass))
+        if 'Mclass' in colnames:
+            # pruning crossmatches to only include stars if applicable
+            print('Found %d good cross-matches before pruning' % len(idx_psfmass))
+            star_mask = np.isin(good_cat_stars[colnames[4]], [-1, -2])
+            star_matches = star_mask[idx_psfmass]
+            idx_psfimage = idx_psfimage[star_matches]
+            idx_psfmass = idx_psfmass[star_matches]
+            print('Found %d good cross-matches after galaxy pruning (ONLY for zp calc crossmatch)' % len(idx_psfmass))
+        else:
+            print('Found %d good cross-matches' % len(idx_psfmass))
 
     return good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords
 
@@ -938,7 +959,7 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
            crop):
     colnames = good_cat_stars.colnames
 
-    if len(colnames) > 4:
+    if len(colnames) > 6:
         magcolname = f'{band}MAG_{magtype}'
         magerrcolname = f'e_{band}MAG_{magtype}'
     else:
@@ -1677,7 +1698,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
     # mag diff calc betw. survey and prime for existing source crsmtches
     def mag_diff_calc(survey_cat, prime_cat, survey_idx, prime_idx, d2d, band):
         colnames = survey_cat.colnames
-        if len(colnames) > 4:
+        if len(colnames) > 6:
             magcolname = f'{band}MAG_{magtype}'
             magerrcolname = f'e_{band}MAG_{magtype}'
         else:
@@ -2286,7 +2307,7 @@ def photometric_fit_calc(cleanPSFsources, band, good_cat_stars, idx_psfmass, idx
 
     # appropriate mag column
     colnames = good_cat_stars.colnames
-    if len(colnames) > 4:
+    if len(colnames) > 6:
         magcol = f'{band}MAG_{magtype}'
         magerrcol = f'{band}MAG_{magtype}'
     else:
@@ -2377,7 +2398,7 @@ def photometry_plots(cleanPSFsources, PSFsources, data, imageName, survey, band,
 
     # appropriate mag column
     colnames = good_cat_stars.colnames
-    if len(colnames) > 4:
+    if len(colnames) > 6:
         magcol = f'{band}MAG_{magtype}'
         magerrcol = f'{band}MAG_{magtype}'
     else:
