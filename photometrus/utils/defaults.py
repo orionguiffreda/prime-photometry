@@ -9,12 +9,12 @@ PROCESSING_DEFAULTS = dict(
     parent=PIPELINE_DEFAULT_DIR, band='J', date=None, flat_col='objname',
     target=None, chip='1,2,3,4', rot_val=48, no_shift=False, astromnet=False,
     sky_override_path=False, removal=False, no_get_files=False, no_download=False, no_mflat=False, sigma=4, bulge=False,
-    sex=False, compress=False, ramplist=None, automode=False, poly_deg=4,
+    sex=False, compress=False, ramplist=None, automode=False, poly_deg=4, check_hist=False,
     stackpath=None, survey=None, grb_ra=None, grb_dec=None, grb_coordlist=None, grb_radius='4.0', grb_name='GRB',
     exp_query=False,
     no_plots=False, keep=False, grb_only=False, filepath=None, crop=300, sigma_photom=3, catalog=None,
     mag_low=PHOTOMETRY_MAG_LOWER_LIMIT, mag_high=PHOTOMETRY_MAG_UPPER_LIMIT, no_int_cal=False, det_cut=2, rampnum='0',
-    magtype='AUTO'
+    magtype='AUTO', parallel=False
 )
 
 FILE_DEFAULTS = dict(

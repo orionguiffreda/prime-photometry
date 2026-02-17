@@ -745,7 +745,12 @@ def iterate_and_test(
         print('WARNING: No good match found. Best crossmatch completion was < 0.1.')
         return 0, 0
 
-    print(f'Finished {crsmtch_iters} attempts. Best and final shifts: ({round(best_shift[0],5)}, {round(best_shift[1],5)}) '
+    if len(xy_shifts) < crsmtch_iters:
+        num_attempts = len(xy_shifts)
+    else:
+        num_attempts = crsmtch_iters
+        
+    print(f'Finished {num_attempts} attempts. Best and final shifts: ({round(best_shift[0],5)}, {round(best_shift[1],5)}) '
           f'→ Completion: {best_completion:.2f}')
     return best_shift[0], best_shift[1]
 

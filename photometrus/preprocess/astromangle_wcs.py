@@ -12,8 +12,10 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.io import fits
-from astropy.wcs.utils import fit_wcs_from_points
+from astropy.wcs.utils import fit_wcs_from_points, pixel_to_skycoord
+from astropy.wcs import WCS
 from astropy.table import Table
+import pandas as pd
 
 from photometrus.settings import gen_config_file_name
 
@@ -26,6 +28,8 @@ _wcs_matrix_tranlation = {
 }
 _default_sip_degree = 4
 _default_downsample = 16
+_wcs_table = pd.read_csv(gen_config_file_name('prime_wcs_template.csv'))
+print(_wcs_table)
 
 
 def get_sep_rot_table(chip_number, mesh_file_dir=_mesh_file_dir):
@@ -61,7 +65,36 @@ def calculate_wcs(
     table = gen_ra_dec(ra_tel, dec_tel, rot, chip_number, mesh_file_dir)
     table = table[::downsample]
     wcs = fit_wcs_from_points((table['x'], table['y']), table['coord'], projection='TAN', sip_degree=sip_degree)
+    middle_coords = pixel_to_skycoord(2044, 2044, wcs)
+    wcs = fit_wcs_from_points((table['x'], table['y']), table['coord'], projection='TAN', sip_degree=sip_degree, proj_point=middle_coords)
     return wcs
+
+
+def calculate_wcs_table(
+        ra_tel, dec_tel, rot, chip_number
+):
+    chip_dict = _wcs_table.loc[chip_number - 1].to_dict()
+    chip_header = fits.Header(chip_dict)
+    w = WCS(chip_header)
+    tel_coords = SkyCoord(ra_tel, dec_tel, unit=(u.deg, u.deg))
+    chip_coords = tel_coords.directional_offset_by((chip_dict['THETA']+rot)*u.degree, chip_dict['SEP']*u.degree)
+    w.wcs.crval = [chip_coords.ra.deg, chip_coords.dec.deg]
+    pa_x = rot+chip_dict['PA_X'] % 360
+    pa_y = rot+chip_dict['PA_Y'] % 360
+    theta_x = np.deg2rad(pa_x)  # +np.pi
+    theta_y = np.deg2rad(pa_y)
+    pscale_x = chip_dict['PSCALEX'] / 3600
+    pscale_y = chip_dict['PSCALEY'] / 3600
+    cd_matrix = [[-pscale_x * np.cos(theta_x), pscale_y * np.sin(theta_y)],
+                [pscale_x * np.sin(theta_x), pscale_y * np.cos(theta_y)]]
+    # cd_matrix = [
+    #     [-pscale_y * np.sin(theta), pscale_x * np.cos(theta)],
+    #     [-pscale_y * np.cos(theta), -pscale_x * np.sin(theta)]
+    # ]
+    w.wcs.pc = cd_matrix
+    # w.wcs.cdelt = [-1.0,-1.0]
+    w.wcs.set()
+    return w
 
 
 def calculate_wcs_header(
@@ -71,11 +104,12 @@ def calculate_wcs_header(
     dec_tel = file_header['DEC-D']
     rot = file_header['ROTOFF']  # - 48
     try:
-        rot = int(rot)
+        rot = float(rot)
     except ValueError:
         rot = rot_val
     chip_number = file_header['CHIP']
-    wcs = calculate_wcs(ra_tel, dec_tel, rot, chip_number, mesh_file_dir, sip_degree, downsample=downsample)
+    # wcs = calculate_wcs(ra_tel, dec_tel, rot, chip_number, mesh_file_dir, sip_degree, downsample=downsample)
+    wcs = calculate_wcs_table(ra_tel, dec_tel, rot, chip_number)
     return wcs
 
 
