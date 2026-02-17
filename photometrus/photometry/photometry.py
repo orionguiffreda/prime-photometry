@@ -4051,9 +4051,9 @@ def int_calibration(
     if make_plots:
         slope, intercept, int_err = single_plots(cleanPSFSources, PSFSources, data, name, survey, band, good_cat_stars,
                                                  idx_psfmass, idx_psfimage, sigma, weights_noclip, clipped, crop)
-
-        sync_queue.put("Calib. done, combining .ecsv files")
-        continue_queue.get()
+        if sync_queue:
+            sync_queue.put("Calib. done, combining .ecsv files")
+            continue_queue.get()
 
         if grb_ra:
             if grb_radius > 60:
@@ -4124,7 +4124,7 @@ def log_output(enable, filename):
 # full intercept calibration loop
 def full_int_calibration(
         name, directory, band, chip, crop, data, sigma, Q, chosen_survey, given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
-        idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec, grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue, continue_queue, no_plots=False,
+        idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec, grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue=None, continue_queue=None, no_plots=False,
         input_magtype=defaults['magtype'], input_parallel=False
 ):
 
