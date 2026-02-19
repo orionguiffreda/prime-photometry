@@ -307,14 +307,15 @@ def checkplot(output_directory, save_name, poly_deg=None):
                         f'\nPerhaps a critical issue with the flat?')
 
 
-def sky_gen(in_path, sky_path, sigma, poly=False):
+def sky_gen(in_path, sky_path, sigma, check_hist=False, poly=False):
     if poly:
         model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_path, poly_deg=defaults['poly_deg'])
         checkplot(output_directory=sky_path, save_name=poly_sky_path, poly_deg=defaults['poly_deg'])
     else:
         save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
                                        sigma=sigma)
-        checkplot(output_directory=sky_path, save_name=save_name)
+        if check_hist:
+            checkplot(output_directory=sky_path, save_name=save_name)
 
 #%%
 
@@ -323,6 +324,8 @@ def main():
     parser = argparse.ArgumentParser(description='Generates sky for given filter and dataset')
     parser.add_argument('-poly', action='store_true', help='Optional arg, use to generate polynomial sky '
                                                            'image from initial sky.')
+    parser.add_argument('-check_hist', action='store_true', help='Optional arg, use to generate histogram check plot '
+                                                                 'for sky image.')
     # parser.add_argument('filter', nargs=1, type=str, metavar='f', help='Filter being utilized (put first)')
     parser.add_argument('-in_path', type=str, help='[str] Input imgs path (usually ramps w/ astrometry), not necessary '
                                                    'w/ -poly')
@@ -330,7 +333,7 @@ def main():
     parser.add_argument('-sigma', type=int, help='[int] Sigma value for sigma clipping',default=defaults['sigma'])
     args, unknown = parser.parse_known_args()
 
-    sky_gen(args.in_path, args.sky_path, args.sigma, args.poly)
+    sky_gen(args.in_path, args.sky_path, args.sigma, args.check_hist, args.poly)
 
 
 if __name__ == "__main__":

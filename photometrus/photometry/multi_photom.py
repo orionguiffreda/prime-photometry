@@ -58,7 +58,7 @@ def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], ch
 
     cmd_str = f'\nEquivalent argparse cmd: photometrus photometry -stackpath {stackpath} -band {band} -chip {chip}'
     if grb_ra:
-        grb_str = f' -grb_ra {grb_ra} -grb_dec {grb_dec}'
+        grb_str = f' -grb_ra {grb_ra} -grb_dec {grb_dec} -grb_radius {grb_radius}'
     else:
         grb_str = ''
     print(cmd_str + grb_str)

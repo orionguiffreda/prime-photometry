@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from astroquery.vizier import Vizier, conf
 import warnings
+import calendar
 
 import pandas as pd
 from datetime import datetime
@@ -83,6 +84,13 @@ VIZIER_MIRRORS = [
     "vizier.inasan.ru",
     "vizier.china-vo.org"
 ]
+
+# keep magtype name *BELOW 4 CHARS*
+MAGTYPES = {
+    "AUTO": "AUTO",
+    "PSF": "PSF",
+    "APER": "APER"
+}
 
 GET_DATA_SETTINGS = dict(
     replace_list = [
@@ -254,7 +262,11 @@ def gen_mflat_file_name(band, chip, date=None, sflat=False):
             def extract_date(file):
                 if sflat:
                     half = file.split("-")[0]
-                    return datetime.strptime(half.split(".")[2], "%Y%m%d")
+                    # return datetime.strptime(half.split(".")[2], "%Y%m%d")
+                    given_date = datetime.strptime(half.split(".")[2], "%Y%m%d")
+                    days_in_month = calendar.monthrange(given_date.year, given_date.month)[1]
+                    target_date = given_date.replace(day=days_in_month // 2)    # middle of month
+                    return target_date
                 else:
                     return datetime.strptime(file.split(".")[2], "%Y%m%d")
 

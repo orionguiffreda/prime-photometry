@@ -131,6 +131,9 @@ def flatlists(date, flatlist, chip):
         print(f'Some starting files taken in diff band!, Majority band: {majority_band}, skipping bad indices...')
         flat_filter = majority_band
 
+    if flat_filter == 'Open':
+        flat_filter = 'Z'
+
     if log_start_flats:
         if log_end_flats:
             if log_start['FILTER1'][start_idx] == 'Z':
