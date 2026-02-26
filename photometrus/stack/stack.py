@@ -112,6 +112,7 @@ def astrom_check(imgdir):
 
 
 def swarp(imgdir, finout):
+    print('SWARP Stacking!')
     image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
     image_fnames.sort()
     header = fits.getheader(image_fnames[-1])
@@ -140,7 +141,7 @@ def swarp(imgdir, finout):
            , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
     s0 = ''
     com = s0.join(com)
-    out = subprocess.Popen([com], shell=True)
+    out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     out.wait()
     print('Co-added image created, all done!')
 

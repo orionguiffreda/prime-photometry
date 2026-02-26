@@ -253,7 +253,7 @@ def shift(subpath, band, adv=False, old=False):
     else:
         shift_x = shift_y = None
         good_fits = None
-        for imgname in all_fits:
+        for imgname in all_fits[:len(all_fits) // 2]:
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
                   (subpath, imgname, band))
             shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
@@ -261,8 +261,15 @@ def shift(subpath, band, adv=False, old=False):
                 good_fits = fits
                 break
 
+            print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s -adv' %
+                  (subpath, imgname, band))
+            shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=True)
+            if (shift_x != 0) or (shift_y != 0):
+                good_fits = fits
+                break
+
         if good_fits is None:
-            print('No adequate fits image found in directory for astrom_shift!  Assuming no shift!')
+            print('Examined half of applicable fits files in directory for astrom_shift w/ no success!  Assuming no shift!')
 
         return shift_x, shift_y
 
@@ -337,32 +344,37 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             imghdr = img[0].header
             rotoff_check = int(imghdr['ROTOFF'])
             rotoff_real = True
-            print('ROTOFF value is real: %i... Attempting more advanced shift algorithm (may take a while!)...' %
+            print('ROTOFF value is real: %i...' %
                   rotoff_check)
         except (ValueError, KeyError):
             print('ROTOFF value is not real! Varying ROTOFF value by +90 deg...')
 
         if rotoff_real:
-            # Advanced shift
-            try:
-                shift(astromdir, band, adv=True)
-            except (IndexError, ValueError) as e:
-                print("Shift algorithm (advanced) encountered an error: %s" % e)
+            raise Exception('\n*PROCESSING ARRESTED, CHECK FIELD*'
+                            'No suitable shift values found across half the total images! Arresting processing to prevent'
+                            'bad image generation / hanging, are the images bad quality or very dense?')
 
-            shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
-            if not shift_fail_check:
-                break
-
-            # old algo fallback
-            if not bulge:
-                print('Improved shift algorithm failed... Attempting old shift algorithm. *MAY HAVE INACCURACY*')
-                try:
-                    shift(astromdir, band, old=True)
-                except (IndexError, ValueError) as e:
-                    print("Shift algorithm (old) encountered an error: %s" % e)
-
-            # No rotation variation if rotoff was real, even if these failed
-            break
+        # if rotoff_real:
+        #     # Advanced shift
+        #     try:
+        #         shift(astromdir, band, adv=True)
+        #     except (IndexError, ValueError) as e:
+        #         print("Shift algorithm (advanced) encountered an error: %s" % e)
+        #
+        #     shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
+        #     if not shift_fail_check:
+        #         break
+        #
+        #     # old algo fallback
+        #     if not bulge:
+        #         print('Improved shift algorithm failed... Attempting old shift algorithm. *MAY HAVE INACCURACY*')
+        #         try:
+        #             shift(astromdir, band, old=True)
+        #         except (IndexError, ValueError) as e:
+        #             print("Shift algorithm (old) encountered an error: %s" % e)
+        #
+        #     # No rotation variation if rotoff was real, even if these failed
+        #     break
 
         else:
             # Rotation variation block for if rotoff is bad

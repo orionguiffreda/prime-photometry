@@ -83,24 +83,35 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
             addition = f' -ASTREF_BAND {band}'
     else:
         addition = ''
+
+    timeout = 180
     if swarpcat:
         command = ('scamp %s -c %s -REF_SERVER %s' % (swarpcat, sc, viz_url))
         command = command + addition
         # print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            raise TimeoutError(f'*PROCESSING ARRESTED* \nSCAMP calculation time exceeded {timeout}s!  '
+                               f'Recommend checking astrometry for this field!')
+
     else:
         img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
         img_list = [os.path.join(imgdir, f) for f in img_list]
         img_list = ','.join(img_list)
         if distortdeg:
-            command = ('scamp %s -c %s -DISTORT_DEGREES %s -REF_SERVER %s' % (img_list, sc, distortdeg, viz_url))
-            command = command + addition
-            print('Executing command: %s' % command)
+            dist_addition = f' -DISTORT_DEGREES {distortdeg}'
         else:
-            command = ('scamp %s -c %s -REF_SERVER %s' % (img_list, sc, viz_url))
-            command = command + addition
-            print('Executing command: %s' % command)
-        subprocess.run(command.split(), check=True)
+            dist_addition = ''
+
+        command = ('scamp %s -c %s -REF_SERVER %s%s' % (img_list, sc, viz_url, dist_addition))
+        command = command + addition
+        print('Executing command: %s' % command)
+        try:
+            subprocess.run(command.split(), check=True, timeout=timeout)
+        except subprocess.TimeoutExpired as e:
+            raise TimeoutError(f'*PROCESSING ARRESTED* \nSCAMP calculation time exceeded {timeout}s!  '
+                               f'Recommend checking astrometry for this field!')
     # print(pre + ext + ' scamped!')
 
 
