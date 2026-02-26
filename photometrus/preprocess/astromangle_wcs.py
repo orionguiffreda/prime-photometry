@@ -29,7 +29,7 @@ _wcs_matrix_tranlation = {
 _default_sip_degree = 4
 _default_downsample = 16
 _wcs_table = pd.read_csv(gen_config_file_name('prime_wcs_template.csv'))
-print(_wcs_table)
+# print(_wcs_table)
 
 
 def get_sep_rot_table(chip_number, mesh_file_dir=_mesh_file_dir):

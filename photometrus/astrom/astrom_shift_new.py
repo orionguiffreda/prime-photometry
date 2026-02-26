@@ -448,11 +448,11 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
 
     # print(sexcat.colnames)
     if adv:
-        inner_primesources = sexcat[(sexcat['FLAGS'] < 2) &
+        inner_primesources = sexcat[(sexcat['FLAGS'] == 0) &
                                     (sexcat['X_IMAGE'] < (max_x - right_crop)) & (sexcat['X_IMAGE'] > left_crop)
                                     & (sexcat['Y_IMAGE'] < (max_y) - y_crop) & (
                                                 sexcat['Y_IMAGE'] > y_crop) & (sexcat['FLUX_RADIUS'] * 0.498 > 1)
-                                    & (sexcat['CLASS_STAR'] > 0.5)]
+                                    & (sexcat['FLUX_MAX'] / sexcat['FLUX_AUTO'] < 0.5)]
     else:
         inner_primesources = sexcat[(sexcat['FLAGS'] <= 1) &
                                     (sexcat['X_IMAGE'] < (max_x - right_crop)) & (sexcat['X_IMAGE'] > left_crop)
@@ -885,19 +885,22 @@ def shift(
     if bulge:
         boxsize, crop = boxchange(4)
         thresh_high = 0.25
+    elif adv_solve:
+        boxsize, crop = boxchange(6)
+        thresh_high = 0.25
     else:
         boxsize, crop = boxchange(10, x_offset=x_offset)
 
-    if adv_solve:
-        if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
-            print('Previous psf cat detected, saving you some time and skipping all sextractor steps...')
-            catname = os.path.splitext(imagename)[0] + '.psf.cat'
-        else:
-            catname = sex1(imagename, bulge=bulge)
-            psfex(catname)
-            catname = sex2(imagename)
-    else:
-        sex1(imagename, bulge=bulge)
+    # if adv_solve:
+    #     if os.path.isfile(os.path.splitext(imagename)[0] + '.psf.cat'):
+    #         print('Previous psf cat detected, saving you some time and skipping all sextractor steps...')
+    #         catname = os.path.splitext(imagename)[0] + '.psf.cat'
+    #     else:
+    #         catname = sex1(imagename, bulge=bulge)
+    #         # psfex(catname)
+    #         # catname = sex2(imagename)
+    # else:
+    sex1(imagename, bulge=bulge)
 
     # Q = cat_query(raImage, decImage, filter_used, boxsize, maglow=maglow, maghigh=maghigh)
     Q, coords, catNum, magcol, mag_low_cutoff, mag_high_cutoff, eff_boxsize, errbits = complex_query(raImage, decImage,
