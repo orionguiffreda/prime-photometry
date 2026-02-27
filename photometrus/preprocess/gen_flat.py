@@ -187,6 +187,9 @@ def flatlists(date, flatlist, chip):
 def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,end_images_names_1=None,end_images_names_2=None):
     print('getting data for groups of flats and stacking...')
 
+    start_images_length = None
+    end_images_length = None
+
     if start_images_names_1:
         image_list_1 = []
         for f in start_images_names_1:
@@ -212,6 +215,8 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
             start_median.append(normsub)
         start_median_norm = np.nanmedian(np.stack(start_median), axis=0)
 
+        start_images_length = len(image_list_1 + image_list_2)
+
     if end_images_names_1:
         image_list_3 = []
         for f in end_images_names_1:
@@ -236,6 +241,8 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
             normsub = sub / np.nanmedian(sub)
             end_median.append(normsub)
         end_median_norm = np.nanmedian(np.stack(end_median), axis=0)
+
+        end_images_length = len(image_list_3 + image_list_4)
 
     """
     #    old algo
@@ -304,7 +311,16 @@ def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,en
 
         fits.HDUList(fits.PrimaryHDU(header=header_end, data=end_median_norm)).writeto(output_fname_end, overwrite=True)
 
-    return save_name_start, save_name_end
+    if end_images_length > start_images_length:
+        save_name_main = save_name_end
+        save_name_alt = save_name_start
+        print('End of night flat set has more exposure time! Taking it as main.')
+    else:
+        save_name_main = save_name_start
+        save_name_alt = save_name_end
+        print('Start of night flat set has more exposure time! Taking it as main.')
+
+    return save_name_main, save_name_alt
 #%%
 
 
@@ -313,12 +329,12 @@ def flatgen(directory, date, chip, band=None):
     if flatlist:
         start_images_names_1, start_images_names_2, end_images_names_1, end_images_names_2, flat_filter = flatlists(
             date, flatlist, chip)
-        save_name_start, save_name_end = flatprocessing(directory, start_images_names_1, start_images_names_2,
+        save_name_main, save_name_alt = flatprocessing(directory, start_images_names_1, start_images_names_2,
                                                         end_images_names_1, end_images_names_2)
     else:
         print('No mflat data taken during this night, halting mflat gen...')
-        save_name_start = save_name_end = flat_filter = 0
-    return save_name_start, save_name_end, flat_filter
+        save_name_main = save_name_alt = flat_filter = 0
+    return save_name_main, save_name_alt, flat_filter
 
 
 def main():
@@ -331,7 +347,7 @@ def main():
                                                 ' try to generate mflats regardless of filter', default=None)
     args, unknown = parser.parse_known_args()
 
-    save_name_start, save_name_end, flat_filter = flatgen(args.dir, args.date, args.chip, args.band)
+    save_name_main, save_name_alt, flat_filter = flatgen(args.dir, args.date, args.chip, args.band)
 
 
 if __name__ == "__main__":

@@ -704,6 +704,7 @@ def sex1(imageName, det_cut):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
+            raise Exception('Sextractor failed to run, is the stacked image quality adequate?')
     else:
         try:
             command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' %
@@ -712,6 +713,7 @@ def sex1(imageName, det_cut):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
+            raise Exception('Sextractor failed to run, is the stacked image quality adequate?')
     return catalogName
 
 
@@ -822,7 +824,7 @@ def sex2(imageName, det_cut, catalogName):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
-            print('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
+            raise Exception('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
                   '"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL" from this subprocess command to investigate.')
     else:
         try:
@@ -833,7 +835,7 @@ def sex2(imageName, det_cut, catalogName):
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except subprocess.CalledProcessError as err:
             print('Could not run sextractor with exit error %s' % err)
-            print('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
+            raise Exception('Is there a problem with the sextractor configs or PSF model? Recommend temporarily removing '
                   '"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL" from this subprocess command to investigate.')
     return psfcatalogName
 
@@ -992,7 +994,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         else:
             print('Found %d good cross-matches' % len(idx_psfmass))
 
-    return good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords
+    return good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars
 
 
 def queryexport(good_cat_stars, imageName, survey):
@@ -1107,7 +1109,7 @@ def zp_write(PSFSources, imageName, zp, e_zp, calmag, calmagerr, weights_noclip,
     return PSFSources, weights_noclip, clipped
 
 
-def single_zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_mass, idx_image, imageName, band, survey, sigma, data,
+def single_zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_mass, idx_image, imageName, band, survey, sigma, data,
            crop):
     """
     Calculates and writes zero pt statistics to header for specific magtype
@@ -1219,16 +1221,16 @@ def single_zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_mass, idx_ima
         PSFSources.write('%s.%s.%s.ecsv' % (imageName, survey, magtype), overwrite=True)
         print('%s.%s.%s.ecsv written, CSV w/ corrected mags' % (imageName, survey, MAGTYPES[magtype]))
 
-        if abs(len(idx_mass) / len(ab_cat_stars)) < 0.03:
-            raise Exception(f'*WARNING* Significant disparity in survey vs. cross-matched source num (<0.03), '
-                            f'survey/crsmtch ratio: {round(abs(len(idx_mass) / len(ab_cat_stars)), 3)}'
+        if abs(len(idx_mass) / len(crop_cat_stars)) < 0.03:
+            raise Exception(f'*WARNING* Significant disparity in cropped survey vs. cross-matched source num (<0.03), '
+                            f'crsmtch/survey ratio: {round(abs(len(idx_mass) / len(ab_cat_stars)), 3)}'
                             f'\nPhotometry likely NOT reliable, Recommend checking field, '
                             f'likely an astrometric & or stacking issue!')
 
         return cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars
 
 
-def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma, data,
+def zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma, data,
            crop):
     colnames = good_cat_stars.colnames
 
@@ -1472,8 +1474,8 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
     # good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=survey)
     # ab_cat_stars = good_cat_stars
 
-    if abs(len(idx_psfmass) / len(ab_cat_stars)) < 0.03:
-        raise Exception(f'*WARNING* Significant disparity in survey vs. cross-matched source num (<0.03), '
+    if abs(len(idx_psfmass) / len(crop_cat_stars)) < 0.03:
+        raise Exception(f'*WARNING* Significant disparity in cropped survey vs. cross-matched source num (<0.03), '
                         f'survey/crsmtch ratio: {round(abs(len(idx_psfmass) / len(ab_cat_stars)), 3)}'
                         f'\nPhotometry likely NOT reliable, Recommend checking field, '
                         f'likely an astrometric & or stacking issue!')
@@ -1486,8 +1488,14 @@ def zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimag
 
 
 # New Source Search
-def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, survey, band, ab_cat_stars,
-                    mag_low_lim=PHOTOMETRY_MAG_LOWER_LIMIT, grbname=defaults['grb_name'], **kwargs):
+def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars, directory, chip, grbname=defaults['grb_name'],
+                    mag_low_lim=PHOTOMETRY_MAG_LOWER_LIMIT,  **kwargs):
+
+    source_ra = ra
+    source_dec = dec
+    ab_cat_stars = good_cat_stars
+    header = fits.getheader(imageName)
+    w = WCS(header)
 
     if grbname != defaults['grb_name']:
         grb_name = grbname
@@ -1570,7 +1578,7 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
                 seen.add(l)
         plt.legend(filtered_handles, filtered_labels, loc='best')
         plt.savefig(savename + '.png', dpi=300)
-        plt.clf()
+        plt.close()
 
         fits.writeto(savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
         return savename, threshname
@@ -1710,9 +1718,10 @@ def newsourcesearch(source_ra, source_dec, thresh, directory, w, imageName, surv
         print(f'Error in finding lim mag for survey catalogs, no matching catalog found? '
               f'Using generous PRIME lim: {lim_mag}')
 
+    print(f' {survey} limiting mag: {lim_mag}')
     PSFsources_new = PSFsources_nomatch[(PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] < lim_mag) &
                                         (PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] > mag_low_lim)]
-    print('# of sources found after removing sources < %.2f & > %.2f: %i' % (mag_low_lim, lim_mag, len(PSFsources_new)))
+    print('# of sources found after removing sources dimmer than %.2f & brighter than %.2f: %i' % (mag_low_lim, lim_mag, len(PSFsources_new)))
 
     PSFsources_new.write('%s_Sources.%s.%s.%s.ecsv' % (newsrcname, imageName, survey, num), overwrite=True)
     print('New source full catalog written!')
@@ -1814,7 +1823,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
         size = 4 * photoDistThresh * u.arcsec
         try:
-            cutout = Cutout2D(imgdata, GRBcoords, size, wcs=w, copy=True)
+            cutout = Cutout2D(imgdata, GRBcoords[0], size, wcs=w, copy=True)
             region = CircleSkyRegion(center=GRBcoords[0], radius=Angle(thresh, unit='arcsec'))
             pix_region = region.to_pixel(cutout.wcs)
         except astropy.nddata.utils.NoOverlapError:
@@ -1872,7 +1881,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 seen.add(l)
         plt.legend(filtered_handles, filtered_labels, loc='best')
         plt.savefig(savename + '.png', dpi=300)
-        plt.clf()
+        plt.close()
 
         fits.writeto(savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
 
@@ -1957,7 +1966,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     sep = d2d
             else:
                 # survey mag - prime mag
-                mag_diff = float(survey_cat[magcolname][survey_idx]) - float(prime_cat[f'{band}MAG_{col_magtype}'])
+                mag_diff = float(survey_cat[magcolname][survey_idx].item()) - float(prime_cat[f'{band}MAG_{col_magtype}'].item())
 
                 # errors in quad
                 comb_err = np.sqrt(survey_cat[magerrcolname][survey_idx] ** 2 +
@@ -1974,7 +1983,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 flg = 1
 
             if not np.isscalar(sep):
-                sep = sep
+                sep = sep[0]
             elif len(sep) > 1:
                 sep = sep[0]
 
@@ -2435,9 +2444,15 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             print(
                 ' Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius (HWHM) = %.3f arcsec and SNR = %.3f' % (
                     grb_ra, grb_dec, grb_rad, grb_snr))
-            print(' %s magnitude of GRB is %.2f +/- %.2f' % (band,
-                                                             mag_ecsvcleanSources[idx_GRBcleanpsf][f'{band}MAG_{MAGTYPES[magtype]}'][0],
-                                                             mag_ecsvcleanSources[idx_GRBcleanpsf][f'e_{band}MAG_{MAGTYPES[magtype]}'][0]))
+
+            all_magtypes = set(MAGTYPES.keys())
+            for mag in all_magtypes:
+                try:
+                    print(f' %s {mag} magnitude of GRB is %.2f +/- %.2f' % (band,
+                                                                     mag_ecsvcleanSources[idx_GRBcleanpsf][f'{band}MAG_{mag}'][0],
+                                                                     mag_ecsvcleanSources[idx_GRBcleanpsf][f'e_{band}MAG_{mag}'][0]))
+                except KeyError:
+                    pass
 
             # survey crsmtch check
             idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = (
@@ -3167,37 +3182,37 @@ def single_plots(cleanPSFsources, PSFsources, data, imageName, survey, band, goo
 
     # Crossmatch location check plot
     # if not os.path.isfile('%s_C%s_source_check_plot_%s.png' % (survey, chip, num)):
-    mean, median, sigma_plot = sigma_clipped_stats(data)
-
-    fig = plt.figure(figsize=(10, 10))
-    ax = fig.gca()
-
-    im = ax.imshow(
-        data,
-        vmin=median - 1.5 * sigma_plot,
-        vmax=median + 1.5 * sigma_plot,
-        origin='lower'
-    )
-
-    # Draw circles
-    circles = [
-        plt.Circle(
-            (cleanPSFsources['X_IMAGE'][idx_image][i],
-             cleanPSFsources['Y_IMAGE'][idx_image][i]),
-            radius=5,
-            edgecolor='r',
-            facecolor='None'
-        ) for i in range(len(cleanPSFsources['X_IMAGE'][idx_image]))
-    ]
-    for c in circles:
-        ax.add_artist(c)
-
-    cbar = fig.colorbar(im, ax=ax)
-    cbar.set_label("Pixel Value")
-
-    plt.savefig('%s_C%s_source_check_plot_%s%s' % (survey, chip, num, end_name), dpi=150)
-    print('Saved source location check plot to dir!')
-    plt.clf()
+    # mean, median, sigma_plot = sigma_clipped_stats(data)
+    #
+    # fig = plt.figure(figsize=(10, 10))
+    # ax = fig.gca()
+    #
+    # im = ax.imshow(
+    #     data,
+    #     vmin=median - 1.5 * sigma_plot,
+    #     vmax=median + 1.5 * sigma_plot,
+    #     origin='lower'
+    # )
+    #
+    # # Draw circles
+    # circles = [
+    #     plt.Circle(
+    #         (cleanPSFsources['X_IMAGE'][idx_image][i],
+    #          cleanPSFsources['Y_IMAGE'][idx_image][i]),
+    #         radius=5,
+    #         edgecolor='r',
+    #         facecolor='None'
+    #     ) for i in range(len(cleanPSFsources['X_IMAGE'][idx_image]))
+    # ]
+    # for c in circles:
+    #     ax.add_artist(c)
+    #
+    # cbar = fig.colorbar(im, ax=ax)
+    # cbar.set_label("Pixel Value")
+    #
+    # plt.savefig('%s_C%s_source_check_plot_%s%s' % (survey, chip, num, end_name), dpi=150)
+    # print('Saved source location check plot to dir!')
+    # plt.clf()
 
     plt.close('all')
 
@@ -3983,7 +3998,7 @@ def grb_rad_convert(rad):
     else:
         print('Only arcsec, arcmin, and deg are supported! Default = arcsec')
         raise Exception('Use supported units.')
-    return abs(arcconvert)
+    return float(abs(arcconvert))
 
 
 #%%
@@ -4039,13 +4054,18 @@ def int_calibration(
     key0 = list(Q.keys())[0]
     Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
 
-    psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.photom.cat') and f'C{chip}' in f]
+    if grb_ra:
+        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.photom.cat') and f'C{chip}' in f
+                          and '.fits.photom' not in f]
+    else:
+        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.fits.photom.cat') and f'C{chip}' in f]
+
     psfcatalogName = ''.join(psfcatalogName)
-    good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
-                                                                                    crop, given_catalog)
+    good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
+        tables(Q, data, w, psfcatalogName, crop, given_catalog))
 
     cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars = single_zeropt(
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, survey, sigma,
+        good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, survey, sigma,
         data, crop)
 
     if make_plots:
@@ -4057,8 +4077,8 @@ def int_calibration(
 
         if grb_ra:
             if grb_radius > 60:
-                newsourcesearch(grb_ra, grb_dec, grb_radius, directory, w, name, chosen_survey, band, ab_cat_stars,
-                                mag_low_lim=mag_low_lim, grbname=grb_name)
+                newsourcesearch(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory,
+                    chip, grbname=grb_name, mag_low_lim=mag_low_lim)
                 # GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory)
             else:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_radius, massCatCoords, ab_cat_stars, directory,
@@ -4123,7 +4143,7 @@ def log_output(enable, filename):
 
 # full intercept calibration loop
 def full_int_calibration(
-        name, directory, band, chip, crop, data, sigma, Q, chosen_survey, given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
+        name, directory, band, chip, crop, data, sigma, Q, chosen_survey, given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
         idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec, grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue=None, continue_queue=None, no_plots=False,
         input_magtype=defaults['magtype'], input_parallel=False
 ):
@@ -4147,7 +4167,7 @@ def full_int_calibration(
                 print(f'Sigma value increased for PSF in lower exp. time field: sigma = {sigma}')
 
         cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars = single_zeropt(
-                                                    good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass,
+                                                    good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass,
                                                     idx_psfimage, name, band, chosen_survey, sigma, data, crop
                                                 )
 
@@ -4310,17 +4330,18 @@ def full_int_calibration(
                     else:
                         comb_mag_catalogs(directory, name, chosen_survey)
 
-                if grb_ra:
-                    keep = True
-                    if grb_dec is None:
-                        print('Only GRB RA is found, GRB Dec is None!  Cant conduct grb analysis, '
-                              'make sure the -grb_dec flag is correctly formatted!')
-                    if grb_thresh > 60:
-                        newsourcesearch(**grb_arg_dict)
-                    else:
+                if not parallel:
+                    if grb_ra:
+                        keep = True
+                        if grb_dec is None:
+                            print('Only GRB RA is found, GRB Dec is None!  Cant conduct grb analysis, '
+                                  'make sure the -grb_dec flag is correctly formatted!')
+                        if grb_thresh > 60:
+                            newsourcesearch(**grb_arg_dict)
+                        else:
+                            GRB(**grb_arg_dict)
+                    elif grb_coordlist:
                         GRB(**grb_arg_dict)
-                elif grb_coordlist:
-                    GRB(**grb_arg_dict)
 
 
 # %% optional removal of intermediate files
@@ -4391,8 +4412,8 @@ def photometry(
                                     f'the -grb_only flag!')
 
         psfcatalogName = name.replace('.fits', '.photom.cat')
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
-                                                                                        crop, given_catalog)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
+            tables(Q, data, w, psfcatalogName, crop, given_catalog))
         colnames = good_cat_stars.colnames
         magcolname = colnames[2]
         good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=chosen_survey)
@@ -4402,8 +4423,8 @@ def photometry(
         else:
             if grb_thresh > 60:
                 # newsourcesearch(grb_ra, grb_dec, w, name, chosen_survey, band, massCatCoords, grb_thresh)
-                newsourcesearch(grb_ra, grb_dec, grb_thresh, directory, w, name, chosen_survey, band, ab_cat_stars,
-                                mag_low_lim=mag_low_cutoff, grbname=grb_name)
+                newsourcesearch(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip,
+                                grbname=grb_name, mag_low_lim=mag_low_cutoff)
             else:
                 GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars, directory, chip, grbname=grb_name)
     else:
@@ -4416,8 +4437,8 @@ def photometry(
             catalogName = sex1(name, det_cut=det_thresh)
             psfex(catalogName, band, data, crop)
             psfcatalogName = sex2(name, det_cut=det_thresh, catalogName=catalogName)
-        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords = tables(Q, data, w, psfcatalogName,
-                                                                                        crop, given_catalog)
+        good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
+            tables(Q, data, w, psfcatalogName, crop, given_catalog))
         if len(idx_psfimage) == 0:
             raise ValueError('No crossmatches found!  Cannot continue with photometry!  Is there something wrong with the image, '
                   'source catalogs, or psf model?  If those all seem normal, perhaps the image has had pixel values scaled'
@@ -4427,7 +4448,7 @@ def photometry(
             if no_int_cal:
                 (cleanPSFSources, PSFsources, psfweights_noclip, psf_clipped, ab_cat_stars,
                  aperweights_noclip, aper_clipped_all, autoweights_noclip, auto_clipped) = (
-                    zeropt(good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band,
+                    zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band,
                            chosen_survey,
                            sigma, data, crop))
 
@@ -4449,9 +4470,8 @@ def photometry(
                         print('Only GRB RA is found, GRB Dec is None!  Cant conduct grb analysis, '
                               'make sure the -grb_dec flag is correctly formatted!')
                     if grb_thresh > 60:
-                        newsourcesearch(grb_ra, grb_dec, grb_thresh, directory, w, name, chosen_survey, band,
-                                        ab_cat_stars,
-                                        mag_low_lim=mag_low_cutoff, grbname=grb_name)
+                        newsourcesearch(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars,
+                            directory, chip, grbname=grb_name, mag_low_lim=mag_low_cutoff)
                     else:
                         GRB(grb_ra, grb_dec, name, chosen_survey, band, grb_thresh, massCatCoords, ab_cat_stars,
                             directory, chip, grbname=grb_name)
@@ -4472,7 +4492,7 @@ def photometry(
                     auto_calib = Process(target=full_int_calibration,
                                          args=(
                                              name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
-                                             given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
+                                             given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
                                              idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec,
                                              grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue, continue_queue
                                          ),
@@ -4484,7 +4504,7 @@ def photometry(
                     psf_calib = Process(target=full_int_calibration,
                                         args=(
                                             name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
-                                            given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
+                                            given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
                                             idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec,
                                             grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue, continue_queue
                                         ),
@@ -4496,7 +4516,7 @@ def photometry(
                     aper_calib = Process(target=full_int_calibration,
                                         args=(
                                             name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
-                                            given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
+                                            given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
                                             idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec,
                                             grb_coordlist, grb_name, grb_thresh, comp_lvl, sync_queue, continue_queue
                                         ),
@@ -4564,10 +4584,47 @@ def photometry(
                         aper_calib.join()
                         raise
 
+                    colnames = good_cat_stars.colnames
+                    if len(colnames) > 6:
+                        magcolname = f'{band}MAG_{MAGTYPES[magtype]}'
+                    else:
+                        magcolname = colnames[2]
+
+                    good_cat_stars[magcolname] = ab_convert(good_cat_stars[magcolname], band=band, survey=chosen_survey)
+                    ab_cat_stars = good_cat_stars
+
+                    grb_arg_dict = dict(
+                        ra=grb_ra,
+                        dec=grb_dec,
+                        imageName=name,
+                        survey=chosen_survey,
+                        band=band,
+                        thresh=grb_thresh,
+                        massCatCoords=massCatCoords,
+                        good_cat_stars=ab_cat_stars,
+                        directory=directory,
+                        chip=chip,
+                        coordlist=grb_coordlist,
+                        grbname=grb_name,
+                        mag_low_lim=mag_low_cutoff
+                    )
+
+                    if grb_ra:
+                        keep = True
+                        if grb_dec is None:
+                            print('Only GRB RA is found, GRB Dec is None!  Cant conduct grb analysis, '
+                                  'make sure the -grb_dec flag is correctly formatted!')
+                        if grb_thresh > 60:
+                            newsourcesearch(**grb_arg_dict)
+                        else:
+                            GRB(**grb_arg_dict)
+                    elif grb_coordlist:
+                        GRB(**grb_arg_dict)
+
                 else:
                     full_int_calibration(
                         name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
-                        given_catalog, good_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
+                        given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
                         idx_psfmass, idx_psfimage, mag_high_lim, mag_low_cutoff, grb_ra, grb_dec,
                         grb_coordlist, grb_name, grb_thresh, comp_lvl,
                         no_plots=no_plots, input_magtype="AUTO", input_parallel=False

@@ -50,7 +50,7 @@ def mean_filter_masking(image, size=30):
     print('start_nan_percentage: {}'.format(nan_percent))
     filter_image = image.copy()
     filter_image[np.isnan(filter_image)] = np.nanmedian(image)
-    plt.imsave('filter_img.png',filter_image,vmin=-1,vmax=1)
+    # plt.imsave('filter_img.png',filter_image,vmin=-1,vmax=1)
     # filter_image_norm = np.max(np.abs(filter_image))
     nan_percent = 100 * np.count_nonzero(np.isnan(filter_image)) / (image.shape[0] * image.shape[1])
     print('filter_nan_percentage: {}'.format(nan_percent))
@@ -134,6 +134,14 @@ def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=
         group_files = image_fnames[file_counter:file_counter+sky_group_size]
         print(group_files)
         images = [sigma_clipped(fits.getdata(f), sigma) for f in group_files]
+
+        # images = []
+        # for f in group_files:
+        #     single_img = fits.getdata(f)
+        #     single_med = median_filter_masking(single_img, size=128)
+        #     single_sky_image = sigma_clipped(single_img, sigma, sky=single_med)
+        #     images.append(single_sky_image)
+
         images = [img / np.nanmedian(img) for img in images]
         # images = [sigma_clipped(image) for image in images]
         median_array.append(np.nanmedian(images, axis=0))
@@ -266,7 +274,7 @@ def checkplot(output_directory, save_name, poly_deg=None):
         plt.title('Sky Image Histogram')
         plt.savefig('%s.check_plot.png' % skypath, dpi=300)
 
-        if not save_name.startswith('sky.'):
+        if save_name.startswith('cheb.'):
             print(f'Generating self sky - cheb2d sky residual data!')
             skyhdr = fits.getheader(skypath)
             orig_skypath = skypath.replace(f'cheb.{poly_deg}.','')
@@ -310,7 +318,8 @@ def checkplot(output_directory, save_name, poly_deg=None):
 def sky_gen(in_path, sky_path, sigma, check_hist=False, poly=False):
     if poly:
         model, coeffs, poly_sky_path = gen_poly_fit(sky_img_path=sky_path, poly_deg=defaults['poly_deg'])
-        checkplot(output_directory=sky_path, save_name=poly_sky_path, poly_deg=defaults['poly_deg'])
+        if check_hist:
+            checkplot(output_directory=sky_path, save_name=poly_sky_path, poly_deg=defaults['poly_deg'])
     else:
         save_name = gen_flat_sky_image(science_data_directory=in_path, output_directory=sky_path, sky_group_size=None,
                                        sigma=sigma)
