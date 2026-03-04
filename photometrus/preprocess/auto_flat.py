@@ -39,28 +39,28 @@ def auto_flat_creation(date, band=None, chip=None):
 
         print('\nBeginning mflat gen for chip %s' % f)
 
-        save_name_start, save_name_end, flat_filter = gen_flat.flatgen(mflat_storage_dir, date, f, band)
+        save_name_main, save_name_alt, flat_filter = gen_flat.flatgen(mflat_storage_dir, date, f, band)
 
-        if save_name_start:
-            save_name = save_name_start
-        elif save_name_end:
-            save_name = save_name_end
+        if save_name_main:
+            save_name = save_name_main
+        elif save_name_alt:
+            save_name = save_name_alt
         else:
             print('Will take closest mflat during processing, continuing..')
             save_name = 0
 
         if save_name:
             datename = 'mflat.%s.%s.C%s.fits' % (flat_filter, date, f)
-            datename_end = 'mflat.end.%s.%s.C%s.fits' % (flat_filter, date, f)
+            datename_end = 'mflat.alt.%s.%s.C%s.fits' % (flat_filter, date, f)
 
             current_chosen_path = os.path.join(mflat_storage_dir, save_name)
             renamed_chosen_path = os.path.join(mflat_storage_dir, datename)
             os.rename(current_chosen_path, renamed_chosen_path)
             print('Renamed to', renamed_chosen_path)
 
-            if save_name_start:
-                if save_name_end:
-                    current_auxiliary_path = os.path.join(mflat_storage_dir, save_name_end)
+            if save_name_main:
+                if save_name_alt:
+                    current_auxiliary_path = os.path.join(mflat_storage_dir, save_name_alt)
                     renamed_auxiliary_path = os.path.join(mflat_storage_dir+'/auxiliary_mflats/', datename_end)
                     os.rename(current_auxiliary_path, renamed_auxiliary_path)
                     print('Auxiliary mflat:', renamed_auxiliary_path)

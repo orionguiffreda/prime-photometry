@@ -211,7 +211,7 @@ def sexback(imgdir,outdir):
         backname = output_fname.replace('.sky.flat.fits', '.sky.flat.back.fits')
         backpath = os.path.join(outdir, backname)
         sxbackcmd(imgpath, sx, catpath, ap, outpath, backpath, first=True)
-        checkplot(output_directory=outdir, save_name=backname)
+        # checkplot(output_directory=outdir, save_name=backname)
         for f in files[1:]:
             output_fname = f.replace('.flat.fits', '.sky.flat.fits')
             pre = os.path.splitext(output_fname)[0]
