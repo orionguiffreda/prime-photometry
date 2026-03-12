@@ -26,7 +26,7 @@ def parse_header_file(header_file, remove_comments=True, remove_history=True):
 
 def combine_header_and_fits(header_file, fits_file, remove_header_file=False):
     hdr = parse_header_file(header_file)
-    with fits.open(fits_file) as fin:
+    with fits.open(fits_file, mode='update') as fin:
         fin[0].header.update(hdr)
     if remove_header_file:
         os.remove(header_file)

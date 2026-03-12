@@ -101,7 +101,7 @@ def astrom_check(imgdir):
         bad_img_names = [os.path.split(img)[1] for img in bad_imgs]
         print(f' Recommend checking quality / astrometry on offending images: {bad_img_names}')
 
-        if len(bad_imgs) > len(image_fnames) / 2:
+        if len(bad_imgs) > len(image_fnames) // 2:
             raise Exception(f'*WARNING* {len(bad_imgs)}/{len(image_fnames)} images (> 1/2 total # of images) are NOT '
                             f'in acceptable area, examine images!  Is there an issue with image acquisition tracking '
                             f'or astrometry?')
