@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from astroquery.vizier import Vizier, conf
 from astropy.table import Table
+from astroquery.utils import TableList
 import warnings
 import calendar
 import psycopg2
@@ -409,7 +410,7 @@ def local_query_box(ra_center, dec_center,
     column_filters: dict
         optional, apply filters to specific cols for query. Same format as query_region
     """
-    
+
     ra_center = ra_center % 360
 
     if dec_center > 90 or dec_center < -90:
@@ -418,6 +419,7 @@ def local_query_box(ra_center, dec_center,
     if height is None:
         height = width
 
+    print(f' Local query box size: {height, width}')
     height = ang_convert(height)
     width = ang_convert(width)
 
@@ -453,7 +455,16 @@ def local_query_box(ra_center, dec_center,
 
     if column_filters:
         for col, expr in column_filters.items():
-            where.append(f"{col} {expr}")
+            if expr == '!= null':
+                adj_expr = 'IS NOT NULL'
+            else:
+                adj_expr = expr
+            where.append(f"{col} {adj_expr}")
+
+    print(' Specific cols specified, removing rows where column vals = None')
+    if columns:
+        for col in columns:
+            where.append(f"{col} IS NOT NULL")
 
     sql = f"""
         SELECT {colstr}
@@ -461,13 +472,13 @@ def local_query_box(ra_center, dec_center,
         WHERE {" AND ".join(where)}
     """
 
+    # print(f' Constraints: {where}')
+
     cur.execute(sql)
     rows = cur.fetchall()
     names = [d[0] for d in cur.description]
     conn.close()
 
-    if not rows:
-        return Table(names=names)
+    tbl = Table(rows=rows, names=names) if rows else Table(names=names)
 
-    return Table(rows=rows, names=names)
-
+    return TableList([("twomass_local_query", tbl)])

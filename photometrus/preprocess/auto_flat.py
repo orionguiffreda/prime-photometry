@@ -14,6 +14,7 @@ import numpy as np
 
 from photometrus.settings import gen_pipeline_file_name, gen_flat_dir, mflat_checker, gen_mflat_file_name
 from photometrus.preprocess import gen_flat
+from photometrus.preprocess.gen_flat import initflatlist_check
 from photometrus.getfiles import get_data_files
 
 #%%
@@ -65,7 +66,7 @@ def auto_flat_creation(date, band=None, chip=None):
                     os.rename(current_auxiliary_path, renamed_auxiliary_path)
                     print('Auxiliary mflat:', renamed_auxiliary_path)
                 else:
-                    print('No auxiliary mflat, no flat data at end of night.')
+                    print('No auxiliary mflat, no other set of flat data.')
         else:
             pass
 
@@ -316,8 +317,12 @@ def gen_mflat_file_name_new(band, chip, date=None, sflat=False):
 
         if sflat:
             # filename = iterate_until_sflat(date)
-            filename = closest_file(mflat_list, date)
-            print(f'Getting {name} closest to given date: ', filename)
+            try:
+                filename = closest_file(mflat_list, date)
+                print(f'Getting {name} closest to given date: ', filename)
+            except ValueError:
+                raise FileNotFoundError('*WARNING* No applicable sflat file found!  There should be a file if your filter '
+                                        'is supported.. (i.e. broadband), is your filter narrowband (NB?)')
         else:
             filename = iterate_until_mflat(date)
 
@@ -378,8 +383,8 @@ def superflatgen(date, band, chip=None):
         fdata_stack = np.stack(match_data)
         super_flat_data = np.nanmedian(fdata_stack, axis=0)
 
-        start_date = matches[0].split('.')[3]
-        end_date = matches[-1].split('.')[3]
+        start_date = os.path.basename(matches[0]).split('.')[2]
+        end_date = os.path.basename(matches[-1]).split('.')[2]
         sfname = f'sflat.{band}.{start_date}-{end_date}.C{i}.fits'
         fits.writeto(os.path.join(flat_dir, sfname), super_flat_data, overwrite=True)
 
@@ -393,23 +398,84 @@ def superflatgen(date, band, chip=None):
             fdata_stack = np.stack(match_data)
             super_flat_data = np.nanmedian(fdata_stack, axis=0)
 
-            start_date = matches[0].split('.')[3]
-            end_date = matches[-1].split('.')[3]
+            start_date = os.path.basename(matches[0]).split('.')[2]
+            end_date = os.path.basename(matches[-1]).split('.')[2]
             sfname = f'sflat.{band}.{start_date}-{end_date}.C{i}.fits'
             fits.writeto(os.path.join(flat_dir, sfname), super_flat_data, overwrite=True)
 
             print('sflat generated at: ', os.path.join(flat_dir, sfname))
 
 
+def auto_sflat_gen(date, band):
+    flat_dir = gen_flat_dir() + os.path.sep
+
+    try:
+        # Try single-date format
+        dt = datetime.strptime(date, "%Y%m%d")
+        first_day = dt.replace(day=1)
+        last_day = dt.replace(day=calendar.monthrange(dt.year, dt.month)[1])
+    except ValueError:
+        # Try date-range format 'yyyymmdd-yyyymmdd'
+        try:
+            start_str, end_str = date.split('-')
+            first_day = datetime.strptime(start_str, "%Y%m%d")
+            last_day = datetime.strptime(end_str, "%Y%m%d")
+        except Exception as e:
+            raise ValueError(f"Date format not recognized: {date}") from e
+
+    # finding all current mflats
+    print('Searching for all existing mflats between %s - %s' % (first_day, last_day))
+
+    matched_dates = []
+    current = first_day
+    while current <= last_day:
+        check_date_str = current.strftime("%Y%m%d")
+        if mflat_checker(check_date_str, band=band, sflat=True):
+            matched_dates.append(check_date_str)
+        current += timedelta(days=1)
+    print('%s band mflats found: %s' % (band, matched_dates))
+
+    # finding all dates that aren't mflats already
+    matched_set = set(matched_dates)
+    non_matched_dates = [first_day + timedelta(days=i) for i in range((last_day - first_day).days + 1)
+                         if (first_day + timedelta(days=i)).strftime('%Y%m%d') not in matched_set]
+    non_matched_dates = [f.strftime("%Y%m%d") for f in non_matched_dates]
+    print(f'Dates w/ no {band} band mflats: {non_matched_dates}')
+
+    # testing dates to determine
+    print(f'Seeing if these dates have applicable {band} band data...')
+    new_mflat_dates = []
+    for tried_date in non_matched_dates:
+        try:
+            flat_files = initflatlist_check(date=tried_date, band=band)
+        except UnboundLocalError:
+            print(f' No observations taken on {date}!')
+            flat_files = [[], [], [], []]
+        if not any(flat_files):
+            print(f' No mflat data taken in {band} on {tried_date}!\n')
+        else:
+            try:
+                autoflatgen(date=tried_date, band=band)
+                new_mflat_dates.append(tried_date)
+            except Exception as e:
+                print(f'Failed to create mflat for {band} band on {tried_date}: {e}\n')
+
+    print(f'All dates w/in range exhausted!  Now moving to create {band} band sflat!')
+    try:
+        superflatgen(date=date, band=band)
+    except ValueError:
+        raise FileNotFoundError(f'\nNo mflats taken in {band} this time period!')
 
 
 def main():
     parser = argparse.ArgumentParser(description='Downloads data and generates master flats for an observation, '
                                                  'storing them in prime-photometry')
+    parser.add_argument('-auto_sflat', action='store_true', help='use to auto generate all applicable mflats w/in month or date range, '
+                                                                 'then auto generate super flat, single chips not supported')
     parser.add_argument('-sflat', action='store_true', help='use to generate super flat (median of all mflats'
                                                             ' from that month)')
     parser.add_argument('-date', type=str, help='[str] date of observation, in yyyymmdd format, or when '
-                                                'using -sflat, can be 2 dates to generate sflats betw., w/ the format '
+                                                'using -sflat or -auto_sflat, can be 2 dates to generate sflats betw., w/ the format '
                                                 '"yyyymmdd-yyyymmdd"')
     parser.add_argument('-band', type=str, help='[str], optional, specify filter ex. "J", otherwise it will'
                                                 ' try to generate mflats regardless of filter', default=None)
@@ -419,6 +485,8 @@ def main():
 
     if args.sflat:
         superflatgen(args.date, args.band, args.chip)
+    elif args.auto_sflat:
+        auto_sflat_gen(args.date, args.band)
     else:
         autoflatgen(args.date, args.band, args.chip)
 
