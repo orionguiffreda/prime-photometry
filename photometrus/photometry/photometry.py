@@ -1733,7 +1733,7 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
         source_ra = deci_coords[0]
         source_dec = deci_coords[1]
 
-    if len(ab_cat_stars.colnames) > 4:
+    if len(ab_cat_stars.colnames) > 6:
         RA = 'ALPHA_J2000'
         DEC = 'DELTA_J2000'
     else:
@@ -1788,14 +1788,19 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
     print(f' {survey} limiting mag: {lim_mag}')
     PSFsources_new = PSFsources_nomatch[(PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] < lim_mag) &
                                         (PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] > mag_low_lim)]
-    print('# of sources found after removing sources dimmer than %.2f & brighter than %.2f: %i' % (mag_low_lim, lim_mag, len(PSFsources_new)))
-
-    PSFsources_new.write('%s_Sources.%s.%s.%s.ecsv' % (newsrcname, imageName, survey, num), overwrite=True)
-    print('New source full catalog written!')
+    print('# of sources found after removing sources dimmer than %.2f & brighter than %.2f in %s mag: %i'
+          % (mag_low_lim, lim_mag, MAGTYPES[magtype], len(PSFsources_new)))
 
     # Table gen
 
     if len(PSFsources_new) > 0:
+        PSFsources_new.write('%s_Sources.%s.%s.%s.ecsv' % (newsrcname, imageName, survey, num), overwrite=True)
+        print('New source full catalog written!')
+
+        all_magtypes = set(MAGTYPES.keys())
+        prime_mag_cols = sorted([col for col in PSFsources_new.colnames if any(mag in col for mag in all_magtypes)
+                                 and band in col and f'{band}MAG' in col and 'e_' not in col])
+
         mag_auto_ar = []
         mag_auto_err_ar = []
         mag_psf_ar = []
@@ -1809,18 +1814,21 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
         source_reg_gen()
 
         for i in PSFsources_new:
-            grb_mag_auto = i[f'{band}MAG_AUTO']
-            mag_auto_ar.append(grb_mag_auto)
-            grb_mag_auto_err = i[f'e_{band}MAG_AUTO']
-            mag_auto_err_ar.append(grb_mag_auto_err)
-            grb_mag_psf = i[f'{band}MAG_PSF']
-            mag_psf_ar.append(grb_mag_psf)
-            grb_mag_psf_err = i[f'e_{band}MAG_PSF']
-            mag_psf_err_ar.append(grb_mag_psf_err)
-            grb_mag_aper = i[f'{band}MAG_APER']
-            mag_aper_ar.append(grb_mag_aper)
-            grb_mag_aper_err = i[f'e_{band}MAG_APER']
-            mag_aper_err_ar.append(grb_mag_aper_err)
+            if f'{band}MAG_AUTO' in prime_mag_cols:
+                grb_mag_auto = i[f'{band}MAG_AUTO']
+                mag_auto_ar.append(grb_mag_auto)
+                grb_mag_auto_err = i[f'e_{band}MAG_AUTO']
+                mag_auto_err_ar.append(grb_mag_auto_err)
+            if f'{band}MAG_PSF' in prime_mag_cols:
+                grb_mag_psf = i[f'{band}MAG_PSF']
+                mag_psf_ar.append(grb_mag_psf)
+                grb_mag_psf_err = i[f'e_{band}MAG_PSF']
+                mag_psf_err_ar.append(grb_mag_psf_err)
+            if f'{band}MAG_APER' in prime_mag_cols:
+                grb_mag_aper = i[f'{band}MAG_APER']
+                mag_aper_ar.append(grb_mag_aper)
+                grb_mag_aper_err = i[f'e_{band}MAG_APER']
+                mag_aper_err_ar.append(grb_mag_aper_err)
             grb_ra = i['ALPHA_J2000']
             ra_ar.append(grb_ra)
             grb_dec = i['DELTA_J2000']
@@ -1835,12 +1843,15 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
         grbdata = Table()
         grbdata['RA'] = np.round(np.array(ra_ar), decimals=5) * u.deg
         grbdata['DEC'] = np.round(np.array(dec_ar), decimals=5) * u.deg
-        grbdata[f'{band}autoMag'] = np.round(np.array(mag_auto_ar), decimals=3) * u.ABmag
-        grbdata[f'{band}autoMag_Err'] = np.round(np.array(mag_auto_err_ar), decimals=3) * u.ABmag
-        grbdata[f'{band}psfMag'] = np.round(np.array(mag_psf_ar), decimals=3) * u.ABmag
-        grbdata[f'{band}psfMag_Err'] = np.round(np.array(mag_psf_err_ar), decimals=3) * u.ABmag
-        grbdata[f'{band}aperMag'] = np.round(np.array(mag_aper_ar), decimals=3) * u.ABmag
-        grbdata[f'{band}aperMag_Err'] = np.round(np.array(mag_aper_err_ar), decimals=3) * u.ABmag
+        if f'{band}MAG_AUTO' in prime_mag_cols:
+            grbdata[f'{band}autoMag'] = np.round(np.array(mag_auto_ar), decimals=3) * u.ABmag
+            grbdata[f'{band}autoMag_Err'] = np.round(np.array(mag_auto_err_ar), decimals=3) * u.ABmag
+        if f'{band}MAG_PSF' in prime_mag_cols:
+            grbdata[f'{band}psfMag'] = np.round(np.array(mag_psf_ar), decimals=3) * u.ABmag
+            grbdata[f'{band}psfMag_Err'] = np.round(np.array(mag_psf_err_ar), decimals=3) * u.ABmag
+        if f'{band}MAG_APER' in prime_mag_cols:
+            grbdata[f'{band}aperMag'] = np.round(np.array(mag_aper_ar), decimals=3) * u.ABmag
+            grbdata[f'{band}aperMag_Err'] = np.round(np.array(mag_aper_err_ar), decimals=3) * u.ABmag
         grbdata['Radius'] = np.round(np.array(rad_ar), decimals=2) * u.arcsec
         grbdata['SNR'] = np.round(np.array(snr_ar), decimals=2)
 
@@ -1853,6 +1864,9 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
                                           regprimename=regprimename)
         html_gen(grbdata, directory, savename, threshname, band, survey, ra=source_ra,
                  dec=source_dec, thresh=thresh, primename=regprimename)
+
+    else:
+        print('No sources remaining after pruning!  Cannot write new source catalog!')
 
 
 # %% optional GRB-specific photom
@@ -2287,12 +2301,16 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grb_dist = d2d[0].to(u.arcsec)
                 grb_dist = grb_dist / u.arcsec
 
-                print(
-                    ' Detected GRB ra = %.6f, dec = %.6f, with 50 percent flux radius (HWHM) = %.3f arcsec and SNR = %.3f' % (
-                        grb_ra, grb_dec, grb_rad, grb_snr))
-                print(f' %s {MAGTYPES[magtype]} magnitude of GRB is %.2f +/- %.2f' % (band,
-                                                                 mag_ecsvcleanSources[idx_GRBcleanpsf][f'{band}MAG_{MAGTYPES[magtype]}'][0],
-                                                                 mag_ecsvcleanSources[idx_GRBcleanpsf][f'e_{band}MAG_{MAGTYPES[magtype]}'][0]))
+                all_magtypes = set(MAGTYPES.keys())
+                for mag in sorted(all_magtypes):
+                    try:
+                        print(f' %s {mag} magnitude of GRB is %.2f +/- %.2f' % (band,
+                                                                                mag_ecsvcleanSources[idx_GRBcleanpsf][
+                                                                                    f'{band}MAG_{mag}'][0],
+                                                                                mag_ecsvcleanSources[idx_GRBcleanpsf][
+                                                                                    f'e_{band}MAG_{mag}'][0]))
+                    except KeyError:
+                        pass
 
                 # survey crsmtch check
                 idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
@@ -2533,7 +2551,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     grb_ra, grb_dec, grb_rad, grb_snr))
 
             all_magtypes = set(MAGTYPES.keys())
-            for mag in all_magtypes:
+            for mag in sorted(all_magtypes):
                 try:
                     print(f' %s {mag} magnitude of GRB is %.2f +/- %.2f' % (band,
                                                                      mag_ecsvcleanSources[idx_GRBcleanpsf][f'{band}MAG_{mag}'][0],
@@ -4164,11 +4182,13 @@ def int_calibration(
     key0 = list(Q.keys())[0]
     Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
 
+    head_name = os.path.split(name)[0]
     if grb_ra:
         psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.photom.cat') and f'C{chip}' in f
-                          and '.fits.photom' not in f]
+                          and '.fits.photom' not in f and head_name in f]
     else:
-        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.fits.photom.cat') and f'C{chip}' in f]
+        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.fits.photom.cat') and f'C{chip}' in f and
+                          head_name in f]
 
     psfcatalogName = ''.join(psfcatalogName)
     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
@@ -4447,16 +4467,18 @@ def full_int_calibration(
 # %% optional removal of intermediate files
 
 def removal(directory):
-    fnames = ['.cat', '.psf']
-    for f in os.listdir(directory):
-        for name in fnames:
-            if f.endswith(name):
-                path = os.path.join(directory + f)
-                try:
-                    os.remove(path)
-                    # print(f"Removed file: {path}")
-                except Exception as e:
-                    print(f"Error removing file: {path} - {e}")
+    end_names = ['.cat', '.psf']
+    start_names = []    # ['GRB_', 'PSF.']
+    preserved_end_names = []    # ['.ecsv', '.fits']
+    rem_files = [f for f in os.listdir(directory) if f.endswith(tuple(end_names)) or f.startswith(tuple(start_names))
+                 and not f.endswith(tuple(preserved_end_names))]
+    for file in rem_files:
+        path = os.path.join(directory + file)
+        try:
+            os.remove(path)
+            # print(f"Removed file: {path}")
+        except Exception as e:
+            print(f"Error removing file: {path} - {e}")
 
 #%%
 
@@ -4483,10 +4505,10 @@ def photometry(
     try:
         directory = os.path.dirname(full_filename)
     except TypeError:
-        print('-filepath not specified!')
+        raise Exception('-filepath not specified!')
     if directory == '':
         directory = '.'
-    directory = directory + '/'
+    directory = directory + os.path.sep
     name = os.path.basename(full_filename)
 
     if grb_ra or grb_dec or grb_radius != defaults['grb_radius']:
