@@ -74,6 +74,13 @@ def flatlists(date, flatlist, chip):
                                 'Or were there missing files in the flat generation?')
 
     datetime = to_datetime(date)
+
+    # correcting for incorrect chip in log for specific date range
+    if to_datetime('2024-06-24') <= datetime <= to_datetime('2024-07-04'):
+        log_chip = 2
+    else:
+        log_chip = 1
+
     date = datetime.strftime('%Y-%m-%d')
     log = get_log_file(date)
 
@@ -90,12 +97,12 @@ def flatlists(date, flatlist, chip):
     log_start_orig_names = list(log_start['filename'][log_start['OBJNAME']=='FLAT'])
     log_start_names = []
     for file in log_start_orig_names:
-        new = file.replace('C1.'+orig_ext, f'C{chip}.'+new_ext)
+        new = file.replace(f'C{log_chip}.'+orig_ext, f'C{chip}.'+new_ext)
         log_start_names.append(new)
     log_end_orig_names = list(log_end['filename'][log_end['OBJNAME']=='FLAT'])
     log_end_names = []
     for file in log_end_orig_names:
-        new = file.replace('C1.'+orig_ext, f'C{chip}.'+new_ext)
+        new = file.replace(f'C{log_chip}.'+orig_ext, f'C{chip}.'+new_ext)
         log_end_names.append(new)
 
     log_start_flats = [flatlistfile for flatlistfile in flatlist if
@@ -187,8 +194,8 @@ def flatlists(date, flatlist, chip):
 def flatprocessing(direct,start_images_names_1=None,start_images_names_2=None,end_images_names_1=None,end_images_names_2=None):
     print('getting data for groups of flats and stacking...')
 
-    start_images_length = None
-    end_images_length = None
+    start_images_length = 0
+    end_images_length = 0
 
     if start_images_names_1:
         image_list_1 = []

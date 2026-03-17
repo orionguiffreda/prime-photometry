@@ -4,6 +4,7 @@ Corrects initial astrometry for zero order translation error
 
 import os
 import subprocess
+import requests
 import argparse
 import threading
 from datetime import datetime as dt
@@ -23,7 +24,7 @@ import math
 import sys
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS, set_vizier_mirror)
+                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):
@@ -143,16 +144,29 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
     else:
         errbits_vvv = errbits
         errbits_2M = '!= null'
-    print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
-          % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
-    v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
-                                                 "%sperrbits" % band: errbits_vvv,
-                                                "%s1perrb" % band: errbits_vvv,
-                                                "%sflags" % band: errbits_vvv,
-                                                "Cflg": errbits_2M,
-                                                "Nd": ">6"}, row_limit=-1)
-    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
-                       catalog=catNum, cache=False, frame=chosen_frame)
+
+    try:
+        print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
+              % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
+        v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
+                                                     "%sperrbits" % band: errbits_vvv,
+                                                    "%s1perrb" % band: errbits_vvv,
+                                                    "%sflags" % band: errbits_vvv,
+                                                    "Cflg": errbits_2M,
+                                                    "Nd": ">6"}, row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
+                           catalog=catNum, cache=False, frame=chosen_frame)
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+
+        Q = local_query_box(ra_center=float(frame_long),
+                            dec_center=float(frame_lat),
+                            width=str(boxsize) + 'm',
+                            columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                            column_filters={
+                                f"{band.lower()}mag": f"BETWEEN {maglow:f} AND {maghigh:f}",
+                                "cc_flg": errbits_2M,
+                            }
+                            )
     print('Queried source total = ', len(Q[0]))
     return Q
 
@@ -264,6 +278,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                           [0.85, 0.5, 1.25, '<16', errbit_2mass]]
 
     success_flag = False
+    last_idx = catalogs[-1][1]
     for chosen_survey, catNum in catalogs:
         for k in keycheck:
             if catNum in k:
@@ -297,23 +312,35 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                               % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
                                  eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
                         try:
-                            v = Vizier(columns=[cols[0], cols[1], cols[2]],
-                                       column_filters={
-                                           cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
-                                           f"{band.lower()}Flag": "<4",
-                                           f"{band}perrbits": errbits_constraint,
-                                           f"{band}1perrb": errbits_constraint,
-                                           f"{band}flags": errbits_constraint,
-                                           "Cflg": errbits_2M,
-                                           "Hclass": "== -1",
-                                           "Class": "== 0",
-                                           "Nd": ">6"
-                                       }, row_limit=-1)
+                            if catNum == last_idx:
+                                print('\nVizier catalogs exhausted, switching to local 2MASS query...')
+                                Q = local_query_box(ra_center=raImage,
+                                                    dec_center=decImage,
+                                                    width=str(effective_boxsize) + 'm',
+                                                    columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                                                    column_filters={
+                                                        f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
+                                                        "cc_flg": errbits_2M,
+                                                    }
+                                                    )
+                            else:
+                                v = Vizier(columns=[cols[0], cols[1], cols[2]],
+                                           column_filters={
+                                               cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
+                                               f"{band.lower()}Flag": "<4",
+                                               f"{band}perrbits": errbits_constraint,
+                                               f"{band}1perrb": errbits_constraint,
+                                               f"{band}flags": errbits_constraint,
+                                               "Cflg": errbits_2M,
+                                               "Hclass": "== -1",
+                                               "Class": "== 0",
+                                               "Nd": ">6"
+                                           }, row_limit=-1)
 
-                            Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
-                                               width=str(effective_boxsize) + 'm',
-                                               catalog=catNum, cache=False,
-                                               frame=chosen_frame)
+                                Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
+                                                   width=str(effective_boxsize) + 'm',
+                                                   catalog=catNum, cache=False,
+                                                   frame=chosen_frame)
 
                             if Q and len(Q[0]) > 0:
                                 print('Queried source total = ', len(Q[0]))

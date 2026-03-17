@@ -9,8 +9,12 @@ Settings for pipeline
 import os
 from pathlib import Path
 from astroquery.vizier import Vizier, conf
+from astropy.table import Table
+from astroquery.utils import TableList
 import warnings
 import calendar
+import psycopg2
+import math
 
 import pandas as pd
 from datetime import datetime
@@ -22,6 +26,7 @@ import json5
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
 PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
+FLAT_DEFAULT_DIR = '/mnt/fits_data/flat_storage_dir'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -192,6 +197,7 @@ def load_settings(settings_file='photometrus.json5'):
 def update_settings(settings_file='photometrus.json5'):
     settings = load_settings(settings_file)
     global PIPELINE_DEFAULT_DIR
+    global FLAT_DEFAULT_DIR
     global PHOTOMETRY_MAG_LOWER_LIMIT
     global PHOTOMETRY_MAG_UPPER_LIMIT
     global PHOTOMETRY_QUERY_WIDTH
@@ -206,6 +212,7 @@ def update_settings(settings_file='photometrus.json5'):
     global GET_DATA_SETTINGS
 
     PIPELINE_DEFAULT_DIR = settings['PIPELINE_DEFAULT_DIR']
+    PIPELINE_DEFAULT_DIR = settings['FLAT_DEFAULT_DIR']
     PHOTOMETRY_MAG_LOWER_LIMIT = settings['PHOTOMETRY_MAG_LOWER_LIMIT']
     PHOTOMETRY_MAG_UPPER_LIMIT = settings['PHOTOMETRY_MAG_UPPER_LIMIT']
     PHOTOMETRY_QUERY_WIDTH = settings['PHOTOMETRY_QUERY_WIDTH']
@@ -233,8 +240,7 @@ def gen_master_name():
 
 
 def gen_flat_dir():
-    base_dir = gen_user_prime_dir()
-    flat_dir = os.path.join(base_dir, 'mflats')
+    flat_dir = FLAT_DEFAULT_DIR
     if not os.path.exists(flat_dir):
         os.makedirs(os.path.join(flat_dir, 'auxiliary_mflats'))
     return flat_dir
@@ -350,3 +356,129 @@ def set_vizier_mirror():
         raise RuntimeError('No working Vizier mirror found!')
 
     return url
+
+
+# local 2mass query functions
+
+def ang_convert(ang):
+    """
+    Converts input to appropriate degree equivalent for query (ex. 33m -> 33 arcmin to degree).  Use just a number or 'd' for
+    degrees, m for arcmin, and s for arcsec
+    """
+
+    if isinstance(ang, (float, int)):
+        arcconvert = ang
+    elif not any(char.isalpha() for char in ang) or 'd' in ang:
+        if 'd' in ang:
+            ang = ang.split('d')[0]
+        arcconvert = float(ang)
+    elif 'm' in ang:
+        angsplit = ang.split('m')
+        rad_f = float(angsplit[0])
+        arcconvert = rad_f / 60
+    elif 's' in ang:
+        angsplit = ang.split('s')
+        rad_f = float(angsplit[0])
+        arcconvert = rad_f / 3600
+    else:
+        print('Only arcsec, arcmin, and deg are supported! Default = deg')
+        raise Exception('Use supported units.')
+    return arcconvert
+
+
+def local_query_box(ra_center, dec_center,
+                    width, height=None,
+                    columns=None,
+                    column_filters=None):
+
+    """
+    Replicates astroquery's query_region box query functionality using the local psql db.
+
+    Parameters
+    ----------
+    ra_center: float
+        RA coordinate for query
+    dec_center: float
+        Dec coordinate for query
+    width: float, int, or str
+        full width of box query. If float or int or str w/ 'd' (ex. '2d'), degrees are assumed, if str w/ 'm' (ex. 33m),
+        arcmin assumed, & if str w/ 's' (ex. '4s'), arcsec assumed
+    height: float, int, or str
+        optional, full height of box query.  If not specified, will be the same as width
+    columns: list of str
+        optional, specify specific cols to return w/ query. Same format as query_region
+    column_filters: dict
+        optional, apply filters to specific cols for query. Same format as query_region
+    """
+
+    ra_center = ra_center % 360
+
+    if dec_center > 90 or dec_center < -90:
+        raise ValueError("Declination must be between -90 and +90 degrees")
+
+    if height is None:
+        height = width
+
+    print(f' Local query box size: {height, width}')
+    height = ang_convert(height)
+    width = ang_convert(width)
+
+    delta_ra = (width / 2) / math.cos(math.radians(dec_center))
+    delta_dec = height / 2
+
+    corners = [
+        (ra_center - delta_ra, dec_center + delta_dec),  # TL
+        (ra_center + delta_ra, dec_center + delta_dec),  # TR
+        (ra_center + delta_ra, dec_center - delta_dec),  # BR
+        (ra_center - delta_ra, dec_center - delta_dec),  # BL
+    ]
+
+    corners = [(ra % 360, dec) for ra, dec in corners]
+
+    conn = psycopg2.connect(service='localdb')
+
+    cur = conn.cursor()
+
+    colstr = "*" if columns is None else ",".join(columns)
+
+    where = [f"""
+       q3c_poly_query(
+           ra, dec,
+           ARRAY[
+               {corners[0][0]}, {corners[0][1]},
+               {corners[1][0]}, {corners[1][1]},
+               {corners[2][0]}, {corners[2][1]},
+               {corners[3][0]}, {corners[3][1]}
+           ]::double precision[]
+       )
+       """]
+
+    if column_filters:
+        for col, expr in column_filters.items():
+            if expr == '!= null':
+                adj_expr = 'IS NOT NULL'
+            else:
+                adj_expr = expr
+            where.append(f"{col} {adj_expr}")
+
+    print(' Specific cols specified, removing rows where column vals = None')
+    if columns:
+        for col in columns:
+            where.append(f"{col} IS NOT NULL")
+
+    sql = f"""
+        SELECT {colstr}
+        FROM twomass_local
+        WHERE {" AND ".join(where)}
+    """
+
+    # print(f' Constraints: {where}')
+
+    cur.execute(sql)
+    rows = cur.fetchall()
+    names = [d[0] for d in cur.description]
+    conn.close()
+
+    tbl = Table(rows=rows, names=names) if rows else Table(names=names)
+
+    return TableList([("twomass_local_query", tbl)])
