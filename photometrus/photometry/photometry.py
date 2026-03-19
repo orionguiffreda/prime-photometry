@@ -1876,9 +1876,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         grbname=defaults['grb_name'], **kwargs):
     mag_ecsvname = '%s.%s.ecsv' % (imageName, survey)
     mag_ecsvtable = ascii.read(mag_ecsvname)
-    mag_ecsvcleanSources = mag_ecsvtable  # [(mag_ecsvtable['FLAGS'] == 0) & (mag_ecsvtable['FLAGS_MODEL'] == 0)]
-    # mag_ecsvcleanSources['%sMAG_PSF' % band] = (
-    #     ab_convert(mag_ecsvcleanSources['%sMAG_PSF' % band], band=band, survey=survey, revert=True))
+    mag_ecsvcleanSources = mag_ecsvtable
     mag_ecsvsourceCatCoords = SkyCoord(ra=mag_ecsvcleanSources['ALPHA_J2000'], dec=mag_ecsvcleanSources['DELTA_J2000'],
                                        frame='icrs',
                                        unit='degree')
@@ -1887,6 +1885,14 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         num = 'img'
     else:
         num = imageName[-16:-8]
+
+    # limiting mag for survey
+    try:
+        survey_lim_mag = PHOTOMETRY_LIM_MAGS[survey]
+    except KeyError:
+        survey_lim_mag = 19.7
+        print(f'Error in finding lim mag for survey catalogs, no matching catalog found? '
+              f'Using generous PRIME lim: {survey_lim_mag}')
 
     # postage stamp cutout fctn (png & fits)
     def grb_cutout(imageName, GRBcoords, photoDistThresh, loc=None, append=False, regprimename=None, regsurvname=None):
@@ -2000,6 +2006,7 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
     # mag diff calc betw. survey and prime for existing source crsmtches
     def mag_diff_calc(survey_cat, prime_cat, survey_idx, prime_idx, d2d, band):
+        """calculates diff betw. crossmatched prime source and survey, generating seperation & appropriate flags"""
         # prime & survey mag cols
         all_magtypes = set(MAGTYPES.keys())
         prime_mag_cols = sorted([col for col in prime_cat.colnames if any(mag in col for mag in all_magtypes)
@@ -2077,22 +2084,57 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
 
         return mag_diff_ar, float(sep_dist), flag_ar
 
+    # mag diff calc betw. survey and prime for existing source crsmtches
+    def non_cm_flag_calc(prime_source, band, survey_lim_mag):
+        """function to determine if non-crossmatched source is deeper than limiting mag of survey, flag = 3 if so, 0 if not"""
+        # prime & survey mag cols
+        all_magtypes = set(MAGTYPES.keys())
+        prime_mag_cols = sorted([col for col in prime_source.colnames if any(mag in col for mag in all_magtypes)
+                                 and band in col and f'{band}MAG' in col and 'e_' not in col])
 
-    def mag_diff_ar_grabber(mag_diff_ar, flag_ar, output, col_magtype='AUTO'):
-        # grabbing correct mag diff values
+        # array of flags for each mag col
+        flag_ar = []
+
+        for mag_col in prime_mag_cols:
+            col_magtype = mag_col.split('_')[-1]
+
+            src_mag = prime_source[mag_col]
+            if src_mag > survey_lim_mag:
+                flg = 3
+            else:
+                flg = 0
+            flag_ar.append((np.int16(flg), col_magtype))
+
+        return flag_ar
+
+    def mag_and_flag_grabber(mag_diff_ar, flag_ar, output, col_magtype='AUTO'):
+        """grabbing correct mag diff & flag values from input arrays"""
         if isinstance(mag_diff_ar[0], tuple):
+            # if input mag diff arr is real, return appropriate mag diff and flag vals
             mag_diff_val = [t[0] for t in mag_diff_ar if t[1] == col_magtype]
             flag_val = [t[0] for t in flag_ar if t[1] == col_magtype]
             if output == 'mag':
                 return mag_diff_val[0]
             elif output == 'flag':
                 return flag_val[0]
+            else:
+                raise Exception('output option must be either "mag" or "flag"!')
+        elif isinstance(flag_ar[0], tuple):
+            # if only input flag arr is real, return appropriate mag diff andflag val
+            flag_val = [t[0] for t in flag_ar if t[1] == col_magtype]
+            if output == 'mag':
+                return 99
+            if output == 'flag':
+                return flag_val[0]
+            else:
+                raise Exception('output option must be either "mag" or "flag"!')
         else:
             if output == 'mag':
                 return 99
             elif output == 'flag':
                 return np.int16(0)
-
+            else:
+                raise Exception('output option must be either "mag" or "flag"!')
 
     # generation of html file
     def html_gen(data, directory, savename, threshname, band, survey, ra, dec, thresh, survname=None, primename=None):
@@ -2241,7 +2283,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
         "separation": f'2D distance (arcsec) betw. PRIME & crossmatched {survey} source, -1 = no match',
         "crsmtch_flg": (f'Flag for {survey} crossmatch: '
                         f'0 = no match, 1 = match w/ mag diff within 3 sig, '
-                        f'2 = match w/ mag diff outside 3 sig')
+                        f'2 = match w/ mag diff outside 3 sig, '
+                        f'3 = no match, but deeper than survey limiting mag ({survey_lim_mag})')
     }
 
     mag_col_num = len([col for col in mag_ecsvcleanSources.colnames if any(mag in col for mag in set(MAGTYPES.keys()))
@@ -2316,16 +2359,15 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
                     mag_ecsvsourceCatCoords[idx_GRBcleanpsf],
                     grb_rad * u.arcsec)
+                prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
                 if len(idx_bothcleanpsf) > 0:
-                    # print(' Detected source crossmatched to existing %s source!' % survey)
-                    prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
                     mag_diff_crs_ar, sep, survey_flg_ar = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
                                                                   survey_idx=idx_bothcleanpsf,
                                                                   prime_idx=[idx_GRBcleanpsf][idx_both],
                                                                   d2d=d2d_crs, band=band)
                 else:
                     mag_diff_crs_ar = [99] * mag_col_num
-                    survey_flg_ar = [np.int16(0)] * mag_col_num
+                    survey_flg_ar = non_cm_flag_calc(prime_source=prime_crs_cat, band=band, survey_lim_mag=survey_lim_mag)
                     sep = -1
 
                 grbdata['RA'] = Column(np.round(np.array([grb_ra]), 5) * u.deg, description=ra_desc)
@@ -2339,10 +2381,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                         description=psf_mag_err_desc
                     )
                     grbdata['%spsfME_CM' % band] = Column(
-                        np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'PSF')]),3) * u.ABmag,
+                        np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'PSF')]), 3) * u.ABmag,
                         description=mag_diff_desc
                     )
-                    grbdata['psfS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'PSF'),
+                    grbdata['psfS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'PSF'),
                                                 description=flag_desc)
 
                 if aper_mag_desc is not None:
@@ -2353,10 +2395,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                         description=aper_mag_err_desc
                     )
                     grbdata['%saperME_CM' % band] = Column(
-                        np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'APER')]), 3) * u.ABmag,
+                        np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'APER')]), 3) * u.ABmag,
                         description=mag_diff_desc
                     )
-                    grbdata['aperS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'APER'),
+                    grbdata['aperS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'APER'),
                                                  description=flag_desc)
 
                 if auto_mag_desc is not None:
@@ -2367,10 +2409,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                         description=auto_mag_err_desc
                     )
                     grbdata['%sautoME_CM' % band] = Column(
-                        np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'AUTO')]), 3) * u.ABmag,
+                        np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'AUTO')]), 3) * u.ABmag,
                         description=mag_diff_desc
                     )
-                    grbdata['autoS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'AUTO'),
+                    grbdata['autoS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'AUTO'),
                                                  description=flag_desc)
 
                 grbdata['Radius'] = Column(np.round(np.array([grb_rad]), decimals=2) * u.arcsec, description=rad_desc)
@@ -2443,9 +2485,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                                            frame='icrs', unit='degree')
                     idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
                         checkcoords, grb_rad * u.arcsec)
+                    prime_crs_cat = mag_ecsvcleanSources[i]
                     if len(idx_bothcleanpsf) > 0:
-                        # print(' Detected source crossmatched to existing %s source!' % survey)
-                        prime_crs_cat = mag_ecsvcleanSources[i]
                         mag_diff_crs_ar, sep, survey_flg_ar = mag_diff_calc(survey_cat=good_cat_stars,
                                                                       prime_cat=prime_crs_cat,
                                                                       survey_idx=idx_bothcleanpsf,
@@ -2453,7 +2494,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                                                                       d2d=d2d_crs, band=band)
                     else:
                         mag_diff_crs_ar = [99] * mag_col_num
-                        survey_flg_ar = [np.int16(0)] * mag_col_num
+                        survey_flg_ar = non_cm_flag_calc(prime_source=prime_crs_cat, band=band,
+                                                         survey_lim_mag=survey_lim_mag)
                         sep = -1
 
                     diff_ar.append(mag_diff_crs_ar)
@@ -2466,8 +2508,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['DEC'] = Column(np.round(np.array(dec_ar), decimals=5) * u.deg, description=dec_desc)
 
                 if psf_mag_desc is not None:
-                    psf_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
-                    psf_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    psf_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    psf_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                     grbdata['%spsfMag' % band] = Column(np.round(np.array(mag_ar), 3) * u.ABmag,
                         description=psf_mag_desc
@@ -2481,8 +2523,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     grbdata['psfS_CM'] = Column(np.array(psf_flg_ar), description=flag_desc)
 
                 if aper_mag_desc is not None:
-                    aper_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
-                    aper_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    aper_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    aper_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                     grbdata['%saperMag' % band] = Column(np.round(np.array(apmag_ar), 3) * u.ABmag,
                         description=aper_mag_desc
@@ -2496,8 +2538,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     grbdata['aperS_CM'] = Column(np.array(aper_flg_ar), description=flag_desc)
 
                 if auto_mag_desc is not None:
-                    auto_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
-                    auto_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    auto_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
+                    auto_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                     grbdata['%sautoMag' % band] = Column(np.round(np.array(automag_ar), 3) * u.ABmag,
                         description=auto_mag_desc
@@ -2562,15 +2604,16 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             # survey crsmtch check
             idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = (
                 massCatCoords.search_around_sky(mag_ecsvsourceCatCoords[idx_GRBcleanpsf], grb_rad * u.arcsec))
+            prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
             if len(idx_bothcleanpsf) > 0:
                 # print(' Detected source crossmatched to existing %s source!' % survey)
-                prime_crs_cat = mag_ecsvcleanSources[idx_GRBcleanpsf]
                 mag_diff_crs_ar, sep, survey_flg_ar = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
                                                               survey_idx=idx_bothcleanpsf, prime_idx=idx_both,
                                                               d2d=d2d_crs, band=band)
             else:
                 mag_diff_crs_ar = [99] * mag_col_num
-                survey_flg_ar = [np.int16(0)] * mag_col_num
+                survey_flg_ar = non_cm_flag_calc(prime_source=prime_crs_cat, band=band,
+                                                 survey_lim_mag=survey_lim_mag)
                 sep = -1
 
             grbdata['RA'] = Column(np.round(np.array([grb_ra]), 5) * u.deg, description=ra_desc)
@@ -2584,10 +2627,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     description=psf_mag_err_desc
                 )
                 grbdata['%spsfME_CM' % band] = Column(
-                    np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'PSF')]),3) * u.ABmag,
+                    np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'PSF')]), 3) * u.ABmag,
                     description=mag_diff_desc
                 )
-                grbdata['psfS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'PSF'),
+                grbdata['psfS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'PSF'),
                                             description=flag_desc)
 
             if aper_mag_desc is not None:
@@ -2598,10 +2641,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     description=aper_mag_err_desc
                 )
                 grbdata['%saperME_CM' % band] = Column(
-                    np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'APER')]), 3) * u.ABmag,
+                    np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'APER')]), 3) * u.ABmag,
                     description=mag_diff_desc
                 )
-                grbdata['aperS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'APER'),
+                grbdata['aperS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'APER'),
                                              description=flag_desc)
 
             if auto_mag_desc is not None:
@@ -2612,10 +2655,10 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                     description=auto_mag_err_desc
                 )
                 grbdata['%sautoME_CM' % band] = Column(
-                    np.round(np.array([mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'AUTO')]), 3) * u.ABmag,
+                    np.round(np.array([mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'mag', 'AUTO')]), 3) * u.ABmag,
                     description=mag_diff_desc
                 )
-                grbdata['autoS_CM'] = Column(mag_diff_ar_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'AUTO'),
+                grbdata['autoS_CM'] = Column(mag_and_flag_grabber(mag_diff_crs_ar, survey_flg_ar, 'flag', 'AUTO'),
                                              description=flag_desc)
 
             grbdata['Radius'] = Column(np.round(np.array([grb_rad]), decimals=2) * u.arcsec, description=rad_desc)
@@ -2692,16 +2735,15 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                                        frame='icrs', unit='degree')
                 idx_both, idx_bothcleanpsf, d2d_crs, d3d_crs = massCatCoords.search_around_sky(
                     checkcoords, grb_rad * u.arcsec)
-
+                prime_crs_cat = mag_ecsvcleanSources[i]
                 if len(idx_bothcleanpsf) > 0:
-                    # print(' Detected source crossmatched to existing %s source!' % survey)
-                    prime_crs_cat = mag_ecsvcleanSources[i]
                     mag_diff_crs_ar, sep, survey_flg_ar = mag_diff_calc(survey_cat=good_cat_stars, prime_cat=prime_crs_cat,
                                                                   survey_idx=idx_bothcleanpsf, prime_idx=idx_both,
                                                                   d2d=d2d_crs, band=band)
                 else:
                     mag_diff_crs_ar = [99] * mag_col_num
-                    survey_flg_ar = [np.int16(0)] * mag_col_num
+                    survey_flg_ar = non_cm_flag_calc(prime_source=prime_crs_cat, band=band,
+                                                     survey_lim_mag=survey_lim_mag)
                     sep = -1
 
                 diff_ar.append(mag_diff_crs_ar)
@@ -2714,8 +2756,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
             grbdata['DEC'] = Column(np.round(np.array(dec_ar), decimals=5) * u.deg, description=dec_desc)
 
             if psf_mag_desc is not None:
-                psf_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
-                psf_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
+                psf_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
+                psf_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'PSF') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                 grbdata['%spsfMag' % band] = Column(np.round(np.array(mag_ar), 3) * u.ABmag,
                     description=psf_mag_desc
@@ -2729,8 +2771,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['psfS_CM'] = Column(np.array(psf_flg_ar), description=flag_desc)
 
             if aper_mag_desc is not None:
-                aper_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
-                aper_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
+                aper_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
+                aper_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'APER') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                 grbdata['%saperMag' % band] = Column(np.round(np.array(apmag_ar), 3) * u.ABmag,
                     description=aper_mag_desc
@@ -2744,8 +2786,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 grbdata['aperS_CM'] = Column(np.array(aper_flg_ar), description=flag_desc)
 
             if auto_mag_desc is not None:
-                auto_diff_ar = [mag_diff_ar_grabber(md, sf, 'mag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
-                auto_flg_ar = [mag_diff_ar_grabber(md, sf, 'flag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
+                auto_diff_ar = [mag_and_flag_grabber(md, sf, 'mag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
+                auto_flg_ar = [mag_and_flag_grabber(md, sf, 'flag', 'AUTO') for md, sf in zip(diff_ar, crsmtch_ar)]
 
                 grbdata['%sautoMag' % band] = Column(np.round(np.array(automag_ar), 3) * u.ABmag,
                     description=auto_mag_desc
