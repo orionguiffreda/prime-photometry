@@ -73,6 +73,8 @@ def sexback(imgdir):
 
 
 def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
+    if os.path.isfile(imgdir):
+        imgdir = os.path.split(imgdir)[0]
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
     if band:
