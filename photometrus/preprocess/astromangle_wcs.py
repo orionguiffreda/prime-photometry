@@ -108,8 +108,8 @@ def calculate_wcs_header(
     except ValueError:
         rot = rot_val
     chip_number = file_header['CHIP']
-    # wcs = calculate_wcs(ra_tel, dec_tel, rot, chip_number, mesh_file_dir, sip_degree, downsample=downsample)
-    wcs = calculate_wcs_table(ra_tel, dec_tel, rot, chip_number)
+    wcs = calculate_wcs(ra_tel, dec_tel, rot, chip_number, mesh_file_dir, sip_degree, downsample=downsample)
+    # wcs = calculate_wcs_table(ra_tel, dec_tel, rot, chip_number)
     return wcs
 
 

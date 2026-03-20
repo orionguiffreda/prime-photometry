@@ -185,7 +185,7 @@ def swarp_increm(imgdir, finout, im_num=5):
                    , ' -IMAGEOUT_NAME '+save_name, ' -WEIGHTOUT_NAME '+weight_name]
             s0 = ''
             com = s0.join(com)
-            out = subprocess.Popen([com], shell=True)
+            out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             out.wait()
             print('Co-added image created, all done!')
 
@@ -203,7 +203,7 @@ def swarp_increm(imgdir, finout, im_num=5):
             print(f'\nRunning photometry on {stack}\n')
             photometry(full_filename=stack, band=band)
         hdr = fits.getheader(stack)
-        lim_mag = hdr['lim_mag_auto']
+        lim_mag = hdr['LM_AUTO']
         lim_mags.append(lim_mag)
 
     exptime = fits.getheader(files[0])['EXPTIMEC']
@@ -379,6 +379,7 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
 def main():
     parser = argparse.ArgumentParser(description='Runs swarp to stack imgs, then reruns astrometry for improved wcs *NOTE* if using -mask flag, do not keyboard interrupt')
     # parser.add_argument('-mask', action='store_true', help='optional flag, use if you want to utilize a bad pixel mask')
+    parser.add_argument('-chip', type=int, help='[int] Detector chip number', default=None)
     parser.add_argument('-no_astrom', action='store_true', help='optional flag, use if you just want the swarped image, not the image with improved astrometry')
     parser.add_argument('-astrom_only', action='store_true',
                         help='optional flag, use if you already have the swarped image, but want improved astrometry')
@@ -391,9 +392,8 @@ def main():
                              'image location screening')
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
-    parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of imgs to increment by', default=5)
+    parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of individual imgs to increment by, default=5', default=5)
     #parser.add_argument('-parent', type=str, help='*USE ONLY W/ -MASK FLAG* [str] Parent directory where all img folders are stored', default=None)
-    parser.add_argument('-chip', type=int, help='*USE ONLY W/O -no_astrom FLAG* [int] Detector chip number', default=None)
     args, unknown = parser.parse_known_args()
 
     stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt, args.mosaic)

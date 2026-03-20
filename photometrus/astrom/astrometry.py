@@ -73,9 +73,10 @@ def sexback(imgdir):
 
 
 def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
+    if os.path.isfile(imgdir):
+        imgdir = os.path.split(imgdir)[0]
     os.chdir(imgdir)
     sc = gen_config_file_name('scamp.conf')
-    viz_url = set_vizier_mirror()
     if band:
         if band == 'Z' or band == 'Y':
             addition = f' -ASTREF_BAND J'
@@ -86,14 +87,14 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
 
     timeout = 180
     if swarpcat:
-        command = ('scamp %s -c %s -REF_SERVER %s' % (swarpcat, sc, viz_url))
+        command = ('scamp %s -c %s' % (swarpcat, sc))
         command = command + addition
         # print('Executing command: %s' % command)
         try:
             subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f'*PROCESSING ARRESTED* \nSCAMP calculation time exceeded {timeout}s!  '
-                               f'Recommend checking astrometry for this field!')
+                               f'Recommend checking astrometry for this field!: {e}')
 
     else:
         img_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
@@ -104,14 +105,14 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
         else:
             dist_addition = ''
 
-        command = ('scamp %s -c %s -REF_SERVER %s%s' % (img_list, sc, viz_url, dist_addition))
+        command = ('scamp %s -c %s%s' % (img_list, sc, dist_addition))
         command = command + addition
         print('Executing command: %s' % command)
         try:
             subprocess.run(command.split(), check=True, timeout=timeout)
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f'*PROCESSING ARRESTED* \nSCAMP calculation time exceeded {timeout}s!  '
-                               f'Recommend checking astrometry for this field!')
+                               f'Recommend checking astrometry for this field!: {e}')
     # print(pre + ext + ' scamped!')
 
 
