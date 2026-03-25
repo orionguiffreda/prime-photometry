@@ -1,6 +1,23 @@
 import os
+import re
 
 from astropy.io import fits
+
+
+
+def remove_wcs_headers(header):
+    wcs_keywords = [
+        'WCSAXES', 'CRPIX*', 'CRVAL*', 'CDELT*', 'CUNIT*', 'CTYPE*',
+        'CRDER*', 'CSYSER*', 'CD[1-9]_[1-9]*', 'PC[1-9]_[1-9]*',
+        'PV*', 'PS*', 'PZ*', 'WCSPER*', 'SIP*', 'A_*', 'B_*',
+        'C_*', 'D_*', 'ONAXIS*'
+    ]  # I removed FOC* since it was removing FOCUS. It seems unlikely that FOC* headers will be used at any point
+    for pattern in wcs_keywords:
+        try:
+            del header[pattern]
+        except KeyError:
+            continue
+    return header
 
 
 def parse_header_file(header_file, remove_comments=True, remove_history=True):
@@ -24,10 +41,14 @@ def parse_header_file(header_file, remove_comments=True, remove_history=True):
     return header
 
 
-def combine_header_and_fits(header_file, fits_file, remove_header_file=False):
+def combine_header_and_fits(header_file, fits_file, remove_header_file=False, remove_fits_wcs=True):
     hdr = parse_header_file(header_file)
     with fits.open(fits_file, mode='update') as fin:
-        fin[0].header.update(hdr)
+        fits_hdr = fin[0].header
+        if remove_fits_wcs:
+            fits_hdr = remove_wcs_headers(fits_hdr)
+        fits_hdr.update(hdr)
+        fin[0].header = fits_hdr
     if remove_header_file:
         os.remove(header_file)
 
