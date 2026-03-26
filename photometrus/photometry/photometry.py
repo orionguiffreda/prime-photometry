@@ -1636,15 +1636,11 @@ def int_calibration(
     key0 = list(Q.keys())[0]
     Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
 
-    head_name = os.path.split(name)[0]
     if grb_ra:
-        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.photom.cat') and f'C{chip}' in f
-                          and '.fits.photom' not in f and head_name in f]
+        psfcatalogName = name.replace(os.path.splitext(name)[1], '.photom.cat')
     else:
-        psfcatalogName = [f for f in os.listdir(directory) if f.endswith(f'.fits.photom.cat') and f'C{chip}' in f and
-                          head_name in f]
+        psfcatalogName = f"{name}.photom.cat"
 
-    psfcatalogName = ''.join(psfcatalogName)
     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
         tables(Q, data, w, psfcatalogName, crop, given_catalog))
 
