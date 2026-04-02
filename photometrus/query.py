@@ -1,0 +1,424 @@
+"""
+Query functions: for individual catalogs & automatic query
+"""
+
+import numpy as np
+import pandas as pd
+import astropy.units as u
+from astroquery.vizier import Vizier
+from astropy.coordinates import Angle, SkyCoord
+from requests.exceptions import ConnectionError, Timeout
+from astroquery.exceptions import RemoteServiceError
+from astropy.io import ascii
+import psycopg2
+
+from photometrus.settings import (PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
+                                  PHOTOMETRY_QUERY_WIDTH, local_query_box)
+
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
+# GAIA COMPLETION QUERY
+
+
+def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
+    crop = int(crop)
+    max_x = data.shape[0]
+    max_y = data.shape[1]
+
+    # gaia query
+    mag_low_cutoff = 3
+    catNum = 'I/350/gaiaedr3'
+    # mag_lims = f">{mag_low_cutoff:f}"
+
+    try:
+        print(f' Querying {catNum} and crossmatching to determine catalog completion..')
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'RPmag'],
+                   column_filters={"Dup": "<1", "Nd": ">6"},
+                   row_limit=-1)
+        G = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+
+        # crsmtch check
+        gaia_colnames = G[0].colnames
+        G_RA = gaia_colnames[0]
+        G_DEC = gaia_colnames[1]
+
+        query_colnames = Q[0].colnames
+        Q_RA = query_colnames[0]
+        Q_DEC = query_colnames[1]
+
+        G_imCoords = w.all_world2pix(G[0][G_RA], G[0][G_DEC], 1)
+        Q_imCoords = w.all_world2pix(Q[0][Q_RA], Q[0][Q_DEC], 1)
+
+        good_G_stars = G[0][
+            np.where((G_imCoords[0] > crop) & (G_imCoords[0] < (max_x - crop)) & (G_imCoords[1] > crop) & (
+                    G_imCoords[1] < (max_y - crop)))]
+        good_Q_stars = Q[0][
+            np.where((Q_imCoords[0] > crop) & (Q_imCoords[0] < (max_x - crop)) & (Q_imCoords[1] > crop) & (
+                    Q_imCoords[1] < (max_y - crop)))]
+
+        GaiaCatCoords = SkyCoord(ra=good_G_stars[G_RA], dec=good_G_stars[G_DEC], frame='icrs', unit='degree')
+        QueryCatCoords = SkyCoord(ra=good_Q_stars[Q_RA], dec=good_Q_stars[Q_DEC], frame='icrs', unit='degree')
+
+        print(' Gaia cropped source total = ', len(good_G_stars))
+        print(f' Chosen survey cropped source total = ', len(good_Q_stars))
+
+        gaia_crsmtch_thresh = 1.0
+        idx_gaia, idx_query, d2d, d3d = QueryCatCoords.search_around_sky(GaiaCatCoords,
+                                                                         gaia_crsmtch_thresh * u.arcsec)
+
+        df = pd.DataFrame({
+            'idx_gaia': idx_gaia,
+            'idx_query': idx_query,
+            'd2d': d2d.to(u.arcsec).value  # example in arcsec
+        })
+
+        # Sort by separation and drop duplicates of gaia index, keeping the closest
+        gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
+
+        print(f' Crossmatched Gaia source num = {len(gaia_matches_closest)}')
+        gaia_completion = len(gaia_matches_closest) / len(good_G_stars)
+        print(' Completion = %.2f' % gaia_completion)
+    except AttributeError:
+        print(' Gaia sources not found!  Skipping completion check!')
+        gaia_completion = 1
+    except Exception as e:
+        print(f'Error in Vizier GAIA query & Survey Crossmatch: {e}')
+        print(' Assuming bad completion!')
+        gaia_completion = 0
+
+    return gaia_completion
+
+# ALL CATALOG QUERY FUNCTIONS
+
+
+def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                  mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Local 2mass query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local 2mass query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    survey_name = '2MASS'
+    print('\nVizier catalogs exhausted, switching to local 2MASS query...')
+    print('Local 2MASS Query around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            width=str(width) + 'm',
+                            columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                            column_filters={
+                                f"{band.lower()}mag": f">{mag_low_cutoff:f}",
+                            }
+                            )
+    except psycopg2.ProgrammingError as e:
+        print(f'Error: {e}')
+        raise Exception('Local 2MASS query unsuccessful!  Is the field in Y or Z band? '
+                        ' If so, and there are no other surveys, 2MASS does not have'
+                        'these filters!  Cannot continue with photometry!')
+
+    return Q, survey_name
+
+
+def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier VHS query function"""
+
+    survey_name = 'VHS'
+    catNum = 'II/367'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
+                   column_filters={
+                                "%sap3" % band: f">{mag_low_cutoff:f}",
+                                "%sperrbits" % band: '<128'},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
+            'H band is also not well covered!')
+    return Q, survey_name
+
+
+def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier VIKING query function"""
+
+    survey_name = 'VIKING'
+    catNum = 'II/382/viking4'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
+                   column_filters={
+                                "%sap3" % band: f">{mag_low_cutoff:f}",
+                                "%sperrbits" % band: '<128'},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
+            'H band is also not well covered!'
+            ' If you are in S.H., VIKING is only in a relatively smaller strip!')
+    return Q, survey_name
+
+
+def vvv_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier VVV query function"""
+
+    survey_name = 'VVV'
+    catNum = 'II/348/vvv2'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
+                   column_filters={
+                                "%sap3" % band: f">{mag_low_cutoff:f}",
+                                "%sperrbits" % band: '<128'},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
+            'H band is also not well covered!')
+    return Q, survey_name
+
+
+def ukidss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier UKIDSS query function"""
+
+    survey_name = 'UKIDSS'
+    catNum = 'II/319/las9'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
+                   column_filters={
+                                    "%smag" % band: f">{mag_low_cutoff:f}",
+                                    "%sflags1" % band.lower(): "<16"},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                           catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+            '\n perhaps check UKIDSS coverage maps?')
+    return Q, survey_name
+
+
+def panstarrs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier Pan-STARRS query function"""
+
+    survey_name = 'PanSTARRS'
+    catNum = 'II/389/ps1_dr2'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band.lower(), 'e_%smag' % band.lower()],
+                   column_filters={
+                                    "%smag" % band: f">{mag_low_cutoff:f}",
+                                    "%sFlags" % band.lower(): "!=1 && !=2"},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                           catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?')
+    return Q, survey_name
+
+
+def skymapper_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier Skymapper query function"""
+
+    survey_name = 'Skymapper'
+    catNum = 'II/379/smssdr4'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
+                   column_filters={
+                                    "%sPSF" % band.lower(): f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                    "%sFlag" % band.lower(): "<4"
+                                   },
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+            ' Perhaps check skymapper coverage maps?')
+    return Q, survey_name
+
+
+def sdss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier SDSS query function"""
+
+    survey_name = 'SDSS'
+    catNum = 'V/154/sdss16'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
+                   column_filters={
+                                    "%spmag" % band.lower(): f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                    "%sFlag" % band.lower(): "<4",
+                                    "clean": "=1"},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+            ' Perhaps check SDSS coverage maps?')
+    return Q, survey_name
+
+
+def des_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                    mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier DES query function"""
+
+    if band == 'Z':
+        band = band.lower()
+
+    survey_name = 'DES'
+    catNum = 'II/371/des_dr2'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
+                   column_filters={
+                                    "%smag" % band: f"{mag_low_cutoff:f}..{mag_high_cutoff:f}",
+                                   "%sFlag" % band.lower(): "<4"},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
+                           catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
+            ' Perhaps check DES coverage maps?')
+    return Q, survey_name
+
+
+PHOTOMETRY_QUERY_FUNCTIONS = {
+    'Z': [viking_query, vvv_query, vhs_query, panstarrs_query, sdss_query, des_query],
+    'Y': [viking_query, vvv_query, vhs_query, ukidss_query, panstarrs_query, des_query],
+    'J': [viking_query, vvv_query, vhs_query, ukidss_query, twomass_query],
+    'H': [viking_query, vvv_query, vhs_query, ukidss_query, twomass_query]
+}
+
+
+def query(
+        raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4, survey=None, given_catalog_path=None,
+        mag_lower_lim=PHOTOMETRY_MAG_LOWER_LIMIT, mag_upper_lim=PHOTOMETRY_MAG_UPPER_LIMIT, bulge=False,
+        magtype=defaults['magtype']
+):
+
+    mag_low_cutoff = mag_lower_lim
+    mag_high_cutoff = mag_upper_lim
+
+    # query box width
+    width = PHOTOMETRY_QUERY_WIDTH
+
+    if given_catalog_path:
+        Q = ascii.read(given_catalog_path)
+        Q = Q[Q[f'{band}MAG_{magtype}'] > mag_low_cutoff]
+        chosen_survey = 'PRIME'
+
+        return Q, chosen_survey, mag_low_cutoff
+
+    else:
+        if bulge:
+            # if bulge field, change to galactic coords for query
+            print('Galactic bulge field detected!  Adjusting query parameters accordingly...')
+            coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+            coords = coords.galactic  # galactic conversion for bulge fields
+            chosen_frame = 'galactic'
+            frame_long = coords.l.deg
+            frame_long_str = 'l = %.4f' % frame_long
+            frame_lat = coords.b.deg
+            frame_lat_str = 'b = %.4f' % frame_lat
+            print('Converting coords to galactic: %s, %s' % (frame_long_str, frame_lat_str))
+
+        else:
+            coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+            chosen_frame = 'fk5'
+            frame_long = raImage
+            frame_long_str = 'RA: %.4f' % frame_long
+            frame_lat = decImage
+            frame_lat_str = 'DEC: %.4f' % frame_lat
+
+    # specified survey query
+
+    if survey:
+        Q = None
+        chosen_survey = survey
+
+        fctns_for_band = [fctn for fctn in PHOTOMETRY_QUERY_FUNCTIONS[band]]
+        chosen_fctn = [fctn for fctn in fctns_for_band if chosen_survey.lower() in fctn.__name__.lower()]
+
+        Q, chosen_survey = chosen_fctn[0](
+            coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
+            width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
+        )
+
+        if not Q:
+            raise ReferenceError('Chosen catalog failed to produce a result!  No coverage?')
+        else:
+            if len(Q[0]) > 0:
+                print('Queried source total = ', len(Q[0]))
+            else:
+                raise ValueError('No sources found in survey catalog!  No coverage?')
+
+        return Q, chosen_survey, mag_low_cutoff
+
+    # auto query
+
+    fctns_for_band = [fctn for fctn in PHOTOMETRY_QUERY_FUNCTIONS[band]]
+    last_idx = fctns_for_band[-1]
+
+    Q = None
+    chosen_survey = None
+
+    for fctn in fctns_for_band:
+        Q, chosen_survey = fctn(
+            coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
+            width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
+        )
+
+        if Q and len(Q[0]) > 0:
+            print('Queried source total = ', len(Q[0]))
+            if fctn != last_idx:
+                gaia_comp = gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q)
+                if gaia_comp >= acc_comp_lvl:
+                    print(f' Completion acceptable (>{acc_comp_lvl})! Moving on w/ catalog!\n')
+                    break
+                else:
+                    print(f' Gaia completion < {acc_comp_lvl}, defaulting to next catalog..\n')
+
+    if Q is None:
+        raise ReferenceError('All catalogs failed to produce a result!')
+
+    return Q, chosen_survey, mag_low_cutoff

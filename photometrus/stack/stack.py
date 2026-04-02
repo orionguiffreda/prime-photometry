@@ -1,6 +1,7 @@
 """
 Stacks astrometrically calibrated files using swarp
 """
+import datetime
 #%%
 import os
 import shutil
@@ -10,17 +11,122 @@ import sys
 from astropy.io import fits
 import astropy.units as u
 from astropy.coordinates import SkyCoord
+from astropy.time import Time
 import numpy as np
 import fnmatch
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
 from photometrus.astrom.astrometry import sextract, scamp
 from photometrus.photometry.photometry import photometry
 from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
-from photometrus.utils.utils import combine_header_and_fits
+from photometrus.utils.utils import combine_header_and_fits, remove_wcs_headers
 
 #%%
+
+
+def get_astrom_files(imgdir):
+    image_fnames = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if
+                    f.endswith('.flat.fits') or f.endswith('.flat.new')]
+    return image_fnames
+
+
+def datetime_to_julian_date(datetime):
+    ts = Time(datetime)
+    jd = ts.jd1 + ts.jd2
+    return jd
+
+
+def julian_date_to_modified_julian_date(julian_date):
+    return julian_date - 2400000.5
+
+
+def datetime_to_modified_julian_date(datetime):
+    jd = datetime_to_julian_date(datetime)
+    return julian_date_to_modified_julian_date(jd)
+
+
+def get_time_stack_header(header_df):
+    dt_fmt = '%Y-%m-%dT%H:%M:%S.%f'
+    return_header = fits.Header()
+    start_frame = header_df.iloc[0]
+    end_frame = header_df.iloc[-1]
+    start_time = datetime.datetime.strptime(start_frame['DATE-BEG'], dt_fmt)
+    end_time = datetime.datetime.strptime(end_frame['DATE-END'], dt_fmt) + datetime.timedelta(seconds=end_frame['EXPTIME'])
+    return_header.set('DATE-BEG', start_time.strftime(dt_fmt), 'UT DT at start of 1st exp in stack')
+    return_header.set('DATE-END', end_time.strftime(dt_fmt), 'UT DT at end of last exp in stack')
+    return_header.set('MJD-BEG', datetime_to_modified_julian_date(start_time), 'modified jd at start of 1st exp')
+    return_header.set('MJD-END', datetime_to_modified_julian_date(end_time), 'modified jd at end of last exp')
+    return_header.set('JD-BEG', datetime_to_julian_date(start_time), 'julian date at start of 1st exp')
+    return_header.set('JD-END', datetime_to_julian_date(end_time), 'julian date at end of last exp')
+    return_header.set('EXPSTART', datetime_to_modified_julian_date(start_time), 'modified jd at start of 1st exp')
+    return_header.set('EXPEND', datetime_to_modified_julian_date(end_time), 'modified jd at end of last exp')
+    return_header.set('EXPMID', (return_header['EXPSTART'] + return_header['EXPEND']) / 2, 'modified jd at middle of stack exp')
+    return_header.set('TELAPSE', (return_header['EXPEND'] - return_header['EXPEND']) * 24 * 3600, '[s] time elapsed during stack')
+    return_header.set('EXPERR', return_header['TELAPSE'] / 2, '[s] time error around EXPMID for stack')
+    return return_header
+
+
+def gen_stack_header(image_fnames):
+    # image_fnames = get_astrom_files(imgdir)
+    image_fnames.sort()
+    all_headers = [remove_wcs_headers(fits.getheader(f)) for f in image_fnames]
+    header_template = all_headers[0]
+    all_headers_df = pd.DataFrame(all_headers)
+    delete_headers = [
+        'NAXIS1', 'NAXIS2', 'FRAME', 'COMMENT', 'ISRESET', 'SIZAXIS1', 'SIZAXIS2', 'NCOLS', 'NROWS', 'UTDATE',
+        'UTSTART', 'DATE', 'ASDFNAME', 'RSTSAVE', 'SCIWRD1', 'SCIWRD2', 'SCIWRD3', 'SCIWRD4', 'SCIWRD5', 'SCIWRD6',
+        'ASCIXPID', 'NSCIHEAD', 'ABLKLEN', 'ABLKCNT', 'AASICID', 'AHDRLEN', 'ASDPCNT', 'AFF', 'AEXPVIDL', 'ASCIFRM',
+        'SATURATE', 'GAIN', 'SLICE', 'BLOCKID', 'DITHPH', 'DITH_IDX', 'INT', 'USEDNUMS', 'USEDNUML', 'CHECKSUM',
+        'DATASUM',
+    ]
+    mean_headers = [
+        'NRESETS', 'ASICADDR', 'ASICINDX', 'DETECTOR', 'ASICSN', 'FPAPOS', 'MACIESN', 'VRESET', 'CELLDRAI', 'VBIASGAT',
+        'VBIASPOW', 'SUB', 'DSUB', 'DRAIN', 'VDDA', 'VDD', 'GND', 'GNDA', 'VREF', 'CHIP', 'RAOFF', 'DECOFF', 'ROTOFF',
+        'DITHRAD', 'DITH_REP', 'TEMPASIC', 'TEMPPLAT', 'TEMPSTRP', 'TEMPDET', 'TEMPMOTI', 'TEMPMOTO', 'PRESSURE',
+        'ALT', 'AZI', 'RA-D', 'DEC-D', 'TSDOME', 'FOCUS', 'ROT', 'TIMEOFF', 'TSSECZ', 'ETMPCCP', 'ETMPCC1', 'ETMPCCC1',
+        'ETMPCC2', 'ETMPCCC2', 'ETMPDECK', 'ETMPHK', 'ETMPMAC', 'ETMPMANI', 'ETMPMANO', 'ETMPPDU', 'ETMPPRES',
+        'TEMPHED1', 'PWRHED1C', 'PWRHED1M', 'TEMPREJ1', 'CRYO1STA', 'TMPHED1T', 'TEMPHED2', 'PWRHED2C', 'PWRHED2M',
+        'TEMPREJ2', 'CRYO2STA', 'TMPHD2T', 'SKY_FAC', 'AIRMASS', 'X_SHIFT', 'Y_SHIFT',
+    ]
+    sum_headers = ['NFRAMES', 'EXPTIME', 'EXPTIMEE', 'EXPTIMEC', 'NINT', 'DITH_TOT']
+    first_headers = [
+        'FRTIME', 'TFRAME', 'REDXMODE', 'REFOUT', 'NOUTPUTS', 'AMPMODE', 'MACIEINT', 'TIMEUNIT', 'DEINTERL', 'RSTTYPE',
+        'LODFIL0', 'LODFIL1', 'LODFIL2', 'LODFIL3', 'LODFIL4', 'LODFIL5', 'LODFIL6', 'LODFIL7', 'LODFIL8', 'LODFIL9',
+        'LODFIL10', 'RMVSCIHD', 'PIXSCALE', 'INSTRUME', 'LATITUDE', 'LONGITUD', 'ALTITUDE', 'BINNING', 'BINX', 'BINY',
+        'WAVELENG', 'PIXSIZE', 'OBSERVER', 'OBJNAME', 'OBJTYPE', 'DITHTYP', 'COMMENT1', 'COMMENT2', 'DEC', 'RA',
+        'FILTER1', 'FILTER2', 'SKY_FILE', 'COER', 'COED', 'DARKLIM', 'SPBIAS', 'SATULIM',
+    ]
+    last_headers = []
+    time_headers = get_time_stack_header(all_headers_df)
+    for k in delete_headers:
+        try:
+            del header_template[k]
+        except KeyError:
+            print('Could not find header key "%s" skipping delete' % k)
+    for k in mean_headers:
+        try:
+            header_template.set(k, np.mean(all_headers_df[k]), 'Stack mean of '+ header_template.comments[k])
+        except KeyError:
+            print('Could not find header key "%s" skipping mean' % k)
+    for k in sum_headers:
+        try:
+            header_template.set(k, np.sum(all_headers_df[k]), 'Stack sum of ' + header_template.comments[k])
+        except KeyError:
+            print('Could not find header key "%s" skipping sum' % k)
+    for k in first_headers:
+        try:
+            header_template[k] = all_headers_df[k].tolist()[0]
+        except KeyError:
+            print('Could not find header key "%s" skipping first' % k)
+    for k in last_headers:
+        try:
+            header_template[k] = all_headers_df[k].tolist()[-1]
+        except KeyError:
+            print('Could not find header key "%s" skipping last' % k)
+    header_template.update(time_headers)
+    return header_template
 
 
 def badpixmask(parent, subpath, chip):
@@ -74,8 +180,7 @@ def astrom_check(imgdir):
         Directory where input images are stored
     """
 
-    image_fnames = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if
-                    f.endswith('.flat.fits') or f.endswith('.flat.new')]
+    image_fnames = get_astrom_files(imgdir)
 
     image_hdrs = [fits.getheader(img) for img in image_fnames]
 
@@ -113,9 +218,10 @@ def astrom_check(imgdir):
 
 def swarp(imgdir, finout):
     print('SWARP Stacking!')
-    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
+    image_fnames = get_astrom_files(imgdir)
     image_fnames.sort()
-    header = fits.getheader(image_fnames[-1])
+    # header = fits.getheader(image_fnames[-1])
+    header = gen_stack_header(image_fnames)
     filter1 = header.get('FILTER1', 'unknown')
     filter2 = header.get('FILTER2', 'unknown')
     ext = os.path.splitext(image_fnames[-1])[1]
@@ -137,18 +243,22 @@ def swarp(imgdir, finout):
     #weight_name = 'coaddastrweight.fits'
 
     sw = gen_config_file_name('default.swarp')
-    com = ["swarp ", os.path.join(imgdir, '*.flat'+ext), ' -c '+sw
-           , ' -IMAGEOUT_NAME '+ save_name, ' -WEIGHTOUT_NAME '+weight_name]
-    s0 = ''
-    com = s0.join(com)
-    out = subprocess.Popen([com], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    out.wait()
+
+    try:
+        com = f'swarp {os.path.join(imgdir, '*.flat'+ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}'
+        subprocess.run(com, shell=True, check=True, capture_output=True, text=True)
+    except subprocess.CalledProcessError as err:
+        print(f"SWARP failed with exit code {err.returncode}")
+        print(f"STDERR:\n{err.stderr}")
+        print(f"STDOUT:\n{err.stdout}")
     print('Co-added image created, all done!')
+    with fits.open(save_name, mode='update') as fin:
+        fin[0].header.update(header)
 
 
 def swarp_increm(imgdir, finout, im_num=5):
     batch_size = im_num
-    files = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
+    files = get_astrom_files(imgdir)
     total_files = len(files)
 
     stack_files = [os.path.join(finout, f) for f in sorted(os.listdir(finout)) if f.startswith('coadd') and f.endswith('.fits')]
@@ -229,7 +339,7 @@ def swarp_increm(imgdir, finout, im_num=5):
 
 
 def swarp_alt(imgdir, imout):
-    image_fnames = [os.path.join(imgdir, f) for f in os.listdir(imgdir) if f.endswith('.flat.new') or f.endswith('.flat.fits')]
+    image_fnames = get_astrom_files(imgdir)
     image_fnames.sort()
     image_fnames_1 = image_fnames[::2]
     image_fnames_2 = image_fnames[1::2]

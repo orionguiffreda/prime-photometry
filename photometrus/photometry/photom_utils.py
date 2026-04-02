@@ -3,10 +3,12 @@ Utility functions for photometry
 """
 
 import random
+import os
 import numpy as np
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 import time
 from astropy.io import fits
+from filelock import FileLock, Timeout
 
 from photometrus.settings import AB_OFFSET_DICT
 
@@ -15,51 +17,32 @@ from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 # Context Managers
 @contextmanager
-def open_fits_robust(imageName, mode='update', retries=3, delay=1, jitter=1):
+def open_fits_robust(imageName, mode='update', timeout=30):
     """
     Provides robustness against file update errors from multiprocess
 
     Parameters
     ----------
-    imageName: str
+    imageName : str
         Filename of input image
-    mode: str
-        Mode for fits to open file in
-    retries: int
-        Max retries to open fits file (default = 3)
-    delay: int
-        Time (s) to delay before attempting to reopen the file (default = 1)
-    jitter: int
-        Random time betw. 0 and input added to delay (default = 1)
+    mode : str
+        Mode for fits.open (default 'update')
+    timeout : int
+        Max seconds to wait for the lock before raising (default 30)
     """
 
-    hdul = None
-    for attempt in range(retries):
-        try:
-            hdul = fits.open(imageName, mode=mode)
-            break
-        except (FileNotFoundError, OSError) as e:
-            if attempt < retries - 1:
-                sleep_time = delay + random.uniform(0, jitter)
-                print(f"FITS open failed (process collision?), trying again w/ delay: {round(sleep_time,2)}s")
-                time.sleep(sleep_time)
-            else:
-                raise
+    lock_path = imageName + ".lock"
+    lock = FileLock(lock_path, timeout=timeout)
+
     try:
-        yield hdul
-    finally:
-        if hdul is not None:
-            for attempt in range(retries):
-                try:
-                    hdul.close()
-                    break
-                except (FileNotFoundError, OSError) as e:
-                    if attempt < retries - 1:
-                        sleep_time = delay + random.uniform(0, jitter)
-                        print(f"FITS close failed (process collision?), trying again w/ delay: {round(sleep_time,2)}s")
-                        time.sleep(sleep_time)
-                    else:
-                        print(f"*WARNING*: FITS close/flush failed after {retries}")
+        with lock:
+            hdul = fits.open(imageName, mode=mode)
+            try:
+                yield hdul
+            finally:
+                hdul.close()
+    except Timeout:
+        raise Timeout(f"Could not acquire lock for '{imageName}' within {timeout}s")
 
 
 @contextmanager
@@ -234,3 +217,32 @@ def ab_convert(mag, band, survey=None, revert=False):
             return vega_mag
 
     return ab_mag
+
+
+def removal(directory, end_names=None):
+    """
+    Removes files from directory with specific suffixes
+
+    Parameters
+    ----------
+    directory : str
+        Directory to conduct removal processes on
+    end_names: str
+        Optional, list of suffixes to remove, using format: end_names=".lock,.psf", default = ".cat,.psf"
+    """
+
+    if end_names:
+        end_names = end_names.split(',')
+    else:
+        end_names = ['.cat', '.psf']
+    start_names = []    # ['GRB_', 'PSF.']
+    preserved_end_names = []    # ['.ecsv', '.fits']
+    rem_files = [f for f in os.listdir(directory) if f.endswith(tuple(end_names)) or f.startswith(tuple(start_names))
+                 and not f.endswith(tuple(preserved_end_names))]
+    for file in rem_files:
+        path = os.path.join(directory + file)
+        try:
+            os.remove(path)
+            # print(f"Removed file: {path}")
+        except Exception as e:
+            print(f"Error removing file: {path} - {e}")
