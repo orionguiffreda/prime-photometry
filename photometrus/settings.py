@@ -31,11 +31,18 @@ FLAT_DEFAULT_DIR = '/mnt/fits_data/flat_storage_dir'
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
 PHOTOMETRY_QUERY_WIDTH = 48  # in arcmin, should cover the whole chip even with 45 deg rotation
-PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/343/viking2'], 'VVV_J': ['J', 'II/348/vvv2'],
+PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/382/viking4'], 'VVV_J': ['J', 'II/348/vvv2'],
                              '2MASS': ['J', 'II/246/'],
                             'VVV_Y': ['J', 'II/348/vvv2'], 'Skymapper': ['Z', 'II/379/smssdr4'],'SDSS': ['Z', 'V/154/sdss16'],'DES_Z': ['Z', 'II/371/des_dr2'],
                              'VVV_Z': ['J', 'II/348/vvv2'], 'UKIDSS': ['Y', 'II/319/las9'],'PanSTARRS': ['Y', 'II/349/ps1'],'DES_Y': ['Y', 'II/371/des_dr2']
                              }
+
+# PHOTOMETRY_QUERY_FUNCTIONS = {
+#     'Z': ['viking_query', 'vvv_query', 'vhs_query', 'panstarrs_query', 'sdss_query', 'des_query'],
+#     'Y': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'panstarrs_query', 'des_query'],
+#     'J': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'twomass_query'],
+#     'H': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'twomass_query']
+# }
 
 ASTROM_QUERY_CATALOGS = {
     'VIRAC': ['J,H','II/364/virac2'],
@@ -423,17 +430,28 @@ def local_query_box(ra_center, dec_center,
     height = ang_convert(height)
     width = ang_convert(width)
 
-    delta_ra = (width / 2) / math.cos(math.radians(dec_center))
-    delta_dec = height / 2
+    POLE_THRESHOLD = 0.5  # degrees from pole to switch query strategy (box to radial)
+    near_south_pole = dec_center - height / 2 <= -90 + POLE_THRESHOLD
+    near_north_pole = dec_center + height / 2 >= 90 - POLE_THRESHOLD
 
-    corners = [
-        (ra_center - delta_ra, dec_center + delta_dec),  # TL
-        (ra_center + delta_ra, dec_center + delta_dec),  # TR
-        (ra_center + delta_ra, dec_center - delta_dec),  # BR
-        (ra_center - delta_ra, dec_center - delta_dec),  # BL
-    ]
-
-    corners = [(ra % 360, dec) for ra, dec in corners]
+    if near_south_pole or near_north_pole:
+        # Use radial query near poles
+        radius = math.sqrt((height / 2) ** 2 + (width / 2) ** 2)
+        print(f" Near pole detected, switching to radial query with radius {radius:.4f} deg")
+        query_type = 'radial'
+        query_params = (ra_center, dec_center, radius)
+    else:
+        delta_ra = (width / 2) / math.cos(math.radians(dec_center))
+        delta_dec = height / 2
+        corners = [
+            (ra_center - delta_ra, dec_center + delta_dec),  # TL
+            (ra_center + delta_ra, dec_center + delta_dec),  # TR
+            (ra_center + delta_ra, dec_center - delta_dec),  # BR
+            (ra_center - delta_ra, dec_center - delta_dec),  # BL
+        ]
+        corners = [(ra % 360, dec) for ra, dec in corners]
+        query_type = 'poly'
+        query_params = corners
 
     conn = psycopg2.connect(service='localdb')
 
@@ -441,17 +459,24 @@ def local_query_box(ra_center, dec_center,
 
     colstr = "*" if columns is None else ",".join(columns)
 
-    where = [f"""
-       q3c_poly_query(
-           ra, dec,
-           ARRAY[
-               {corners[0][0]}, {corners[0][1]},
-               {corners[1][0]}, {corners[1][1]},
-               {corners[2][0]}, {corners[2][1]},
-               {corners[3][0]}, {corners[3][1]}
-           ]::double precision[]
-       )
-       """]
+    if query_type == 'radial':
+        where = [f"""
+           q3c_radial_query(
+                ra, dec, {query_params[0]}, {query_params[1]}, {query_params[2]}
+           )
+           """]
+    else:
+        where = [f"""
+           q3c_poly_query(
+               ra, dec,
+               ARRAY[
+                   {query_params[0][0]}, {query_params[0][1]},
+                   {query_params[1][0]}, {query_params[1][1]},
+                   {query_params[2][0]}, {query_params[2][1]},
+                   {query_params[3][0]}, {query_params[3][1]}
+               ]::double precision[]
+           )
+           """]
 
     if column_filters:
         for col, expr in column_filters.items():
