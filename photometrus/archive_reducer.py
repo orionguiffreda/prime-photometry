@@ -207,7 +207,7 @@ def archive_reducer(
 	archive.to_csv(os.path.join(archive_filename))
 	print('output file to: ', archive_filename)
 
-	use_all_sky_grid = False
+	use_all_sky_grid = True
 	grids = None
 	if use_all_sky_grid:
 		grid_df = pd.read_csv(grid_file)
@@ -265,7 +265,6 @@ def archive_reducer(
 						print(tb)
 
 
-		
 	
 	if grid_search:
 		for i, coord_dict in coord_df.iterrows():
@@ -295,9 +294,7 @@ def archive_reducer(
 		
 					# if not is_nasa_non_grid_field: # if not (is_nasa_non_field or is_grid):
 					# 	continue
-		
-				
-						# access additional metadata from grids?
+					# access additional metadata from grids?
 		
 					bandpass = (object_dict['FILTER1']+object_dict['FILTER2']).replace('Open', '')
 						
