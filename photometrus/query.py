@@ -89,7 +89,69 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 
     return gaia_completion
 
+
 # ALL CATALOG QUERY FUNCTIONS
+"""
+Below is the format of an example Vizier query, if you want to add one.  It should have the following parameters:
+
+coords: SkyCoord
+    SkyCoord object of input center coordinates for query.  Normal usage with the main query fctn at the bottom of this 
+    file usually provides this as: coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+frame_long_str: str
+    String providing the coordinate longitude. Normal usage with the main query fctn will provide this, usually as:
+    frame_long_str = 'RA: %.4f' % raImage
+frame_lat_str: str
+    String providing the coordinate latitude. Normal usage with the main query fctn will provide this, usually as:
+    frame_long_str = 'DEC: %.4f' % decImage
+band: str
+    Filter of observation
+width: float
+    Full width of query box in arcmin
+mag_low_cutoff: float
+    Bright end mag cutoff to avoid saturated sources (specified in settings.py, usually = 12.5)
+mag_high_cutoff: float
+    Dim end mag cutoff to handle very deep surveys beyond PRIME's limit (specified in settings.py, usually = 23)
+chosen_frame: str
+    String denoting coordinate system frame.  Normal usage with the main query fctn will provide this, usually as 'fk5'
+
+Below is the formatting for a query function.  Note the following:
+
+* The Vizier object should have 4 columns: [RA, DEC, Mag, MagErr].  While a 5th column is supported for Vista surveys, 
+(Mclass), photometry.py currently only supports this specific column with those surveys to prune galaxies for zp calc.
+
+* Column filters should feature a mag cutoff of bright sources, as in the example below.  If the survey is especially 
+deep, it should also have a dim mag cutoff.  See the skymapper or sdss query fctns for formatting in that case.  Column
+filters should also have whatever error flag constraints you deem necessary to prune unwanted sources.
+
+* Your function should return two parameters: Q (the query object from query_region), and survey_name (name of the survey
+you're adding).  The survey_name should match the name of the fctn, ex: survey_name='VHS' for the vhs_query() fctn.
+
+* Finally, make sure to add your query to the PHOTOMETRY_QUERY_FUNCTIONS dict near the bottom of the file.  Add it for 
+the applicable bands the survey provides.  The order of the survey fctns in the dict denotes hierarchy of attempts, ex. 
+for J band VIKING will be tried first, then VVV, and so on.
+
+
+def example_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+
+    survey_name = 'name_of_input_survey' (i.e. 'VHS')
+    catNum = 'Vizier_catalog_number_for_survey' (i.e. 'II/367' for VHS)
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band],
+                   column_filters={
+                                "%sap3" % band: f">{mag_low_cutoff:f}",
+                                "%sperrbits" % band: '<128'},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query')
+    return Q, survey_name              
+"""
 
 
 def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
