@@ -154,12 +154,36 @@ def example_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
 """
 
 
+def twomass_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+                  mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """Vizier 2mass query function"""
+
+    survey_name = '2MASS'
+    catNum = 'II/246'
+    print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
+                   column_filters={
+                       "%smag" % band: f">{mag_low_cutoff:f}", "Nd": ">6"
+                   },
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query.  Is Vizier down?')
+
+    return Q, survey_name
+
+
 def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
                   mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
     """Local 2mass query function"""
 
     if chosen_frame != 'fk5':
-        raise Exception('Frame other than fk5 detected! *WARNING* Local 2mass query currently doesnt '
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
                         'support galactic coords!')
 
     ra = coords.ra.deg
@@ -172,22 +196,26 @@ def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
     try:
         Q = local_query_box(ra_center=ra,
                             dec_center=dec,
+                            dbname='prime_2mass_local',
+                            tablename='twomass_local',
                             width=str(width) + 'm',
                             columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
                             column_filters={
                                 f"{band.lower()}mag": f">{mag_low_cutoff:f}",
                             }
                             )
-    except psycopg2.ProgrammingError as e:
-        print(f'Error: {e}')
-        raise Exception('Local 2MASS query unsuccessful!  Is the field in Y or Z band? '
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Local 2MASS query unsuccessful!  Is the field in Y or Z band? '
                         ' If so, and there are no other surveys, 2MASS does not have'
-                        'these filters!  Cannot continue with photometry!')
+                        'these filters!  Cannot continue with photometry! \nError: {e}')
+        print('Attempting Vizier query as backup!')
+        Q, survey_name = twomass_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame)
 
     return Q, survey_name
 
 
-def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+def vhs_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
               mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
     """Vizier VHS query function"""
 
@@ -199,7 +227,8 @@ def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
                    column_filters={
                                 "%sap3" % band: f">{mag_low_cutoff:f}",
-                                "%sperrbits" % band: '<128'},
+                                "%sperrbits" % band: '<128',
+                   },
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -211,7 +240,42 @@ def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     return Q, survey_name
 
 
-def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """VHS query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    survey_name = 'VHS'
+    print('Local VHS Query around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            dbname='prime_vhs_local',
+                            tablename='vhs_sources',
+                            width=str(width) + 'm',
+                            columns=["ra", "dec", f'{band}AperMag3', f'{band}AperMag3Err', 'mergedClass'],
+                            column_filters={
+                                f'{band}AperMag3': f">{mag_low_cutoff:f}",
+                                f"{band}pperrbits": '<128'
+                            }
+                            )
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Local VHS query unsuccessful!: Error: {e}')
+        print('Attempting Vizier query as backup!')
+        Q, survey_name = vhs_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame)
+
+    return Q, survey_name
+
+
+def viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
                     mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
     """Vizier VIKING query function"""
 
@@ -233,6 +297,41 @@ def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cut
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
             'H band is also not well covered!'
             ' If you are in S.H., VIKING is only in a relatively smaller strip!')
+    return Q, survey_name
+
+
+def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """VIKING query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    survey_name = 'VIKING'
+    print('Local VIKING Query around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            dbname='prime_vhs_local',
+                            tablename='viking_sources',
+                            width=str(width) + 'm',
+                            columns=["ra", "dec", f'{band}AperMag3', f'{band}AperMag3Err', 'mergedClass'],
+                            column_filters={
+                                f'{band}AperMag3': f">{mag_low_cutoff:f}",
+                                f"{band}pperrbits": '<128'
+                            }
+                            )
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Local VIKING query unsuccessful!: Error: {e}')
+        print('Attempting Vizier query as backup!')
+        Q, survey_name = viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame)
+
     return Q, survey_name
 
 
@@ -268,10 +367,15 @@ def ukidss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cut
     catNum = 'II/319/las9'
     print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
           % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+
+    mag_col_name = f'{band}mag'
+    if band == 'J':
+        mag_col_name = f'{band}mag1'
+
     try:
-        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%s' % mag_col_name, 'e_%s' % mag_col_name],
                    column_filters={
-                                    "%smag" % band: f">{mag_low_cutoff:f}",
+                                    "%s" % mag_col_name: f">{mag_low_cutoff:f}",
                                     "%sflags1" % band.lower(): "<16"},
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
@@ -281,6 +385,7 @@ def ukidss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cut
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
             '\n perhaps check UKIDSS coverage maps?')
+
     return Q, survey_name
 
 

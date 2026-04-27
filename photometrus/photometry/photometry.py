@@ -254,7 +254,7 @@ def sex1(imageName, det_cut, grb_flag=False):
             whdr.set('DET_CUT', detect_cutoff, 'Pix value cutoff for source detection', after='MEDIAN')
             hdu.close()
         try:
-            print('Including weight map!')
+            print(' Including weight map!')
             command = (f'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PARAMETERS_NAME %s {aper_str}'
                        %
                        (f'{imageName}', configFile, catalogName, detect_cutoff, f'{weightName}', paramName))
@@ -385,6 +385,7 @@ def sex2(imageName, det_cut, catalogName):
         weight_std = np.nanstd(weightdata)
         detect_cutoff = weight_med - (weight_std * det_cut)
         try:
+            print(' Including weight map!')
             # We are supplying SExtactor with the PSF model with the PSF_NAME option
             command = (f'sex {imageName} -c {configFile} -CATALOG_NAME {psfcatalogName} -WEIGHT_TYPE MAP_WEIGHT '
                        f'-WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName} -PSF_NAME {psfName} '
@@ -554,7 +555,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                                                               photoDistThresh * u.arcsec)
         # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
 
-        if 'Mclass' in colnames:
+        if 'Mclass' or 'mergedClass' in colnames:
             # pruning crossmatches to only include stars if applicable
             print('Found %d good cross-matches before pruning' % len(idx_psfmass))
             star_mask = np.isin(good_cat_stars[colnames[4]], [-1, -2])

@@ -26,7 +26,7 @@ import json5
 # base_dir = os.path.dirname(os.path.abspath('__file__'))
 
 PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
-FLAT_DEFAULT_DIR = '/mnt/fits_data/flat_storage_dir'
+FLAT_DEFAULT_DIR = '/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/'
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -219,7 +219,7 @@ def update_settings(settings_file='photometrus.json5'):
     global GET_DATA_SETTINGS
 
     PIPELINE_DEFAULT_DIR = settings['PIPELINE_DEFAULT_DIR']
-    PIPELINE_DEFAULT_DIR = settings['FLAT_DEFAULT_DIR']
+    FLAT_DEFAULT_DIR = settings['FLAT_DEFAULT_DIR']
     PHOTOMETRY_MAG_LOWER_LIMIT = settings['PHOTOMETRY_MAG_LOWER_LIMIT']
     PHOTOMETRY_MAG_UPPER_LIMIT = settings['PHOTOMETRY_MAG_UPPER_LIMIT']
     PHOTOMETRY_QUERY_WIDTH = settings['PHOTOMETRY_QUERY_WIDTH']
@@ -393,7 +393,7 @@ def ang_convert(ang):
     return arcconvert
 
 
-def local_query_box(ra_center, dec_center,
+def local_query_box(ra_center, dec_center, dbname, tablename,
                     width, height=None,
                     columns=None,
                     column_filters=None):
@@ -453,7 +453,7 @@ def local_query_box(ra_center, dec_center,
         query_type = 'poly'
         query_params = corners
 
-    conn = psycopg2.connect(service='localdb')
+    conn = psycopg2.connect(service=dbname)
 
     cur = conn.cursor()
 
@@ -486,14 +486,14 @@ def local_query_box(ra_center, dec_center,
                 adj_expr = expr
             where.append(f"{col} {adj_expr}")
 
-    print(' Specific cols specified, removing rows where column vals = None')
     if columns:
+        print(' Specific cols specified, removing rows where column vals = None')
         for col in columns:
             where.append(f"{col} IS NOT NULL")
 
     sql = f"""
         SELECT {colstr}
-        FROM twomass_local
+        FROM {tablename}
         WHERE {" AND ".join(where)}
     """
 
@@ -506,4 +506,4 @@ def local_query_box(ra_center, dec_center,
 
     tbl = Table(rows=rows, names=names) if rows else Table(names=names)
 
-    return TableList([("twomass_local_query", tbl)])
+    return TableList([("local_query", tbl)])
