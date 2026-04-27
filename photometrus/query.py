@@ -196,7 +196,7 @@ def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
     try:
         Q = local_query_box(ra_center=ra,
                             dec_center=dec,
-                            dbname='localdb',
+                            dbname='prime_2mass_local',
                             tablename='twomass_local',
                             width=str(width) + 'm',
                             columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
@@ -275,7 +275,7 @@ def vhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     return Q, survey_name
 
 
-def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+def viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
                     mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
     """Vizier VIKING query function"""
 
@@ -297,6 +297,41 @@ def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cut
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
             'H band is also not well covered!'
             ' If you are in S.H., VIKING is only in a relatively smaller strip!')
+    return Q, survey_name
+
+
+def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5'):
+    """VIKING query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    survey_name = 'VIKING'
+    print('Local VIKING Query around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            dbname='prime_vhs_local',
+                            tablename='viking_sources',
+                            width=str(width) + 'm',
+                            columns=["ra", "dec", f'{band}AperMag3', f'{band}AperMag3Err', 'mergedClass'],
+                            column_filters={
+                                f'{band}AperMag3': f">{mag_low_cutoff:f}",
+                                f"{band}pperrbits": '<128'
+                            }
+                            )
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Local VIKING query unsuccessful!: Error: {e}')
+        print('Attempting Vizier query as backup!')
+        Q, survey_name = viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame)
+
     return Q, survey_name
 
 
