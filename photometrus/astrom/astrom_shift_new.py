@@ -161,6 +161,8 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
         Q = local_query_box(ra_center=float(frame_long),
                             dec_center=float(frame_lat),
                             width=str(boxsize) + 'm',
+                            dbname='prime_2mass_local',
+                            tablename='twomass_local',
                             columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
                             column_filters={
                                 f"{band.lower()}mag": f"BETWEEN {maglow:f} AND {maghigh:f}",
@@ -317,6 +319,8 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                                 Q = local_query_box(ra_center=raImage,
                                                     dec_center=decImage,
                                                     width=str(effective_boxsize) + 'm',
+                                                    dbname='prime_2mass_local',
+                                                    tablename='twomass_local',
                                                     columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
                                                     column_filters={
                                                         f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
