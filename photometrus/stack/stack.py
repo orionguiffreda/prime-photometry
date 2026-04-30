@@ -110,11 +110,15 @@ def gen_stack_header(image_fnames):
             header_template.set(k, np.mean(all_headers_df[k]), 'Stack mean of '+ header_template.comments[k])
         except KeyError:
             print('Could not find header key "%s" skipping mean' % k)
+        except TypeError:
+            first_headers.append(k)
     for k in sum_headers:
         try:
             header_template.set(k, np.sum(all_headers_df[k]), 'Stack sum of ' + header_template.comments[k])
         except KeyError:
             print('Could not find header key "%s" skipping sum' % k)
+        except TypeError:
+            first_headers.append(k)
     for k in first_headers:
         try:
             header_template[k] = all_headers_df[k].tolist()[0]
@@ -129,29 +133,24 @@ def gen_stack_header(image_fnames):
     return header_template
 
 
-def badpixmask(parent, subpath, chip):
-    otherdir = os.path.join(parent, 'temp/')
-    exists = os.path.exists(otherdir)
-    if not exists:
-        os.mkdir(otherdir)
-    if exists:
-        print(otherdir,' exists!')
+def badpixmask(subpath, chip):
+    old_storage_dir = os.path.join(subpath, 'no_mask')
+    if not os.path.exists(old_storage_dir):
+        os.mkdir(old_storage_dir)
     mask = gen_mask_file_name('badpixmask_c%i.fits' % chip)
     badmask = fits.getdata(mask)
     badmask = badmask.astype(bool)
-    imgdir = subpath
-    print('moving imgs to temp dir...')
-    for i in sorted(os.listdir(imgdir)):
-        if i.endswith('.sky.flat.fits'):
-            shutil.move(os.path.join(imgdir, i), os.path.join(otherdir, i))
+    for i in sorted(os.listdir(subpath)):
+        if i.endswith('.sky.flat.fits') or i.endswith('.sky.flat.new'):
+            shutil.move(os.path.join(subpath, i), os.path.join(old_storage_dir, i))
     print('Applying bad pixel mask...')
-    for i in sorted(os.listdir(otherdir)):
-        img = fits.open(os.path.join(otherdir, i))
+    for i in sorted(os.listdir(old_storage_dir)):
+        img = fits.open(os.path.join(old_storage_dir, i))
         hdr = img[0].header
         data = img[0].data
-        data[~badmask] = np.nan
-        fits.writeto(os.path.join(imgdir, i), data, hdr)
-    return otherdir
+        data[~badmask] = 65000
+        fits.writeto(os.path.join(subpath, i), data, hdr)
+    return old_storage_dir
 
 
 def astromfin(directory, chip):
@@ -482,6 +481,7 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
         if not chip:
             raise ValueError('Remember to specify chip number using default stacking behavior!  It is required for '
                              'absolute astrometry check!')
+        # badpixmask(subpath=subpath, chip=chip)
         swarp(subpath, stackpath)
         astromfin(stackpath, chip)
 
