@@ -23,6 +23,9 @@ from photometrus.photometry.photometry import photometry
 from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
 from photometrus.utils.utils import combine_header_and_fits, remove_wcs_headers
 
+from astropy.stats import SigmaClip
+from photutils.background import SExtractorBackground
+
 #%%
 
 
@@ -136,6 +139,7 @@ def badpixmask(parent, subpath, chip):
         os.mkdir(otherdir)
     if exists:
         print(otherdir,' exists!')
+    print(mask)
     mask = gen_mask_file_name('badpixmask_c%i.fits' % chip)
     badmask = fits.getdata(mask)
     badmask = badmask.astype(bool)
@@ -216,10 +220,40 @@ def astrom_check(imgdir):
             os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
 
 
+def make_weight_map(img_adu, chip):
+    data_adu = fits.getdata(img_adu)
+    gain = 1.8 # e- / ADU
+
+    # shot noise from electron statistics
+    poisson_noise = np.sqrt(data_adu * gain) 
+
+    # background noise (read noise, flat fielding, sky subtraction, nonlinearity correction)
+    sigma_clip = SigmaClip(sigma=3.0)
+    bkg = SExtractorBackground(sigma_clip=sigma_clip)
+    bkg_value = bkg.calc_background(data_adu)
+
+    sigma_2 = poisson_noise**2 + bkg_value**2
+    weight = 1/sigma_2
+
+    print("Made weight map",weight.shape)
+
+    mask = gen_mask_file_name('/home/alex/PycharmProjects/prime-photometry/photometrus/weightmaps/badpixmask_c%i.fits' % chip)
+    badmask = fits.getdata(mask)
+    badmask = badmask.astype(bool)
+    weight[~badmask] = 0
+
+
+    return weight
+    
+
+    
 def swarp(imgdir, finout):
     print('SWARP Stacking!')
     image_fnames = get_astrom_files(imgdir)
     image_fnames.sort()
+
+    weight = make_weight_map(image_fnames[0], 2)
+
     # header = fits.getheader(image_fnames[-1])
     header = gen_stack_header(image_fnames)
     filter1 = header.get('FILTER1', 'unknown')
@@ -242,10 +276,13 @@ def swarp(imgdir, finout):
     #save_name = 'coaddastr.fits'
     #weight_name = 'coaddastrweight.fits'
 
+
+
     sw = gen_config_file_name('default.swarp')
 
     try:
-        com = f'swarp {os.path.join(imgdir, '*.flat'+ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}'
+
+        com = f"swarp {os.path.join(imgdir, '*.flat'+ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}"
         subprocess.run(com, shell=True, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as err:
         print(f"SWARP failed with exit code {err.returncode}")
@@ -463,7 +500,7 @@ def swarp_missfits(imgpath, chip):
 
 def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False, mosaic=False):
     # if args.mask:
-        # otherdir = badpixmask(args.parent,args.sub,args.chip)
+    #     otherdir = badpixmask(args.parent,args.sub,args.chip)
         # print('removing temp dir...')
         # shutil.rmtree(otherdir)
     if not mosaic:
