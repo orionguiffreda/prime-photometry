@@ -196,7 +196,7 @@ def twomass_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
     try:
         Q = local_query_box(ra_center=ra,
                             dec_center=dec,
-                            dbname='prime_2mass_local',
+                            dbname='prime_vhs_local',
                             tablename='twomass_local',
                             width=str(width) + 'm',
                             columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],

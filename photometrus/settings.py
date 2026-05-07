@@ -237,8 +237,8 @@ def update_settings(settings_file='photometrus.json5'):
 update_settings()
 
 def gen_mask_file_name(filename):
-    base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
-    return os.path.join(base_dir, 'weightmaps', filename)
+    weightmap_directory = os.path.join(gen_user_prime_dir(), 'weightmaps')
+    return os.path.join(weightmap_directory, filename)
 
 
 def gen_master_name():

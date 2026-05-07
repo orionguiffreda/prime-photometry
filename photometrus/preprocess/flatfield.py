@@ -12,10 +12,22 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 #%%
 
 
-def flatfield(science_data, output_data_dir, flat):
+def flat_fielding_hdr_update(img_path, flat_img_path):
+    with fits.open(img_path, mode='update') as hdul:
+        image = hdul[0].data
+        header = hdul[0].header
+        try:
+            header.set('FLAT_FILE', os.path.basename(flat_img_path), 'Utilized flat file', after='TMPHD2T')
+        except KeyError:
+            header.set('FLAT_FILE', os.path.basename(flat_img_path), 'Utilized flat file')
+        cropimage = image[4:4092, 4:4092]  # remove if crop issue ever fixed
+    return cropimage, header
+
+
+def flatfield(science_data, output_data_dir, flat_img_path):
     if not os.path.isdir(output_data_dir):
         os.makedirs(output_data_dir)
-    flat = fits.getdata(flat)
+    flat = fits.getdata(flat_img_path)
     if type(science_data) is list:
         print('Flat fielding initial ramps...')
         for imagepath in science_data:
@@ -36,10 +48,7 @@ def flatfield(science_data, output_data_dir, flat):
                 shutil.copyfile(imagepath, flatnewpath)
 
             # flat-field copied ramp
-            with fits.open(flatnewpath) as hdul:
-                image = hdul[0].data
-                header = hdul[0].header
-                cropimage = image[4:4092, 4:4092]  # remove if crop issue ever fixed
+            cropimage, header = flat_fielding_hdr_update(img_path=flatnewpath, flat_img_path=flat_img_path)
             ff_image = cropimage/flat
             # write interim temp file
             tmp_path = flatnewpath+'.tmp'
@@ -53,10 +62,7 @@ def flatfield(science_data, output_data_dir, flat):
         image_fnames.sort()
         print('Flat fielding imgs...')
         for f in image_fnames:
-            with fits.open(f) as hdul:
-                image = hdul[0].data
-                header = hdul[0].header
-                cropimage = image[4:4092, 4:4092]  # remove if crop issue ever fixed
+            cropimage, header = flat_fielding_hdr_update(img_path=f, flat_img_path=flat_img_path)
             ff_image = cropimage/flat
             output_fname = os.path.basename(f)
             if f.endswith('.ramp.fits'):
@@ -68,19 +74,21 @@ def flatfield(science_data, output_data_dir, flat):
         print('Flat fielding completed!')
 
     elif os.path.isfile(science_data):
-        hdu = fits.open(science_data)
-        image = hdu[0].data
-        header = hdu[0].header
-        cropimage = image[4:4092, 4:4092]
+        cropimage, header = flat_fielding_hdr_update(img_path=science_data, flat_img_path=flat_img_path)
         ff_image = cropimage / flat
         output_fname = os.path.basename(science_data)
         output_fname = output_fname.replace('.ramp.new', '.flat.fits')
         output_fname = os.path.join(output_data_dir, output_fname)
         fits.HDUList(fits.PrimaryHDU(header=header, data=ff_image)).writeto(output_fname, overwrite=True)
+        return output_fname
+
+    else:
+        raise Exception('Input image(s) is not a list, directory, or filename!')
 
 
 def flat_field_cmd(in_path, out_path, flat_path):
-    flatfield(in_path, out_path, flat_path)
+    ff_img_path = flatfield(in_path, out_path, flat_path)
+    return ff_img_path
 
 
 #%%

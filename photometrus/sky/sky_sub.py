@@ -62,9 +62,9 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
             cropimage = image
 
             try:
-                header.set('SKY_FILE', os.path.split(sky)[1], 'Utilized sky file', after='TMPHD2T')
+                header.set('SKY_FILE', os.path.basename(sky), 'Utilized sky file', after='TMPHD2T')
             except KeyError:
-                header.set('SKY_FILE', os.path.split(sky)[1], 'Utilized sky file')
+                header.set('SKY_FILE', os.path.basename(sky), 'Utilized sky file')
 
             header.set('SKY_FAC', np.nanmedian(cropimage), 'Sky scaling factor', after='SKY_FILE')
 
