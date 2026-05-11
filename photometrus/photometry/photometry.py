@@ -1575,7 +1575,7 @@ def photometry(
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
 
-        psf_check = name.replace(os.path.splitext(name)[1], f'{os.path.splitext(name)}.psf')
+        psf_check = name.replace(os.path.splitext(name)[1], f'{os.path.splitext(name)[1]}.psf')
         if not os.path.isfile(psf_check):
             raise FileNotFoundError(f'\n{psf_check} file not found! This indicates PSF photom data products '
                                     f'have not been kept or PSF photom has not been run! Run GRB photometry again *W/O* '

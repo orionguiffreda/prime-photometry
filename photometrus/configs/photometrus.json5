@@ -97,7 +97,8 @@
     'Skymapper': 22,
     'DES_Z': 23.1,
     'SDSS': 23,
-    'UKIDSS': 20.2,
+    'LAS': 20.9,
+    'UHS': 20.5,
     'DES_Y': 21.7,
     'PanSTARRS': 21.4
   },
