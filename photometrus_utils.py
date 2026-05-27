@@ -1,6 +1,7 @@
 import photometrus.photometry.photometry as photometry
 from photometrus.stack.stack import swarp_sx, swarp_missfits
-from photometrus.astrom.astrom_img_sub import multi_epoch_scamp
+from photometrus.settings import gen_config_file_name
+
 
 import subprocess
 import os
@@ -8,7 +9,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import glob
 import shutil
-
 
 import astropy
 from astropy.io import fits
@@ -21,12 +21,10 @@ from astropy.coordinates import Angle, SkyCoord
 from astropy.wcs import WCS
 from astropy.visualization import astropy_mpl_style, ZScaleInterval
 
-
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from photutils.aperture import aperture_photometry, SkyCircularAperture
 import re
-
 
 
 def psfex(catalogName):
@@ -45,7 +43,6 @@ def psfex(catalogName):
 	]
 
 	subprocess.run(command, check=True)
-
 	
 	psf_files = glob.glob(f'PSF_{base}*.fits')
 	if not psf_files:
@@ -57,7 +54,7 @@ def psfex(catalogName):
 	return psfImageName
 
 
-def sex1(imageName, det_cut, magtype='PSF'):
+def sex1(imageName, det_cut, weightName=None, magtype='PSF'):
 	print('Running sextractor on img to initially find sources...')
 	if magtype == 'PSF':
 		configFile = photometry.gen_config_file_name('sex2.config')
@@ -68,7 +65,8 @@ def sex1(imageName, det_cut, magtype='PSF'):
 		paramName = photometry.gen_config_file_name('photomAUTO.param')
 		catalogName = imageName + '.photom.cat'
 
-	weightName = 'weight'+imageName[5:]
+	if not weightName:
+		weightName = 'weight'+imageName[5:]
 	if os.path.isfile(weightName):
 		# imghdr = fits.getheader(imageName)
 		# if 'BUNIT' in imghdr:
@@ -79,7 +77,8 @@ def sex1(imageName, det_cut, magtype='PSF'):
 		weightdata = weightdata / scale_fac**2
 		weight_med = np.nanmedian(weightdata)
 		weight_std = np.nanstd(weightdata)
-		detect_cutoff = weight_med - (weight_std * det_cut)
+		print(weight_med, weight_std, det_cut)
+		detect_cutoff = max(weight_med - (weight_std * det_cut), 0)
 		with fits.open(weightName, mode='update') as hdu:
 			whdr = hdu[0].header
 			whdr.set('MEDIAN', weight_med, 'Median of weight image', after='EQUINOX')
@@ -88,7 +87,7 @@ def sex1(imageName, det_cut, magtype='PSF'):
 		try:
 			print('Including weight map!')
 			command = ('sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PARAMETERS_NAME %s' %
-					   (imageName, configFile, catalogName, detect_cutoff, weightName, paramName))
+						(imageName, configFile, catalogName, detect_cutoff, weightName, paramName))
 			# print('Executing command: %s' % command)
 			subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 		except subprocess.CalledProcessError as err:
@@ -96,7 +95,7 @@ def sex1(imageName, det_cut, magtype='PSF'):
 	else:
 		try:
 			command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s' %
-					   (imageName, configFile, catalogName, paramName))
+						(imageName, configFile, catalogName, paramName))
 			print('Executing command: %s' % command)
 			subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 		except subprocess.CalledProcessError as err:
@@ -145,8 +144,8 @@ def sex2(imageName, det_cut, catalogName, psfName):
 		try:
 			# We are supplying SExtactor with the PSF model with the PSF_NAME option
 			command = (f'sex {imageName} -c {configFile} -CATALOG_NAME {psfcatalogName} -WEIGHT_TYPE MAP_WEIGHT '
-					   f'-WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName} -PSF_NAME {psfName} '
-					   f'-PARAMETERS_NAME {psfparamName} {aper_str}') # -DET_THRESH X can change configs here (tune sextractor)
+						f'-WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName} -PSF_NAME {psfName} '
+						f'-PARAMETERS_NAME {psfparamName} {aper_str}') # -DET_THRESH X can change configs here (tune sextractor)
 			print("Executing command: %s" % command)
 			subprocess.run(command.split(), check=True) #, stdout=None, stderr=None)
 		except subprocess.CalledProcessError as err:
@@ -157,7 +156,7 @@ def sex2(imageName, det_cut, catalogName, psfName):
 		try:
 			# We are supplying SExtactor with the PSF model with the PSF_NAME option
 			command = (f'sex {imageName} -c {configFile} -CATALOG_NAME {psfcatalogName} -PSF_NAME {psfName} '
-					   f'-PARAMETERS_NAME {psfparamName} {aper_str}')
+						f'-PARAMETERS_NAME {psfparamName} {aper_str}')
 			# print("Executing command: %s" % command)
 			subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 		except subprocess.CalledProcessError as err:
@@ -166,16 +165,29 @@ def sex2(imageName, det_cut, catalogName, psfName):
 				  '"stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL" from this subprocess command to investigate.')
 	return psfcatalogName
 
+def get_reg_rad(reg_file): # GRB_query_thresh.reg
+	primeregs = open(reg_file, 'r')
+	plt_primeregs = []
+	primeallregs = [reg for reg in primeregs if reg != 'fk5\n']
+	reg = primeallregs[0] # only one reg in 
+	nums = re.findall(r'[-+]?\d*\.?\d+', reg)
+	srcra = float(nums[0])
+	srcdec = float(nums[1])
+	srcrad = float(nums[2])
+	return srcrad
+
 def get_reg(imageName):
 	dir_name = os.path.dirname(imageName)
 	reg_files = glob.glob(f"{dir_name}/GRB_query_thresh.reg")
 	plt_primeregs_all = []
+	print(reg_files)
 
 	for reg_file in reg_files:
 		primeregs = open(reg_file, 'r')
 		plt_primeregs = []
 		primeallregs = [reg for reg in primeregs if reg != 'fk5\n']
 		for reg in primeallregs:
+			print(reg)
 			nums = re.findall(r'[-+]?\d*\.?\d+', reg)
 			srcra = float(nums[0])
 			srcdec = float(nums[1])
@@ -189,6 +201,7 @@ def get_reg(imageName):
 
 def grb_cutout(imageName, GRBcoords, photoDistThresh, grb_thresh, name_ext, regprimename=None, regsurvname=None):
 		imgdata = fits.getdata(imageName)
+		image_dir = os.path.dirname(imageName)
 		img = fits.open(imageName)
 		head = img[0].header
 		w = WCS(head)
@@ -215,6 +228,7 @@ def grb_cutout(imageName, GRBcoords, photoDistThresh, grb_thresh, name_ext, regp
 		for i, reg_dict in enumerate(regs_all):
 			for file, reg_list in reg_dict.items():
 				for reg in reg_list:
+					print(reg, colors[i])
 					pix_reg = reg.to_pixel(cutout.wcs)
 					pix_reg.plot(color=colors[i], ls='-', label=os.path.basename(file))
 
@@ -228,12 +242,40 @@ def grb_cutout(imageName, GRBcoords, photoDistThresh, grb_thresh, name_ext, regp
 				filtered_labels.append(l)
 				seen.add(l)
 		plt.legend(filtered_handles, filtered_labels, loc='best')
+		cbar = plt.colorbar()
+		cbar.ax.tick_params(labelsize=25)
 		
-		plt.savefig(os.path.dirname(imageName) + '/' + savename + '.png', dpi=300)
+		plt.savefig(image_dir + '/' + savename + '.png', dpi=300)
 		plt.clf()
 
-		fits.writeto(savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
+		# fits.writeto(image_dir + '/' + savename + '.fits', cutout.data, cutout.wcs.to_header(), overwrite=True)
 		return savename, threshname
+
+
+def multi_epoch_scamp(input_epoch_cat_path, base_epoch_cat_path):
+	"""
+	Runs scamp on input epoch w/ base epoch's sextractor .cat as a local ref catalog
+	
+	Parameters
+	----------
+	input_epoch_cat_path: str
+	  Full filepath to epoch you want to match the base epoch's catalog to
+	base_epoch_cat_path: str
+	  Full filepath to sextractor catalog of base epoch
+	"""
+	
+	sc = gen_config_file_name('scamp.conf')
+	out_name = os.path.dirname(base_epoch_cat_path) + '/scamp.xml'
+	command = (f'scamp {input_epoch_cat_path} -c {sc} -ASTREF_CATALOG FILE -ASTREFCAT_NAME {base_epoch_cat_path} '
+					f'-ASTREFMAG_LIMITS -99.0,99.0 '
+					f'-ASTREFCENT_KEYS ALPHA_J2000,DELTA_J2000 -ASTREFERR_KEYS ERRAWIN_WORLD,ERRBWIN_WORLD,ERRTHETAWIN_WORLD '
+					f'-ASTREFMAG_KEY MAG_AUTO -ASTREFMAGERR_KEY MAGERR_AUTO ') #-XML_NAME {out_name}')
+
+	subprocess.run(command.split(), check=True)
+	# print("saving to", out_name)
+
+	return out_name
+
 
 
 def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
@@ -269,14 +311,14 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
 	base_cat_path = swarp_sx(imgpath=base_epoch_path, chip=base_chip)
 	print(f'Sextracting matching epoch: {match_epoch_name}...')
 	match_cat_path = swarp_sx(imgpath=matching_epoch_path, chip=match_chip)
-	multi_epoch_scamp(input_epoch_cat_path=match_cat_path, base_epoch_cat_path=base_cat_path)
+	out_name = multi_epoch_scamp(input_epoch_cat_path=match_cat_path, base_epoch_cat_path=base_cat_path)
 	swarp_missfits(imgpath=matching_epoch_path, chip=match_chip)
-	return base_epoch_path, matching_epoch_path
+	return base_epoch_path, matching_epoch_path, out_name
 
 
 
 
-def display(file, png=False):
+def display(file, png=False, show=True, savename="transient"):
 	if png:
 		# Read the image data into a NumPy array
 		plt.style.use('default')
@@ -294,13 +336,27 @@ def display(file, png=False):
 		plt.grid(False)
 		plt.imshow(scaled_data, cmap='gray')
 		plt.colorbar()
-	plt.show()
 
-def make_cutout(img, source_ra, source_dec, png=True, display_file=True, name_ext=""):
+	if show:
+		plt.show()
+		return ""
+
+	else:
+		new_path = os.path.dirname(file) + '/' + savename + '.png'
+
+		plt.savefig(new_path, dpi=300)
+		plt.clf()
+		print("saved", new_path)
+		return new_path
+		
+		
+		
+
+def make_cutout(img, source_ra, source_dec, png=True, display_file=True, name_ext="", photoDistThresh=4.0):
 	if source_ra and source_dec: 
 		deci_sky_coords = SkyCoord(ra=[source_ra], dec=[source_dec], frame='icrs', unit='degree')
 	
-		savename, threshname =  grb_cutout(img, deci_sky_coords, photoDistThresh=4.0, grb_thresh=1.0, name_ext=name_ext) 
+		savename, threshname =  grb_cutout(img, deci_sky_coords, photoDistThresh=photoDistThresh, grb_thresh=1.0, name_ext=name_ext) 
 		filename = f"{os.path.dirname(img)}/{savename}.png"
 		print("made cutout: ",filename)
 
@@ -328,7 +384,7 @@ def forced_photometry(ra, dec, imageName):
 
 	mag_ab = zp - 2.5 * np.log10(flux_counts)
 
-	return mag_ab
+	return round(mag_ab, 3)
 
 
 def distance(ra1, dec1, ra2, dec2):
