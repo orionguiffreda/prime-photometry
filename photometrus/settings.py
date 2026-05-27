@@ -54,8 +54,8 @@ AB_OFFSET_DICT = {'J': 0.94, 'H': 1.38, 'Y': 0.62, 'Z': 0.52}
 
 PHOTOMETRY_LIM_MAGS = {
     'VHS': 19.5, 'VIKING': 21.2, 'VVV': 20.2, '2MASS': 15.5, 'Skymapper': 22, 'DES_Z': 23.1, 'SDSS': 23,
-                       'UKIDSS': 20.2, 'DES_Y': 21.7, 'PanSTARRS': 21.4
-                       }
+    'LAS': 21.0, 'UHS': 20.5, 'GPS': 21.0, 'GCS': 20.6, 'DES_Y': 21.7, 'PanSTARRS': 21.4
+}
 
 # chip avg zp (for bulge field astrom)
 # 23.88
@@ -237,8 +237,8 @@ def update_settings(settings_file='photometrus.json5'):
 update_settings()
 
 def gen_mask_file_name(filename):
-    base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
-    return os.path.join(base_dir, 'weightmaps', filename)
+    weightmap_directory = os.path.join(gen_user_prime_dir(), 'weightmaps')
+    return os.path.join(weightmap_directory, filename)
 
 
 def gen_master_name():

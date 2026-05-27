@@ -187,7 +187,9 @@ def flatfielding(astrompath, FFpath, band, chip, date=None):
     print('\nEquivalent argparse cmd: photometrus process flatfield -in_path %s -out_path %s'
           ' -flat_path %s' % (astrompath, FFpath, flatpath))
 
-    flatfield.flat_field_cmd(in_path=astrompath, out_path=FFpath, flat_path=flatpath)
+    ff_img_path = flatfield.flat_field_cmd(in_path=astrompath, out_path=FFpath, flat_path=flatpath)
+
+    return flatpath, ff_img_path
 
 
 # %% sky gen
@@ -244,8 +246,16 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
 def shift(subpath, band, adv=False, old=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
-    all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
-    imgname = all_fits[0]
+
+    if os.path.isfile(subpath):
+        all_fits = [subpath]
+        appl_file_range = all_fits
+        err_msg = 'Individual fits file did not successfully solve w/ astrom_shift!  Assuming no shift!'
+    else:
+        all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
+        appl_file_range = all_fits[:len(all_fits) // 2]
+        err_msg = ('Examined half of applicable fits files in directory for astrom_shift w/ no success!  '
+                   'Assuming no shift!')
 
     if old:
         imgname = all_fits[0]
@@ -253,7 +263,7 @@ def shift(subpath, band, adv=False, old=False):
     else:
         shift_x = shift_y = None
         good_fits = None
-        for imgname in all_fits[:len(all_fits) // 2]:
+        for imgname in appl_file_range:
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
                   (subpath, imgname, band))
             shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
@@ -269,10 +279,9 @@ def shift(subpath, band, adv=False, old=False):
                 break
 
         if good_fits is None:
-            print('Examined half of applicable fits files in directory for astrom_shift w/ no success!  Assuming no shift!')
+            print(err_msg)
 
         return shift_x, shift_y
-
 
 
 # %% better astrometry
@@ -325,12 +334,16 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
             break
 
         # check if shift succeeded
-        shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
+        if os.path.isfile(astromdir):
+            shift_fail_check = os.path.exists(os.path.splitext(astromdir)[0] + '.shift.fits')
+            all_fits = ['']
+        else:
+            shift_fail_check = [f for f in os.listdir(astromdir) if f.endswith('.shift.fits')]
+            all_fits = [f for f in sorted(os.listdir(astromdir)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
         if not shift_fail_check:
             break
 
         print('\nShift astrometry failed! Verifying ROTOFF val in an image FITS header...')
-        all_fits = [f for f in sorted(os.listdir(astromdir)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
         if not all_fits:
             print('No suitable FITS files found in dir!')
             break
@@ -386,6 +399,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
                 print("All rotations failed. Moving on, but astrometry is likely to fail, so examine images further!")
                 break
 
+        return shift_x, shift_y
 
 #%% packing compression
 

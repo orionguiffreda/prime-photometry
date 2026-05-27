@@ -1,9 +1,10 @@
 {
   "PIPELINE_DEFAULT_DIR": '/mnt/photometry/',
+  "FLAT_DEFAULT_DIR": '/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/',
   "PHOTOMETRY_MAG_LOWER_LIMIT": 12.5,
   "PHOTOMETRY_MAG_UPPER_LIMIT": 23,
-  "PHOTOMETRY_QUERY_WIDTH": 48,
   // in arcmin, should cover the whole chip even with 45 deg rotation
+  "PHOTOMETRY_QUERY_WIDTH": 48,
   "PHOTOMETRY_QUERY_CATALOGS": {
     'VHS': [
       'J',
@@ -11,19 +12,23 @@
     ],
     'VIKING': [
       'J',
-      'II/343/viking2'
+      'II/382/viking4'
     ],
     'VVV_J': [
       'J',
       'II/348/vvv2'
     ],
+    'UKIDSS_J': [
+      'J',
+      'II/319/las9'
+    ],
     '2MASS': [
       'J',
       'II/246/'
     ],
-    'VVV_Y': [
-      'Y',
-      'II/348/vvv2'
+    'PanSTARRS_Z': [
+      'Z',
+      'II/389/ps1_dr2'
     ],
     'Skymapper': [
       'Z',
@@ -41,26 +46,49 @@
       'Z',
       'II/348/vvv2'
     ],
+    'VVV_Y': [
+      'Y',
+      'II/348/vvv2'
+    ],
     'UKIDSS': [
       'Y',
       'II/319/las9'
     ],
     'PanSTARRS': [
       'Y',
-      'II/349/ps1'
+      'II/389/ps1_dr2'
     ],
     'DES_Y': [
       'Y',
       'II/371/des_dr2'
     ]
   },
+  "ASTROM_QUERY_CATALOGS": {
+    'VIRAC': [
+      'J,H',
+      'II/364/virac2'
+    ],
+    'GAIA': [
+      'J,H,Y,Z',
+      'I/350/gaiaedr3'
+    ]
+  },
   //AB mag surveys: DES, Skymapper, SDSS, & PSTARRS
   "AB_OFFSET_DICT": {
-    'J': 0.94,
-    'H': 1.38,
-    'Y': 0.62,
-    'Z': 0.52
+        'VISTA': {
+            'J': 0.94,
+            'H': 1.38,
+            'Y': 0.62,
+            'Z': 0.52
+        },
+        'UKIDSS': {
+            'J': 0.938,
+            'H': 1.379,
+            'Y': 0.634,
+            'Z': 0.528
+        }
   },
+  // photometric lim mags
   "PHOTOMETRY_LIM_MAGS": {
     'VHS': 19.5,
     'VIKING': 21.2,
@@ -69,7 +97,10 @@
     'Skymapper': 22,
     'DES_Z': 23.1,
     'SDSS': 23,
-    'UKIDSS': 20.2,
+    'LAS': 20.9,
+    'UHS': 20.5,
+    'GPS': 21.0,
+    'GCS': 20.6,
     'DES_Y': 21.7,
     'PanSTARRS': 21.4
   },
@@ -81,9 +112,21 @@
       'J',
       'II/348/vvv2'
     ],
+    'GSC': [
+      'J',
+      'I/353/gsc242'
+    ],
+    'UKIDSS': [
+      'J',
+      'II/316/gps6'
+    ],
     '2MASS': [
       'J',
       'II/246/'
+    ],
+    'VIRAC': [
+      'J',
+      'II/364/virac'
     ],
     'Skymapper': [
       'Z',
@@ -104,6 +147,47 @@
       24.111
     ]
   },
+    // weight map cutoff thresholds, in sigma -> cutoff = median - (thresh*sigma)
+  "WEIGHT_SIGMA_THRESHOLDS": {
+    'C1': 2.0,
+    'C2': 2.0,
+    'C3': 2.0,
+    'C4': 1.0
+  },
+    // filter central wavelengths & fwhms (in nm): https://arxiv.org/pdf/2508.14474
+  "PRIME_FILTERS_DICT": {
+    'Z': {
+      'lambda': 890,
+      'fwhm': 80
+    },
+    'Y': {
+      'lambda': 1022.5,
+      'fwhm': 105
+    },
+    'J': {
+      'lambda': 1250,
+      'fwhm': 160
+    },
+    'H': {
+      'lambda': 1635,
+      'fwhm': 290
+    }
+  },
+    // mirrors for vizier
+  "VIZIER_MIRRORS": [
+    "vizier.cds.unistra.fr",
+    "vizier.cfa.harvard.edu",
+    "vizier.idia.ac.za",
+    "vizier.nao.ac.jp",
+    "vizier.iucaa.in",
+    "vizier.inasan.ru",
+    "vizier.china-vo.org"
+  ],
+  "MAGTYPES": {
+    "AUTO": "AUTO",
+    "PSF": "PSF",
+    "APER": "APER"
+  },
   "GET_DATA_SETTINGS": {
     'log_folder_location': '/nfs/prime01/work/LOG/Ramp_LOG',
     'funpack_output_dir': '/mnt/photometry/unarchived/C%CHIP%/%SERIAL_TRUNC%',
@@ -113,28 +197,29 @@
         '/nfs/xion2/prime/Data/ramp/%SERIAL%C2.fits.ramp',
         '/nfs/xion3/prime/Data/ramp/%SERIAL%C3.fits.ramp',
         '/nfs/xion4/prime/Data/ramp/%SERIAL%C4.fits.ramp'
+//        '/nfs/xion4/hamada/re_ramp/20250328/field19009//%SERIAL%C4.fits.ramp'
       ],
       'raw': [
         '/nfs/home/prime/Data/raw/%SERIAL%C1.fits',
         '/nfs/xion2/prime/Data/raw/%SERIAL%C2.fits',
-        '/nfs/xion3/prime/Data/raw/%SERIAL%C3.fits',
+        '/nfs/xion4/prime/Data/raw/%SERIAL%C3.fits',
         '/nfs/xion4/prime/Data/raw/%SERIAL%C4.fits'
       ],
       'raw_fz': [
-        '/nfs/xion3/prime/raw_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.fz',
+        '/nfs/xion4/prime/raw_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.fz',
         '/nfs/xion4/prime/raw_fz/C2/%SERIAL_TRUNC%/%SERIAL%C2.fits.fz',
-        '/nfs/xion3/prime/raw_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.fz',
+        '/nfs/xion4/prime/raw_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.fz',
         '/nfs/xion4/prime/raw_fz/C4/%SERIAL_TRUNC%/%SERIAL%C4.fits.fz'],
       'ramp_fz': [
-        '/nfs/xion3/prime/ramp_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.ramp.fz',
+        '/nfs/xion4/prime/ramp_fz/C1/%SERIAL_TRUNC%/%SERIAL%C1.fits.ramp.fz',
         '/nfs/xion4/prime/ramp_fz/C2/%SERIAL_TRUNC%/%SERIAL%C2.fits.ramp.fz',
-        '/nfs/xion3/prime/ramp_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.ramp.fz',
+        '/nfs/xion4/prime/ramp_fz/C3/%SERIAL_TRUNC%/%SERIAL%C3.fits.ramp.fz',
         '/nfs/xion4/prime/ramp_fz/C4/%SERIAL_TRUNC%/%SERIAL%C4.fits.ramp.fz'
       ],
       'ramp': [
-        '/nfs/xion3/prime/Data/reramp/C1/%SERIAL%C1.fits.ramp',
+        '/nfs/xion4/prime/Data/reramp/C1/%SERIAL%C1.fits.ramp',
         '/nfs/xion4/prime/Data/reramp/C2/%SERIAL%C2.fits.ramp',
-        '/nfs/xion3/prime/Data/reramp/C3/%SERIAL%C3.fits.ramp',
+        '/nfs/xion4/prime/Data/reramp/C3/%SERIAL%C3.fits.ramp',
         '/nfs/xion4/prime/Data/reramp/C4/%SERIAL%C4.fits.ramp'
       ]
     },
@@ -216,7 +301,7 @@
         'GainTest_LED'
       ],
     ],
-      'temperature_date_dict' : {
+  'temperature_date_dict' : {
     '2023-06-15T23:00:00': {
       '117.0': ['20240414', '20240904'],
       '122.0': ['20250122'],
@@ -224,6 +309,7 @@
       '114.0': ['20250320']
     }
   },
+  'date_temperature_dict': {'20240403': 119.0},
   'ramp_cal_directory': '/nfs/home/prime/hamada/nlc_result/'
   }
 }

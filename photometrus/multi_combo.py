@@ -21,7 +21,8 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           sky_override_path=defaults['sky_override_path'], removal=defaults['removal'], no_get_files=defaults['no_get_files'],
           no_download=defaults['no_download'], no_mflat=defaults['no_mflat'], rampnum=defaults['rampnum'], bulge=defaults['bulge'],survey=defaults['survey'],
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-          grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
+          grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], sx_cfg=defaults['sx_cfg'],
+          auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
           ):
     # print('combo date', date)
 
@@ -44,7 +45,7 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
                                   sky_override_path, removal, no_get_files, no_mflat, rampnum, bulge, auto_mode=auto_mode,
                                   input_ramp_lists=input_ramp_lists, header_filter=header_filter)
         multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra=grb_ra, grb_dec=grb_dec,
-                                       grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name)
+                                       grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name, sx_cfg=sx_cfg)
 
         end_time = dt.now()
         print(f'\nTotal C{f} pipeline processing time:', (end_time - start_time).total_seconds())
@@ -132,13 +133,18 @@ def main():
                              ' arcmin, or deg w/ an underscore.  Ex. "-grb_radius 3_arcmin" will specify an area of 3 '
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults['grb_radius'])
-    args, unknown = parser.parse_known_args()  # TODO: get these default arguments from defaults dict
+    parser.add_argument('-sx_cfg', type=str,
+                        help='[str] optionally specify different sxtrctr config file to use for main source extraction,'
+                             'must be in .prime/config/ directory, '
+                             'default = sex2.config',
+                        default=defaults["sx_cfg"])
+    args, unknown = parser.parse_known_args()
     # print('main', args.date)
     # print('args', args)
     # print('urnknown', unknown)
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.rampnum, args.bulge, args.survey,
-          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name, defaults['automode'], defaults['ramplist'],
+          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name, args.sx_cfg, defaults['automode'], defaults['ramplist'],
           header_filter=args.header_filter)
 
 

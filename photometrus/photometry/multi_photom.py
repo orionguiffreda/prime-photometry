@@ -35,13 +35,13 @@ def fetchstacks(stackpath, chip=None):
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut, no_plots):
+                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut, no_plots, sx_cfg):
     for img in matchingstacks:
         wholeimgpath = os.path.join(stackpath, img)
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
                            grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_only=grb_only, grb_name=grb_name, no_int_cal=no_int_cal,
-                              keep=keep, det_cut=det_cut, no_plots=no_plots)
+                              keep=keep, det_cut=det_cut, no_plots=no_plots, sx_cfg=sx_cfg)
 
     if len(matchingstacks) == 4:
         ellipticity_logger.logger(directory=stackpath)
@@ -54,7 +54,7 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
                       grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'],
-                      keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots']):
+                      keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots'], sx_cfg=defaults['sx_cfg']):
 
     cmd_str = f'\nEquivalent argparse cmd: photometrus photometry -stackpath {stackpath} -band {band} -chip {chip}'
     if grb_ra:
@@ -65,7 +65,7 @@ def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], ch
 
     matchingstacks = fetchstacks(stackpath, chip)
     multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal,
-                keep, det_cut, no_plots)
+                keep, det_cut, no_plots, sx_cfg)
 
 
 def main():
@@ -113,12 +113,18 @@ def main():
     parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
                                                      ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
                         default=defaults["det_cut"])
+    parser.add_argument('-sx_cfg', type=str,
+                        help='[str] optionally specify different sxtrctr config file to use for main source extraction,'
+                             'must be in .prime/config/ directory, '
+                             'default = sex2.config',
+                        default=defaults["sx_cfg"])
 
     args, unknown = parser.parse_known_args()
     # print(args)
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
-                      args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut, args.no_plots)
+                      args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut, args.no_plots,
+                      args.sx_cfg)
 
 
 if __name__ == "__main__":
