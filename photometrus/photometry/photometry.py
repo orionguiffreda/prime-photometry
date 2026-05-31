@@ -560,7 +560,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                                                               photoDistThresh * u.arcsec)
         # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
 
-        if 'Mclass' or 'mergedClass' in colnames:
+        if 'Mclass' in colnames or 'mergedClass' in colnames:
             # pruning crossmatches to only include stars if applicable
             print('Found %d good cross-matches before pruning' % len(idx_psfmass))
             star_mask = np.isin(good_cat_stars[colnames[4]], [-1, -2])
