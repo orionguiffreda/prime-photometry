@@ -17,78 +17,6 @@ from photometrus.settings import (PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPP
 
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
-# GAIA COMPLETION QUERY
-
-
-def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
-    crop = int(crop)
-    max_x = data.shape[0]
-    max_y = data.shape[1]
-
-    # gaia query
-    mag_low_cutoff = 3
-    catNum = 'I/350/gaiaedr3'
-    # mag_lims = f">{mag_low_cutoff:f}"
-
-    try:
-        print(f' Querying {catNum} and crossmatching to determine catalog completion..')
-        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'RPmag'],
-                   column_filters={"Dup": "<1", "Nd": ">6"},
-                   row_limit=-1)
-        G = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
-                           , catalog=catNum, cache=False, frame=chosen_frame)
-
-        # crsmtch check
-        gaia_colnames = G[0].colnames
-        G_RA = gaia_colnames[0]
-        G_DEC = gaia_colnames[1]
-
-        query_colnames = Q[0].colnames
-        Q_RA = query_colnames[0]
-        Q_DEC = query_colnames[1]
-
-        G_imCoords = w.all_world2pix(G[0][G_RA], G[0][G_DEC], 1)
-        Q_imCoords = w.all_world2pix(Q[0][Q_RA], Q[0][Q_DEC], 1)
-
-        good_G_stars = G[0][
-            np.where((G_imCoords[0] > crop) & (G_imCoords[0] < (max_x - crop)) & (G_imCoords[1] > crop) & (
-                    G_imCoords[1] < (max_y - crop)))]
-        good_Q_stars = Q[0][
-            np.where((Q_imCoords[0] > crop) & (Q_imCoords[0] < (max_x - crop)) & (Q_imCoords[1] > crop) & (
-                    Q_imCoords[1] < (max_y - crop)))]
-
-        GaiaCatCoords = SkyCoord(ra=good_G_stars[G_RA], dec=good_G_stars[G_DEC], frame='icrs', unit='degree')
-        QueryCatCoords = SkyCoord(ra=good_Q_stars[Q_RA], dec=good_Q_stars[Q_DEC], frame='icrs', unit='degree')
-
-        print(' Gaia cropped source total = ', len(good_G_stars))
-        print(f' Chosen survey cropped source total = ', len(good_Q_stars))
-
-        gaia_crsmtch_thresh = 1.0
-        idx_gaia, idx_query, d2d, d3d = QueryCatCoords.search_around_sky(GaiaCatCoords,
-                                                                         gaia_crsmtch_thresh * u.arcsec)
-
-        df = pd.DataFrame({
-            'idx_gaia': idx_gaia,
-            'idx_query': idx_query,
-            'd2d': d2d.to(u.arcsec).value  # example in arcsec
-        })
-
-        # Sort by separation and drop duplicates of gaia index, keeping the closest
-        gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
-
-        print(f' Crossmatched Gaia source num = {len(gaia_matches_closest)}')
-        gaia_completion = len(gaia_matches_closest) / len(good_G_stars)
-        print(' Completion = %.2f' % gaia_completion)
-    except AttributeError:
-        print(' Gaia sources not found!  Skipping completion check!')
-        gaia_completion = 1
-    except Exception as e:
-        print(f'Error in Vizier GAIA query & Survey Crossmatch: {e}')
-        print(' Assuming bad completion!')
-        gaia_completion = 0
-
-    return gaia_completion
-
 
 # ALL CATALOG QUERY FUNCTIONS
 """
@@ -113,6 +41,8 @@ mag_high_cutoff: float
     Dim end mag cutoff to handle very deep surveys beyond PRIME's limit (specified in settings.py, usually = 23)
 chosen_frame: str
     String denoting coordinate system frame.  Normal usage with the main query fctn will provide this, usually as 'fk5'
+    
+*EXCEPTIONS TO THIS ARE THE ASTROMETRIC-BASED GAIA QUERIES*
 
 Below is the formatting for a query function.  Note the following:
 
@@ -152,6 +82,61 @@ def example_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
             'Error in Vizier query')
     return Q, survey_name              
 """
+
+
+def gaia_vizier_query(coords, width, chosen_frame='fk5'):
+    """Vizier GAIA query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    survey_name = 'GAIA'
+    catNum = 'I/350/gaiaedr3'
+    try:
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'RPmag'],
+                   column_filters={"Dup": "<1", "Nd": ">6"},
+                   row_limit=-1)
+        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
+                           , catalog=catNum, cache=False, frame=chosen_frame)
+    except (RemoteServiceError, ConnectionError, Timeout) as e:
+        print(f'Error: {e}')
+        print(
+            'Error in Vizier query.  Is Vizier down?')
+
+    return Q, survey_name
+
+
+def gaia_query(coords, width, chosen_frame='fk5'):
+    """Local GAIA query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    survey_name = 'GAIA'
+    print('Querying GAIA EDR3 locally')
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            dbname='prime_vhs_local',
+                            tablename='gaia_sources',
+                            width=str(width) + 'm',
+                            columns=['ra', 'dec', 'RPmag'],
+                            column_filters={
+                                "duplicated_source": "False"
+                            }
+                            )
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Error: {e}')
+        print(f'Local GAIA query unsuccessful! Cannot continue!')
+        print('Attempting Vizier query as backup!')
+        Q, survey_name = twomass_vizier_query(coords, width, chosen_frame=chosen_frame)
+
+    return Q, survey_name
 
 
 def twomass_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
@@ -630,6 +615,75 @@ PHOTOMETRY_QUERY_FUNCTIONS = {
     'J': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
     'H': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query]
 }
+
+
+# GAIA COMPLETION QUERY
+
+
+def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
+    crop = int(crop)
+    max_x = data.shape[0]
+    max_y = data.shape[1]
+
+    # gaia query
+    mag_low_cutoff = 3
+    catNum = 'I/350/gaiaedr3'
+    # mag_lims = f">{mag_low_cutoff:f}"
+
+    try:
+        print(f' Querying {catNum} and crossmatching to determine catalog completion..')
+        G, _ = gaia_vizier_query(coords=coords, width=width, chosen_frame=chosen_frame)
+
+        # crsmtch check
+        gaia_colnames = G[0].colnames
+        G_RA = gaia_colnames[0]
+        G_DEC = gaia_colnames[1]
+
+        query_colnames = Q[0].colnames
+        Q_RA = query_colnames[0]
+        Q_DEC = query_colnames[1]
+
+        G_imCoords = w.all_world2pix(G[0][G_RA], G[0][G_DEC], 1)
+        Q_imCoords = w.all_world2pix(Q[0][Q_RA], Q[0][Q_DEC], 1)
+
+        good_G_stars = G[0][
+            np.where((G_imCoords[0] > crop) & (G_imCoords[0] < (max_x - crop)) & (G_imCoords[1] > crop) & (
+                    G_imCoords[1] < (max_y - crop)))]
+        good_Q_stars = Q[0][
+            np.where((Q_imCoords[0] > crop) & (Q_imCoords[0] < (max_x - crop)) & (Q_imCoords[1] > crop) & (
+                    Q_imCoords[1] < (max_y - crop)))]
+
+        GaiaCatCoords = SkyCoord(ra=good_G_stars[G_RA], dec=good_G_stars[G_DEC], frame='icrs', unit='degree')
+        QueryCatCoords = SkyCoord(ra=good_Q_stars[Q_RA], dec=good_Q_stars[Q_DEC], frame='icrs', unit='degree')
+
+        print(' Gaia cropped source total = ', len(good_G_stars))
+        print(f' Chosen survey cropped source total = ', len(good_Q_stars))
+
+        gaia_crsmtch_thresh = 1.0
+        idx_gaia, idx_query, d2d, d3d = QueryCatCoords.search_around_sky(GaiaCatCoords,
+                                                                         gaia_crsmtch_thresh * u.arcsec)
+
+        df = pd.DataFrame({
+            'idx_gaia': idx_gaia,
+            'idx_query': idx_query,
+            'd2d': d2d.to(u.arcsec).value  # example in arcsec
+        })
+
+        # Sort by separation and drop duplicates of gaia index, keeping the closest
+        gaia_matches_closest = df.sort_values('d2d').drop_duplicates('idx_gaia', keep='first')
+
+        print(f' Crossmatched Gaia source num = {len(gaia_matches_closest)}')
+        gaia_completion = len(gaia_matches_closest) / len(good_G_stars)
+        print(' Completion = %.2f' % gaia_completion)
+    except AttributeError:
+        print(' Gaia sources not found!  Skipping completion check!')
+        gaia_completion = 1
+    except Exception as e:
+        print(f'Error in Vizier GAIA query & Survey Crossmatch: {e}')
+        print(' Assuming bad completion!')
+        gaia_completion = 0
+
+    return gaia_completion
 
 
 def query(

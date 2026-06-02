@@ -246,20 +246,30 @@ def sex1(imageName, det_cut, grb_flag=False, sx_cfg=defaults['sx_cfg']):
         # else:
         scale_fac = 1
         weightdata = fits.getdata(weightName)
-        weightdata = weightdata / scale_fac**2
-        weight_med = np.nanmedian(weightdata)
-        weight_std = np.nanstd(weightdata)
-        detect_cutoff = weight_med - (weight_std * det_cut)
+        # weight map quality check (catch for all 0 or nan image)
+        if not np.any(np.nan_to_num(weightdata)):
+            print(' *WARNING* ISSUE W/ WEIGHT MAP!  Input weight map is all zero or nan, cannot use!\n'
+                  ' Continuing w/o weight map...')
+            weight_med = -100
+            detect_cutoff = -100
+            weight_map_str = ''
+        else:
+            weightdata = weightdata / scale_fac**2
+            weight_med = np.nanmedian(weightdata)
+            weight_std = np.nanstd(weightdata)
+            detect_cutoff = weight_med - (weight_std * det_cut)
+            weight_map_str = f'-WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName}'
+            print(' Including weight map!')
+
         with fits.open(weightName, mode='update') as hdu:
             whdr = hdu[0].header
             whdr.set('MEDIAN', weight_med, 'Median of weight image', after='EQUINOX')
             whdr.set('DET_CUT', detect_cutoff, 'Pix value cutoff for source detection', after='MEDIAN')
             hdu.close()
         try:
-            print(' Including weight map!')
-            command = (f'sex %s -c %s -CATALOG_NAME %s -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH %s -WEIGHT_IMAGE %s -PARAMETERS_NAME %s {aper_str}'
+            command = (f'sex %s -c %s -CATALOG_NAME %s {weight_map_str} -PARAMETERS_NAME %s {aper_str}'
                        %
-                       (f'{imageName}', configFile, catalogName, detect_cutoff, f'{weightName}', paramName))
+                       (f'{imageName}', configFile, catalogName, paramName))
             # print('Executing command: %s' % command)
             subprocess.run(command.split(), check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as err:
@@ -385,15 +395,22 @@ def sex2(imageName, det_cut, catalogName, sx_cfg=defaults['sx_cfg']):
         # else:
         scale_fac = 1
         weightdata = fits.getdata(weightName)
-        weightdata = weightdata / scale_fac**2
-        weight_med = np.nanmedian(weightdata)
-        weight_std = np.nanstd(weightdata)
-        detect_cutoff = weight_med - (weight_std * det_cut)
-        try:
+
+        if not np.any(np.nan_to_num(weightdata)):
+            print(' *WARNING* ISSUE W/ WEIGHT MAP!  Input weight map is all zero or nan, cannot use!\n'
+                  ' Continuing w/o weight map...')
+            weight_map_str = ''
+        else:
+            weightdata = weightdata / scale_fac**2
+            weight_med = np.nanmedian(weightdata)
+            weight_std = np.nanstd(weightdata)
+            detect_cutoff = weight_med - (weight_std * det_cut)
+            weight_map_str = f'-WEIGHT_TYPE MAP_WEIGHT -WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName}'
             print(' Including weight map!')
+
+        try:
             # We are supplying SExtactor with the PSF model with the PSF_NAME option
-            command = (f'sex {imageName} -c {configFile} -CATALOG_NAME {psfcatalogName} -WEIGHT_TYPE MAP_WEIGHT '
-                       f'-WEIGHT_THRESH {detect_cutoff} -WEIGHT_IMAGE {weightName} -PSF_NAME {psfName} '
+            command = (f'sex {imageName} -c {configFile} -CATALOG_NAME {psfcatalogName} {weight_map_str} -PSF_NAME {psfName} '
                        f'-PARAMETERS_NAME {psfparamName} {aper_str}')
             # print("Executing command: %s" % command)
             subprocess.run(command.split(), check=True, capture_output=True, text=True)

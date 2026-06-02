@@ -190,6 +190,7 @@
   },
   "GET_DATA_SETTINGS": {
     'log_folder_location': '/nfs/prime01/work/LOG/Ramp_LOG',
+    'backup_log_folder_location': '/home/prime/hamada/log',
     'funpack_output_dir': '/mnt/photometry/unarchived/C%CHIP%/%SERIAL_TRUNC%',
     'remote_file_formats': {
       'real_time_ramp': [
