@@ -125,16 +125,16 @@ def gaia_query(coords, width, chosen_frame='fk5'):
                             dbname='prime_vhs_local',
                             tablename='gaia_sources',
                             width=str(width) + 'm',
-                            columns=['ra', 'dec', 'RPmag'],
+                            columns=['ra', 'dec', 'phot_rp_mean_mag'],
                             column_filters={
-                                "duplicated_source": "False"
+                                "duplicated_source": "IS FALSE"
                             }
                             )
     except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
         print(f'Error: {e}')
         print(f'Local GAIA query unsuccessful! Cannot continue!')
         print('Attempting Vizier query as backup!')
-        Q, survey_name = twomass_vizier_query(coords, width, chosen_frame=chosen_frame)
+        Q, survey_name = gaia_vizier_query(coords, width, chosen_frame=chosen_frame)
 
     return Q, survey_name
 
@@ -632,7 +632,7 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 
     try:
         print(f' Querying {catNum} and crossmatching to determine catalog completion..')
-        G, _ = gaia_vizier_query(coords=coords, width=width, chosen_frame=chosen_frame)
+        G, _ = gaia_query(coords=coords, width=width, chosen_frame=chosen_frame)
 
         # crsmtch check
         gaia_colnames = G[0].colnames
