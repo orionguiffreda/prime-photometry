@@ -190,20 +190,22 @@
   },
   "GET_DATA_SETTINGS": {
     'log_folder_location': '/nfs/prime01/work/LOG/Ramp_LOG',
-    'backup_log_folder_location': '/home/prime/hamada/log',
+    'backup_log_folder_location': '/nfs/home/prime/hamada/log',
     'funpack_output_dir': '/mnt/photometry/unarchived/C%CHIP%/%SERIAL_TRUNC%',
     'remote_file_formats': {
       'real_time_ramp': [
         '/nfs/home/prime/Data/ramp/%SERIAL%C1.fits.ramp',
         '/nfs/xion2/prime/Data/ramp/%SERIAL%C2.fits.ramp',
-        '/nfs/xion3/prime/Data/ramp/%SERIAL%C3.fits.ramp',
+//        '/nfs/xion3/prime/Data/ramp/%SERIAL%C3.fits.ramp',
+        '/nfs//xion4/prime/Data_C3/ramp/%SERIAL%C3.fits.ramp',
         '/nfs/xion4/prime/Data/ramp/%SERIAL%C4.fits.ramp'
 //        '/nfs/xion4/hamada/re_ramp/20250328/field19009//%SERIAL%C4.fits.ramp'
       ],
       'raw': [
         '/nfs/home/prime/Data/raw/%SERIAL%C1.fits',
         '/nfs/xion2/prime/Data/raw/%SERIAL%C2.fits',
-        '/nfs/xion4/prime/Data/raw/%SERIAL%C3.fits',
+//        '/nfs/xion3/prime/Data/raw/%SERIAL%C3.fits',
+        '/nfs/xion4/prime/Data_C3/raw/%SERIAL%C3.fits',
         '/nfs/xion4/prime/Data/raw/%SERIAL%C4.fits'
       ],
       'raw_fz': [

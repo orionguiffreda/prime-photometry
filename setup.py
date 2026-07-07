@@ -15,5 +15,5 @@ setup(
     author='Orion Guiffreda',
     author_email='oriogui@umd.edu',
     keywords='photometry',
-    packages=find_packages('photometrus'),
+    packages=find_packages(),
 )
