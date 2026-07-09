@@ -36,6 +36,7 @@ filter_1_options = ','.join(['NB', 'Open', 'Z', 'Dark'])
 filter_2_options = ','.join(['Open', 'Y', 'J', 'H'])
 
 log_folder_location = os.path.join(GET_DATA_SETTINGS['log_folder_location'], 'ramp_fit_log_{}.dat')
+backup_log_folder_location = os.path.join(GET_DATA_SETTINGS['backup_log_folder_location'], 'ramp_log_C1.{}.dat')  # /home/prime/hamada/log
 
 file_prefix = '{0:08d}'
 
@@ -79,6 +80,8 @@ def replace_bad_string(lines):
 def get_log_file(date):
     # log_link = log_link_format.format(date)
     log_link = log_folder_location.format(date)
+    if not os.path.exists(log_link):
+        log_link = backup_log_folder_location.format(date.replace('-', ''))
     print(log_link)
     # output_file, http_message = request.urlretrieve(log_link, filename)
 

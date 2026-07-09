@@ -894,7 +894,7 @@ def boxchange(size, x_offset=0):
 
 def shift(
         directory, imagename, band, length=defaults['length'], num=defaults['num'], thresh_low=defaults['thresh_low'],
-        thresh_high=defaults['thresh_high'], iters=defaults['iters'], test=False, adv_solve=defaults['adv_solve'],
+        thresh_high=defaults['thresh_high'], iters=defaults['iters'], single_solve=defaults['single_solve'], adv_solve=defaults['adv_solve'],
         x=defaults['x_guess'],y=defaults['y_guess']
 ):
 
@@ -970,22 +970,23 @@ def shift(
             print(f'Error in final shift generation, assuming 0, error: {e}')
             ultimate_shift_x = ultimate_shift_y = 0
 
-    if not test:
+    if not single_solve:
         change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
         if ultimate_shift_x != 0:
             removal(directory)
 
+    proc_single_img_path = os.path.join(directory, imagename)
     end_time = dt.now()
     print('astrometric shift correction time:', (end_time - start_time).total_seconds())
 
-    return ultimate_shift_x, ultimate_shift_y
+    return ultimate_shift_x, ultimate_shift_y, proc_single_img_path
 
 
 def main():
     parser = argparse.ArgumentParser(description='Corrects for translation in initial astrometry '
                                                  '(so astrom.net doesnt need to be used)')
-    parser.add_argument('-test', action='store_true', help='optional flag to test for a successful solve, '
-                                                           'doesnt apply to all files in directory.', default=defaults['test'])
+    parser.add_argument('-single_solve', action='store_true', help='optional flag to test for a successful solve, '
+                                                           'doesnt apply to all files in directory.', default=defaults['single_solve'])
     parser.add_argument('-adv_solve', action='store_true', help='optional flag to run psfex and sextractor again for max'
                                                                 ' astrometric & mag accuracy, designed for very dense '
                                                                 'fields, but takes a long time.', default=defaults['adv_solve'])
@@ -1011,7 +1012,7 @@ def main():
     args, unknown = parser.parse_known_args()
 
     shift(args.dir, args.imagename, args.band, args.length, args.num, args.thresh_low, args.thresh_high, args.iters,
-          args.test, args.adv_solve, args.x, args.y)
+          args.single_solve, args.adv_solve, args.x, args.y)
 
 
 if __name__ == "__main__":

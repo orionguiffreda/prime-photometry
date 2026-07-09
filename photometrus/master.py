@@ -162,6 +162,10 @@ def astrom_angle(astrompath, parentdir, chip, rot_val=48):
             inputpath, outputpath))
 
     # astromangle_new.astrom_angle(input_field=ramppath, output_dir=astrompath, rot_val=rot_val)
+    if os.path.isfile(inputpath):
+        init_astrm_path = astromangle_wcs.astrom_angle(input_field=inputpath, output_dir=outputpath, rot_val=rot_val)
+        return init_astrm_path
+
     astromangle_wcs.astrom_angle(input_field=inputpath, output_dir=outputpath, rot_val=rot_val)
 
 
@@ -243,13 +247,14 @@ def skysub(astrompath, subpath, chip, skypath=None, sky_override_path=None, sex=
 # %% astrometry shift
 
 
-def shift(subpath, band, adv=False, old=False):
+def shift(subpath, band, adv=False, old=False, single_solve=False):
     os.chdir(gen_pipeline_file_name())
     print('Shifting astrometry...')
 
     if os.path.isfile(subpath):
-        all_fits = [subpath]
+        all_fits = [os.path.split(subpath)[1]]
         appl_file_range = all_fits
+        subpath = os.path.split(subpath)[0]
         err_msg = 'Individual fits file did not successfully solve w/ astrom_shift!  Assuming no shift!'
     else:
         all_fits = [f for f in sorted(os.listdir(subpath)) if f.endswith('.flat.fits') or f.endswith('.flat.new')]
@@ -263,17 +268,20 @@ def shift(subpath, band, adv=False, old=False):
     else:
         shift_x = shift_y = None
         good_fits = None
+        proc_single_img_path = None
         for imgname in appl_file_range:
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
                   (subpath, imgname, band))
-            shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv)
+            shift_x, shift_y, proc_single_img_path = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=adv,
+                                                      single_solve=single_solve)
             if (shift_x != 0) or (shift_y != 0):
                 good_fits = fits
                 break
 
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s -adv' %
                   (subpath, imgname, band))
-            shift_x, shift_y = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=True)
+            shift_x, shift_y, proc_single_img_path = astrom_shift_new.shift(directory=subpath, imagename=imgname, band=band, adv_solve=True,
+                                                      single_solve=single_solve)
             if (shift_x != 0) or (shift_y != 0):
                 good_fits = fits
                 break
@@ -281,7 +289,7 @@ def shift(subpath, band, adv=False, old=False):
         if good_fits is None:
             print(err_msg)
 
-        return shift_x, shift_y
+        return shift_x, shift_y, proc_single_img_path
 
 
 # %% better astrometry
@@ -301,7 +309,7 @@ def astromatic_astrometry(subpath, band=None, sex=None):
 
     print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path {subpath} -band {band}')
 
-    astrometry.astrometry(path=subpath, band=band, double_solve=True)
+    astrometry.astrometry(path=subpath, band=band, improved=True)
 
 # %% stacking
 
@@ -326,7 +334,7 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
         # Initial shift attempt
         astrom_angle(astromdir, subdir, chip, chosen_rot_val)
 
-        shift_x, shift_y = shift(astromdir, band)
+        shift_x, shift_y, proc_single_img_path = shift(astromdir, band)
         if shift_x == 0 and shift_y == 0:
             print("Shift algorithm (initial) could not solve")
             print("Skipping to ROTOFF verification...")
@@ -401,6 +409,78 @@ def verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=False):
 
         return shift_x, shift_y
 
+
+def verify_astrom_indiv(inputimgpath, outputpath, chip, band, rot_val=defaults['rot_val'], input_shift_x=None,
+                        input_shift_y=None, bulge=False):
+    initial_rot_val = rot_val
+    chosen_rot_val = initial_rot_val
+    attempted_angles = set()
+
+    # if shift already found previously
+    if input_shift_x:
+        init_astrm_path = astrom_angle(outputpath, inputimgpath, chip, chosen_rot_val)
+
+        print(f'\nApplying known shift: {input_shift_x:.2f}, {input_shift_y:.2f} to {init_astrm_path}')
+
+        with fits.open(init_astrm_path, mode='update') as hdul:
+            header = hdul[0].header
+            crpix1 = header['CRPIX1']
+            crpix2 = header['CRPIX2']
+            header['CRPIX1'] = crpix1 + input_shift_x
+            header['CRPIX2'] = crpix2 + input_shift_y
+            hdul.close()
+
+        proc_single_img_path = init_astrm_path
+        return input_shift_x, input_shift_y, proc_single_img_path
+
+    while True:
+        # Initial shift attempt
+        init_astrm_path = astrom_angle(outputpath, inputimgpath, chip, chosen_rot_val)
+
+        shift_x, shift_y, proc_single_img_path = shift(init_astrm_path, band, single_solve=True)
+        if shift_x == 0 and shift_y == 0:
+            print("Shift algorithm (initial) could not solve")
+            print("Skipping to ROTOFF verification...")
+        else:
+            print()
+            break
+
+        # check if shift succeeded
+        shift_fail_check = os.path.exists(os.path.splitext(init_astrm_path)[0] + '.shift.fits')
+        all_fits = ['']
+        if not shift_fail_check:
+            break
+
+        print('\nShift astrometry failed! Verifying ROTOFF val in an image FITS header...')
+
+        # Check if rotoff is real
+        rotoff_real = False
+        try:
+            img = fits.open(init_astrm_path)
+            imghdr = img[0].header
+            rotoff_check = int(imghdr['ROTOFF'])
+            rotoff_real = True
+            print('ROTOFF value is real: %i...' %
+                  rotoff_check)
+        except (ValueError, KeyError):
+            print('ROTOFF value is not real! Varying ROTOFF value by +90 deg...')
+
+        if rotoff_real:
+            raise Exception('\n*PROCESSING ARRESTED, CHECK FIELD*'
+                            'No suitable shift values found across half the total images! Arresting processing to prevent'
+                            'bad image generation / hanging, are the images bad quality or very dense?')
+
+        else:
+            # Rotation variation block for if rotoff is bad
+            attempted_angles.add(chosen_rot_val)
+            chosen_rot_val = (chosen_rot_val + 90) % 360
+            print('New ROTOFF value: %i' % chosen_rot_val)
+
+            if chosen_rot_val in attempted_angles:
+                print("All rotations failed. Moving on, but astrometry is likely to fail, so examine images further!")
+                break
+
+    return shift_x, shift_y, proc_single_img_path
 #%% packing compression
 
 

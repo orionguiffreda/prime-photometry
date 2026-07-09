@@ -1,7 +1,8 @@
 import os
 import re
-
+import tempfile
 from astropy.io import fits
+import numpy as np
 
 
 
@@ -57,3 +58,57 @@ def combine_header_and_fits_list(fits_file_paths, remove_header_file=False, head
     header_file_paths = [os.path.splitext(f)[0]+header_extension for f in fits_file_paths]
     for header_file_path, fits_file_path in zip(header_file_paths, fits_file_paths):
         combine_header_and_fits(header_file_path, fits_file_path, remove_header_file)
+
+
+def convert_hdu_to_ldac(hdu):
+    """
+    Convert an hdu table to a fits_ldac table (format used by astromatic suite)
+
+    Parameters
+    ----------
+    hdu: `astropy.io.fits.BinTableHDU` or `astropy.io.fits.TableHDU`
+        HDUList to convert to fits_ldac HDUList
+
+    Returns
+    -------
+    tbl1: `astropy.io.fits.BinTableHDU`
+        Header info for fits table (LDAC_IMHEAD)
+    tbl2: `astropy.io.fits.BinTableHDU`
+        Data table (LDAC_OBJECTS)
+    """
+    tblhdr = np.array([hdu.header.tostring(',')])
+    col1 = fits.Column(name='Field Header Card', array=tblhdr, format='13200A')
+    cols = fits.ColDefs([col1])
+    tbl1 = fits.BinTableHDU.from_columns(cols)
+    tbl1.header['TDIM1'] = '(80, {0})'.format(len(hdu.header))
+    tbl1.header['EXTNAME'] = 'LDAC_IMHEAD'
+    tbl2 = fits.BinTableHDU(hdu.data)
+    tbl2.header['EXTNAME'] = 'LDAC_OBJECTS'
+    return (tbl1, tbl2)
+
+
+def convert_table_to_ldac(tbl):
+    """
+    Convert an astropy table to a fits_ldac
+
+    Parameters
+    ----------
+    tbl: `astropy.table.Table`
+        Table to convert to ldac format
+    Returns
+    -------
+    hdulist: `astropy.io.fits.HDUList`
+        FITS_LDAC hdulist that can be read by astromatic software
+    """
+    for col in tbl.colnames:
+        if tbl[col].dtype == np.float64:
+            tbl[col] = tbl[col].astype(np.float32)
+
+    f = tempfile.NamedTemporaryFile(suffix='.fits', mode='rb+')
+    tbl.write(f, format='fits')
+    f.seek(0)
+    hdulist = fits.open(f, mode='update')
+    tbl1, tbl2 = convert_hdu_to_ldac(hdulist[1])
+    new_hdulist = [hdulist[0], tbl1, tbl2]
+    new_hdulist = fits.HDUList(new_hdulist)
+    return new_hdulist

@@ -55,6 +55,8 @@ def flatfield(science_data, output_data_dir, flat_img_path):
             fits.HDUList(fits.PrimaryHDU(header=header, data=ff_image)).writeto(tmp_path, overwrite=True)
             # replace temp w/ flat field path
             os.replace(tmp_path, flatnewpath)
+            if len(science_data) == 1:
+                return flatnewpath
         print('Flat fielding completed!')
 
     elif os.path.isdir(science_data):

@@ -20,6 +20,7 @@ from astropy.table import Table, Column
 from photometrus.settings import (gen_config_file_name, auto_bulge_detect, ASTROM_QUERY_CATALOGS, set_vizier_mirror)
 from photometrus.utils.utils import combine_header_and_fits_list
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+from photometrus.query import local_scamp_query
 
 #%%
 
@@ -319,6 +320,39 @@ def improved_scamp(imgdir, band, distortdeg=None, swarpcat=None, bulge=None):
     # subprocess.run(command.split(), check=True)
 
 
+def local_scamp(imgdir, band, distortdeg=4, swarpcat=None, bulge=None):
+
+    fits_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.new')]
+    firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
+
+    cat_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+    firstcat = os.path.join(imgdir, cat_list[0])
+
+    raImage = firsthdr['CRVAL1']
+    decImage = firsthdr['CRVAL2']
+    coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+
+    gaia_cat_name, cols = local_scamp_query(coords=coords, width=48, chosen_frame='fk5')
+
+    if swarpcat:
+        img_list = swarpcat
+    else:
+        img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+        img_list = ','.join(img_list)
+
+    # scamp coord error conversion
+    astr_acc = 0.01 / (60 * 60 * 1000)       # mas (coord error) to degrees
+
+    sc = gen_config_file_name('scamp.conf')
+    command = (f'scamp {img_list} -c {sc} -ASTREF_CATALOG FILE -ASTREFCAT_NAME {gaia_cat_name} '
+               f'-ASTREFMAG_LIMITS 8.5,20 -DISTORT_DEGREES {distortdeg} '
+               f'-ASTREFCENT_KEYS {cols[0]},{cols[1]} -ASTREFERR_KEYS {cols[2]},{cols[3]} '
+               f'-ASTREFMAG_KEY {cols[4]} -ASTREFOBSDATE_KEY {cols[5]} -ASTREFMAGERR_KEY {cols[6]} '
+               f'-ASTR_ACCURACY {astr_acc}')
+    print(f'Executing command: {command}')
+    os.system(command)
+
+
 def missfits(imgdir):
     os.chdir(imgdir)
     mc = gen_config_file_name('default.missfits')
@@ -335,7 +369,7 @@ def missfits(imgdir):
 #%%
 
 def remove_head(directory):
-    fnames = ['.head']
+    fnames = ['.head', '.ldac']
     for f in os.listdir(directory):
         for name in fnames:
             if f.endswith(name):
@@ -346,14 +380,17 @@ def remove_head(directory):
                     print(f"Error removing file: {path} - {e}")
 
 
-def double_astrom(imgdir, band=None):
+def double_astrom(imgdir, band=None, use_local=False):
+    # scamp function utilized (local or vizier)
+    scamp_fctn = local_scamp if use_local else scamp
+
     # beginning from where astrom_shift_bulge solved
     start_time = dt.now()
     remove_head(imgdir)
     print('\nSextracting shift-corrected fits files!')
     sex(imgdir)                     # sextract shift-solved fits files
     print('Running SCAMP w/ 2nd order distortion polynomial...')
-    scamp(imgdir, distortdeg=2, band=band)                 # scamp shift-solved cat files w/ 2d poly solve
+    scamp_fctn(imgdir, distortdeg=2, band=band)                 # scamp shift-solved cat files w/ 2d poly solve
     print('Adding .head files directly to fits hdrs...')
     missfits(imgdir)                            # add 2d-solved scamp hdrs to shifted fits files
     print('Removing 2nd order .head files...')
@@ -362,7 +399,7 @@ def double_astrom(imgdir, band=None):
     print('\nSextracting 2nd order scamp-corrected fits files!')
     sex(imgdir)                     # sextract 2d-solved fits files
     print('Running SCAMP w/ 4th order distortion polynomial...')
-    scamp(imgdir, band=band)                               # scamp 2d-solved cat files w/ 4d poly solve
+    scamp_fctn(imgdir, band=band)                               # scamp 2d-solved cat files w/ 4d poly solve
     print('Adding 4th order .head files directly to fits hdrs...')
     missfits(imgdir)                            # replace 2d-solved fits file scamp hdrs w/ 4d soln scamp hdrs
     end_time = dt.now()
@@ -383,8 +420,10 @@ def astrometry(path, band=None, run_sex=False, run_scamp=False, run_miss=False, 
     elif double_solve:
         double_astrom(path, band=band)
     elif improved:
-        remove_head(path)
-        improved_scamp(imgdir=path, band=band, distortdeg=2, bulge=bulge)
+        double_astrom(path, band=band, use_local=True)
+        # remove_head(path)
+        # sex(path)
+        # local_scamp(imgdir=path, distortdeg=2, bulge=bulge, band=band)
         # missfits(path)
     else:
         start_time = dt.now()

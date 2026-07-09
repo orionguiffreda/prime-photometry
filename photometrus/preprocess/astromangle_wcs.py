@@ -184,17 +184,30 @@ def update_ra_dec_directory(directory, rot_val, downsample=_default_downsample):
 
 
 def update_ra_dec_move_directory(input_dir, output_dir, rot_val, downsample=_default_downsample):
-    for f in sorted(os.listdir(input_dir)):
-        if f.endswith('.flat.fits'):
-            origpath = os.path.join(input_dir, f)
-            if f.endswith('.fz'):
-                fnewname = f.replace('.fz', '.new')
-            else:
-                fnewname = f.replace('.flat.fits', '.flat.new')
-            newpath = os.path.join(output_dir, fnewname)
-            shutil.copyfile(origpath, newpath)
-            update_ra_dec(newpath, rot_val, downsample=downsample)
-            # print('%s updated, renamed, and moved!' % fnewname)
+    if os.path.isfile(input_dir):
+        origpath = input_dir
+        path, f = os.path.split(input_dir)
+        if f.endswith('.fz'):
+            fnewname = f.replace('.fz', '.new')
+        else:
+            fnewname = f.replace('.flat.fits', '.flat.new')
+        newpath = os.path.join(output_dir, fnewname)
+        shutil.copyfile(origpath, newpath)
+        update_ra_dec(newpath, rot_val, downsample=downsample)
+        # print('%s updated, renamed, and moved!' % fnewname)
+        return newpath
+    else:
+        for f in sorted(os.listdir(input_dir)):
+            if f.endswith('.flat.fits'):
+                origpath = os.path.join(input_dir, f)
+                if f.endswith('.fz'):
+                    fnewname = f.replace('.fz', '.new')
+                else:
+                    fnewname = f.replace('.flat.fits', '.flat.new')
+                newpath = os.path.join(output_dir, fnewname)
+                shutil.copyfile(origpath, newpath)
+                update_ra_dec(newpath, rot_val, downsample=downsample)
+                # print('%s updated, renamed, and moved!' % fnewname)
 
 
 def update_ra_dec_list(input_list, output_dir, rot_val, downsample=_default_downsample):
@@ -219,7 +232,11 @@ def astrom_angle(input_field, output_dir, rot_val=48, downsample=_default_downsa
         if not output_dir:
             update_ra_dec_directory(input_field, rot_val, downsample)
     elif os.path.isfile(input_field):
-        update_ra_dec(input_field, rot_val, downsample=downsample)
+        if output_dir:
+            init_astrm_path = update_ra_dec_move_directory(input_field, output_dir, rot_val, downsample)
+            return init_astrm_path
+        else:
+            update_ra_dec(input_field, rot_val, downsample=downsample)
 
 
 def main():

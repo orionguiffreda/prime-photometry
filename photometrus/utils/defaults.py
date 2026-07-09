@@ -27,4 +27,4 @@ FILE_DEFAULTS = dict(
 
 ASTROM_DEFAULTS = dict(range=3,length=100,num=15,stdev=1,segstd=2)
 ASTROM_DEFAULTS_NEW = dict(length=125,num=400,thresh_high=0.4,thresh_low=0.1,iters=10,x_guess=None,y_guess=None,
-                           test=False,adv_solve=False)
+                           single_solve=False,adv_solve=False)
