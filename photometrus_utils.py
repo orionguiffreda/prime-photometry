@@ -2,7 +2,6 @@ import photometrus.photometry.photometry as photometry
 from photometrus.stack.stack import swarp_sx, swarp_missfits
 from photometrus.settings import gen_config_file_name
 
-
 import subprocess
 import os
 import numpy as np
@@ -57,11 +56,14 @@ def psfex(catalogName):
 def sex1(imageName, det_cut, weightName=None, magtype='PSF'):
 	print('Running sextractor on img to initially find sources...')
 	if magtype == 'PSF':
-		configFile = photometry.gen_config_file_name('sex2.config')
+		# configFile = photometry.gen_config_file_name('sex_aggr.config') 	#'sex2.config'
+
+		configFile = photometry.gen_config_file_name('sex2_aggr.config')
+		
 		paramName = photometry.gen_config_file_name('tempsource.param')
 		catalogName = imageName + '.cat'
 	else:
-		configFile = photometry.gen_config_file_name('sex2.config')
+		configFile = photometry.gen_config_file_name('sex2_aggr.config')
 		paramName = photometry.gen_config_file_name('photomAUTO.param')
 		catalogName = imageName + '.photom.cat'
 
@@ -242,6 +244,11 @@ def grb_cutout(imageName, GRBcoords, photoDistThresh, grb_thresh, name_ext, regp
 				filtered_labels.append(l)
 				seen.add(l)
 		plt.legend(filtered_handles, filtered_labels, loc='best')
+
+		
+		plt.gca().set_xticks([])
+		plt.gca().set_yticks([])
+
 		cbar = plt.colorbar()
 		cbar.ax.tick_params(labelsize=25)
 		
@@ -313,12 +320,15 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
 	match_cat_path = swarp_sx(imgpath=matching_epoch_path, chip=match_chip)
 	out_name = multi_epoch_scamp(input_epoch_cat_path=match_cat_path, base_epoch_cat_path=base_cat_path)
 	swarp_missfits(imgpath=matching_epoch_path, chip=match_chip)
+	# print("sci, ref, new?", base_epoch_path, matching_epoch_path, out_name)
 	return base_epoch_path, matching_epoch_path, out_name
 
 
 
-
 def display(file, png=False, show=True, savename="transient"):
+	"""
+	Display a cutout or coadd from wither of FITS file or a PNG
+	"""
 	if png:
 		# Read the image data into a NumPy array
 		plt.style.use('default')
@@ -353,6 +363,9 @@ def display(file, png=False, show=True, savename="transient"):
 		
 
 def make_cutout(img, source_ra, source_dec, png=True, display_file=True, name_ext="", photoDistThresh=4.0):
+	"""
+	Make a cutout from a FITS file, save it to a file, and optionally display it
+	"""
 	if source_ra and source_dec: 
 		deci_sky_coords = SkyCoord(ra=[source_ra], dec=[source_dec], frame='icrs', unit='degree')
 	
@@ -367,12 +380,14 @@ def make_cutout(img, source_ra, source_dec, png=True, display_file=True, name_ex
 
 
 def forced_photometry(ra, dec, imageName):
+	"""
+	Run forced photometry with a 1 arcsecond aperture
+	"""
 
 	data = fits.getdata(imageName)
 	img = fits.open(imageName)
 	header = img[0].header
 	w = WCS(header)
-	# print(header.keys)
 
 	GRBcoords = SkyCoord(ra=[ra], dec=[dec], frame='icrs', unit='degree')
 	aper = SkyCircularAperture(GRBcoords, 1.0*u.arcsec)
@@ -388,7 +403,9 @@ def forced_photometry(ra, dec, imageName):
 
 
 def distance(ra1, dec1, ra2, dec2):
-	# print("ra1, dec1, ra2, dec2:", ra1, dec1, ra2, dec2)
+	"""
+	Calculate distance between two ra / dec coordinates
+	"""
 	c1 = SkyCoord(ra1, dec1, frame='icrs', unit='deg')
 	c2 = SkyCoord(ra2, dec2, frame='icrs', unit='deg')
 	ang_sep = c1.separation(c2)

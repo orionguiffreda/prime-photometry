@@ -16,6 +16,8 @@ from astropy.visualization import astropy_mpl_style, ZScaleInterval
 from astropy.nddata import Cutout2D
 import astropy.units as u
 from astropy.wcs import WCS
+from astropy.stats import SigmaClip
+
 from regions import Regions
 
 
@@ -32,26 +34,37 @@ import photometrus.stack.stack as stack
 
 import photometrus_utils as util
 
-def get_cat(image_path):
-
+def get_catalog(image_path):
+	"""
+	Read in previously generated source catalog
+	"""
 	cat_path = glob.glob(f"{image_path[:-5]}*.cat")
-	cat_path.extend(glob.glob(f"{image_path}*.cat"))
 	cat_file =  cat_path[0]
-	
-	# cat_file = image[:-5]+".cat" # use existing
-
-	# DIY
-	# weight_path = stack.make_weight_map(image, None, coadd=True, bkg_percent=2)
-	# cat_file = util.sex1(image, det_cut=2.0, weightName=weight_path) # for some reason still has lots of edge sources
-	
 	cat = Table.read(cat_file, hdu=2)
+	return cat
 
+
+def gen_cat(image): #get_cat
+	"""
+	Runs source extractor, and identifies good sources based on basic features (size, elongation, ...)
+	"""
+	weight_path = stack.make_weight_map(image, None, coadd=True, bkg_percent=2)
+	cat_file = util.sex1(image, det_cut=2.0, weightName=weight_path) # run my own source extractor 
+	cat = Table.read(cat_file, hdu=2)
 	# print("Before:", cat['X_IMAGE'][:5])
-	# cat = sfft_util.reproject_xy(cat, image)
+	# # cat = reproject_xy(cat, image)
 	# print("After:", cat['X_IMAGE'][:5]) 
 
-	
 	cat_good = cat[get_good_mask(cat)]
+	
+	return cat_good, weight_path
+	
+	
+def get_cat_plot_seeing(image_path):
+	"""
+	Reads in sources, creates a source png and calculates seeing
+	"""
+	cat_good = get_cat(image)
 
 	sci_cat_png = os.path.dirname(image_path)+'/source_distribution.png'
 	plt.scatter(cat_good['X_IMAGE'], cat_good['Y_IMAGE'], s=1)
@@ -61,10 +74,10 @@ def get_cat(image_path):
 	return cat_good, sci_cat_png, round(seeing(cat_good), 3)
 
 
-	sci_cat, sci_cat_png, fwhm_ref = sfft_util.get_cat(FITS_SCI)
-
-
 def sep(sci_cat, ref_cat):
+	"""
+	Calculates seperation between sci cat and ref cat sources
+	"""
 	
 	# Cross match the two catalogs by RA/Dec
 	sci_coords = SkyCoord(ra=sci_cat['ALPHA_J2000'], dec=sci_cat['DELTA_J2000'], unit='deg')
@@ -199,7 +212,7 @@ def get_bkg(image):
 
 def remove_bkg_crop(img, filename, header, ra, dec, crop = 1000):
 	"""
-	functionality to remove background and crop image, currently does nothing
+	Functionality to remove background and crop image, currently not in use
 	"""
 	data = fits.getdata(img)
 	dir_data = os.path.dirname(img)
@@ -220,69 +233,44 @@ def remove_bkg_crop(img, filename, header, ra, dec, crop = 1000):
 
 
 
-	def crop_img(data, crop):
-		# crop image to 1000, or largest image that i can 
-		if crop == 0:
-			fits.writeto(new_path, data, header, overwrite=True)
-			return data
-		
-			# 3500 < 50 + 400	   (4500 - 3500 ) < 50 + 400		 700 < 50 + 400		   4500 - 700 < 50 + 400
-		if xpx < pxthresh + crop or xpxmax - xpx < pxthresh + crop or ypx < pxthresh + crop or ypxmax - ypx < pxthresh + crop:
-			return crop_img(data, crop-100)
-			
-		else:
-			size = (xpxmax-crop, ypxmax-crop)
-			center = (xpxmax//2, ypxmax//2)
-			print(size, center)
-			cutout = Cutout2D(data, center, size, wcs=wcs, copy=True)
-
-			new_header = header.copy()
-			new_header.update(cutout.wcs.to_header())
-
-			fits.writeto(new_path, cutout.data, new_header, overwrite=True)
-			
-			print(xpxmax,ypxmax, "->", cutout.data.shape)	
-			print("wrote to", new_path)
-
-
-			return cutout.data
-		
-	data_crop = crop_img(data_sub, 0) # dont crop for now
-
-	return new_path, bkg_path
-
-
 def get_good_mask(cat):
+	"""
+	generates a mask leaving only good point like sources for subtraction
+	"""
 	px_per_arcsec = 1 / 0.49766 # 49766 arcsec / px
-	# print(np.mean(col) for col in np.transpose(cat['FLUX_RADIUS']))
 	flux_rad_col = cat['FLUX_RADIUS'] if len(cat['FLUX_RADIUS'].shape)==1 else cat['FLUX_RADIUS'][:,0]
-
 	mask = (cat['FLAGS'] == 0)  & (abs(flux_rad_col) > px_per_arcsec) & (cat['ELONGATION'] < 2) 
 	return mask
 
-# def reproject_xy(cat, imageName):
-# 	img = fits.open(imageName)
-# 	head = img[0].header
-# 	w = WCS(head)
+def reproject_xy(cat, imageName):
+	"""
+	reproject pixel coordinates to match WCS post alignment
+	"""
+	img = fits.open(imageName)
+	head = img[0].header
+	w = WCS(head)
 
-# 	# get px from ra, dec
-# 	coords = SkyCoord(
-# 		ra=cat['ALPHA_J2000'],
-# 		dec=cat['DELTA_J2000'],
-# 		unit='deg',
-# 		frame='icrs'
-# 	)
-# 	x_new, y_new = w.world_to_pixel(coords)
+	# get px from ra, dec
+	coords = SkyCoord(
+		ra=cat['ALPHA_J2000'],
+		dec=cat['DELTA_J2000'],
+		unit='deg',
+		frame='icrs'
+	)
+	x_new, y_new = w.world_to_pixel(coords)
 
 
-# 	print(x_new[:5])
-# 	cat['X_IMAGE'] = x_new + 1
-# 	cat['Y_IMAGE'] = y_new + 1
-# 	return cat
+	print(x_new[:5])
+	cat['X_IMAGE'] = x_new + 1
+	cat['Y_IMAGE'] = y_new + 1
+	return cat
 	
 
 def get_all_coords(cat):
-	
+	"""
+	Make a list of coordinates of good sources for SFFT to use for kernel determination
+	"""
+	print("initial length:",len(cat))
 	mask = get_good_mask(cat)
 	x_good = cat['X_IMAGE'][mask]
 	y_good = cat['Y_IMAGE'][mask]
@@ -290,27 +278,21 @@ def get_all_coords(cat):
 	
 	print(np.shape(all_coords))
 	all_coords = np.array(all_coords)
-
+	print("final length:",len(all_coords))
 	return all_coords
 
 
 def rms(sky, name):
+	"""
+	Rms calculated from mean absolute deviation 
+	"""
 	sky = sky[np.isfinite(sky)] # remove nans
 	median = np.median(sky)
 	mad = np.median(np.abs(sky - median)) # mean absolute deviation
 	rms = 1.4826 * mad
 	print(name, "RMS:",rms)
 	return rms
-
-def rms_around_sources():
-	# calculate stdev around sources only, mask space between
-	for f in cat_files:
-		cat = Table.read(f, hdu=2)
-		for source in cat.rows():
-			ra, dec, flux_rad = source['RA'], source['dec']
-			# mask = mask & (ra>
 	
-
 
 def sfft_source_reg_gen(SFFTPrepDict, rad=2, append=False):
 	"""
@@ -355,55 +337,12 @@ def sfft_source_reg_gen(SFFTPrepDict, rad=2, append=False):
 	return np.mean(dx), np.std(dx), np.mean(dy), np.std(dy)
 
 
-	
-# def sfft_source_reg_gen(SFFTPrepDict, rad=2, append=False):
-# 	"""
-# 	Generate DS9 region file for SFFT good sources
-# 	"""
-   
-# 	name = f'sfft_srcs.reg'
-# 	color = 'red'
-# 	scale = 1
-	
-# 	with open(name, 'w+') as f:
-		
-# 		f.write('# Region file format: DS9 version 4.1\n')
-# 		f.write('global color=%s dashlist=8 3 width=1\n' % color)
-# 		f.write('fk5\n')
-
-# 		sfft_cat = SFFTPrepDict['SExCatalog-SubSource']
-# 		# print(sfft_cat.keys())
-
-# 		#['SEGLABEL', 'INDEX_PRIOR_SELECTION', 'SEGLABEL_REF', 'X_IMAGE_REF', 'Y_IMAGE_REF', 'FLUX_AUTO_REF', 'FLUXERR_AUTO_REF', 'MAG_AUTO_REF', 'MAGERR_AUTO_REF', 'FLAGS_REF', 'FLUX_RADIUS_REF', 'FWHM_IMAGE_REF', 'A_IMAGE_REF', 'B_IMAGE_REF', 'SEGLABEL_SCI', 'X_IMAGE_SCI', 'Y_IMAGE_SCI', 'FLUX_AUTO_SCI', 'FLUXERR_AUTO_SCI', 'MAG_AUTO_SCI', 'MAGERR_AUTO_SCI', 'FLAGS_SCI', 'FLUX_RADIUS_SCI', 'FWHM_IMAGE_SCI', 'A_IMAGE_SCI', 'B_IMAGE_SCI', 'X_IMAGE_REF_SCI_MEAN', 'Y_IMAGE_REF_SCI_MEAN']
-		
-# 		x_list = sfft_cat['X_IMAGE_REF_SCI_MEAN']
-# 		y_list = sfft_cat['Y_IMAGE_REF_SCI_MEAN']
-
-# 		x_ref, y_ref, x_sci, y_sci = sfft_cat['X_IMAGE_REF'], sfft_cat['Y_IMAGE_REF'], sfft_cat['X_IMAGE_SCI'], sfft_cat['Y_IMAGE_SCI']
-		
-# 		dx = (x_sci - x_ref) * scale
-# 		dy = (y_sci - y_ref) * scale
-		
-# 		print("dx mean:", np.mean(dx), "std:", np.std(dx))
-# 		print("dy mean:", np.mean(dy), "std:", np.std(dy))
-
-
-
-# 		print(f"SFFT found {len(x_ref)} good sources")
-
-		
-# 		for x, y in zip(x_list, y_list):
-# 			f.write(f'circle({x},{y},{rad}")\n')
-
-# 		# for x, y, ddx, ddy in zip(x_ref, y_ref, dx, dy):
-#   #		   # DS9 vector format: vector(x, y, dx, dy)
-#   #		   f.write(f'vector({x},{y},{ddx},{ddy})\n')
-
-# 	print("wrote to:", name)
-# 	return name
 
 	
 def get_diff_stats(SFFTPrepDict, PixA_DIFF):
+	"""
+	Get difference image statistics
+	"""
 	
 	print(SFFTPrepDict.keys())
 	
@@ -418,16 +357,17 @@ def get_diff_stats(SFFTPrepDict, PixA_DIFF):
 	rms_diff_predicted = (rms_ref**2 + rms_sci**2)**(1/2)
 	print("dif should be:", rms_diff_predicted)
 	
-	mask_diff = (~SFFTPrepDict['Active-Mask'] & ~SFFTPrepDict['Union-NaN-Mask'])
-	rms_diff = rms(PixA_DIFF[mask_diff], "DIFF")
+	# mask_diff = (~SFFTPrepDict['Active-Mask'] & ~SFFTPrepDict['Union-NaN-Mask'])
+	rms_diff = rms(PixA_DIFF, "DIFF")
 	
 	return rms_ref, rms_sci, rms_diff_predicted, rms_diff
 
 
 
 def crop_mask(cat, x_px_max, y_px_max, crop=300):
-
-	# x_px_max, y_px_max = np.shape(data)
+	"""
+	mask our sources within <crop> pixels of edge
+	"""
 	
 	mask = (cat['X_IMAGE'] > crop) & (x_px_max - cat['X_IMAGE'] > crop) & (cat['Y_IMAGE'] > crop) & (y_px_max - cat['Y_IMAGE'] > crop)
 	cat = cat[mask]
@@ -436,6 +376,9 @@ def crop_mask(cat, x_px_max, y_px_max, crop=300):
 
 def ztf_cuts(cat, PixA_DIFF, crop=300):
 
+	"""
+	Apply source cuts to difference imageto retain only good sources
+	"""
 	def count_neg(source):
 		x,y = source['X_IMAGE'], source['Y_IMAGE']
 		x, y = round(x), round(y)
@@ -466,20 +409,23 @@ def ztf_cuts(cat, PixA_DIFF, crop=300):
 
 	# uncomment for cuts
 
-	xdim, ydim = np.shape(PixA_DIFF)
-	df = crop_mask(df, xdim, ydim, crop)
+	# xdim, ydim = np.shape(PixA_DIFF)
+	# df = crop_mask(df, xdim, ydim, crop)
 
-	df = df[df["SNR_WIN"]>5] 
+	# df = df[df["SNR_WIN"]>5] 
    
-	df = df[df["ELONGATION"] <= 2]
+	# df = df[df["ELONGATION"] <= 2]
 	
-	df["N_NEG"] = df.apply(count_neg,axis=1) #wrong axis?
-	df = df[df["N_NEG"] <= 13] #13]  
+	# df["N_NEG"] = df.apply(count_neg,axis=1) #wrong axis?
+	# df = df[df["N_NEG"] <= 13] #13]  
 	
 	return df
 	
 	
 def source_extract(img):
+	"""
+	Run source extractor using photometrus functions, returns extracted catalog  
+	"""
 	grb_radius = "4.0"
 	crop = 150 
 	comp_lvl = 0.3
@@ -513,12 +459,15 @@ def source_extract(img):
 	return cat
 
 
-def closest_source(good_ztf_sources, FITS_DIFF, ra, dec):
+def closest_source(sources, FITS_DIFF, ra, dec):
+	"""
+	Find ra and dec of closest source extracted source
+	"""
 	threshold = 0.005
-	good_ztf_sources["distance"] = ((good_ztf_sources['ALPHA_J2000']-ra)**2 + (good_ztf_sources['DELTA_J2000']-dec)**2)**(1/2)
-	min_source_idx = good_ztf_sources["distance"].argmin()
-	
-	source = good_ztf_sources.iloc[min_source_idx]
+	sources["distance"] = ((sources['ALPHA_J2000']-ra)**2 + (sources['DELTA_J2000']-dec)**2)**(1/2)
+	min_source_idx = sources["distance"].argmin()
+	sources = ztf_cuts(sources, FITS_DIFF)
+	source = sources.iloc[min_source_idx]
 	source_ra = source['ALPHA_J2000']
 	source_dec = source['DELTA_J2000']
 	savename, threshname = util.make_cutout(FITS_DIFF, source_ra, source_dec, display_file=False, name_ext="extracted")
@@ -536,15 +485,67 @@ def closest_source(good_ztf_sources, FITS_DIFF, ra, dec):
 
 	return savename, threshname, source_ra, source_dec
 
+def rms_mask(image_path):
+	"""
+	Create a mask for noisy corners in sci and ref images 
+	"""
+	
+	data = fits.getdata(image_path)
+	sigma_clip = SigmaClip(sigma=3)
+	bkg = Background2D(data, box_size=64, filter_size=3,
+					   sigma_clip=sigma_clip,
+					   bkg_estimator=MedianBackground())
+	rms = bkg.background_rms
+	rms = gaussian_filter(rms, sigma=20)  # tune sigma to taste
 
-# def SFFT(dir_data, f_sci, f_ref, band):
+	bad = (rms > 2.5 * np.median(rms)) | ~np.isfinite(data)
+	
+	return bad
+
+
+def mask(image_path, rms_mask_1, rms_mask_2, crop=300):
+	"""
+	Subtract background, apply rms mask, crop
+	"""
+	
+	data = fits.getdata(image_path)
+	
+	# Mask bad regions (e.g. corners where rms is elevated)
+	bad = rms_mask_1 | rms_mask_2  
+	data_clean = data.copy()
+	sky_level = np.nanmedian(data_clean)
+	print('sky_level:', sky_level)
+	
+	data_clean[:crop, :] = sky_level	  
+	data_clean[-crop:, :] = sky_level	 
+	data_clean[:, :crop] = sky_level	 
+	data_clean[:, -crop:] = sky_level	
+	data_clean[bad] = sky_level 
+
+	
+	sky_level = np.nanmedian(data_clean)
+	data_clean -= sky_level # subtract background level to even out images
+	
+	sky_level = np.nanmedian(data_clean)
+	print('sky_level:', sky_level)
+	
+	
+	outname = image_path[:-5]+'_masked.fits'
+	fits.writeto(outname, data_clean, header=fits.getheader(image_path), overwrite=True)
+	return outname
+
+	
+
 def SFFT(FITS_SCI, FITS_REF):
+	"""
+	Run image subtraction
+	"""
 
 	dir_data = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(FITS_SCI))))
 	print(dir_data)
 	
 	t = time.time()
-	FILE_BASENAME = f"sub_4_16_{t}"
+	FILE_BASENAME = f"sub_6_24_{t}"
 	
 	# * computing backend and resourse 
 	BACKEND_4SUBTRACT = 'Numpy'	 # FIXME {'Cupy', 'Numpy'}, Use 'Numpy' if you only have CPUs
@@ -555,40 +556,27 @@ def SFFT(FITS_SCI, FITS_REF):
 	GAIN_KEY = 'GAIN'  # not GAIN_CAL			 # NOTE Keyword of Gain in FITS header
 	SATUR_KEY = 'SATURATE'		  # NOTE Keyword of Saturation in FITS header
 	
-	# * how to subtract
 	GKerHW = None				   # FIXME given matching kernel half width
 	KerHWRatio = 2.0				# FIXME Ratio of kernel half width to FWHM (typically, 1.5-2.5).
 	KerPolyOrder = 2			  # FIXME {0, 1, 2, 3}, Polynomial degree of kernel spatial variation
-	BGPolyOrder = 2 # trivial for sparse (already sky subtracted)			# As above but for CROWDED field
+	BGPolyOrder = 0 #2 # trivial for sparse (already sky subtracted)			# As above but for CROWDED field
 	ConstPhotRatio =  False	  #False	# FIXME Constant photometric ratio between images? dont scale them
 	PriorBanMask = None			 # FIXME None or a boolean array with same shape of science/reference.
+	MatchTol = 3 # pixel difference required for source match
 	
 	COARSE_VAR_REJECTION = False #True	 # FIXME Coarse Variable Rejection? {True, False}
 	CVREJ_MAGD_THRESH = 0.12		# FIXME magnitude threshold for Coarse Variable Rejection
 	ELABO_VAR_REJECTION = False #True	  # FIXME Elaborate Variable Rejection? {True, False}
 
 	sci_stack = os.path.dirname(FITS_SCI)
-	ref_stack = os.path.dirname(FITS_REF)
-
-	sci_cat = FITS_REF[:-5]+".cat"
-	ref_cat = FITS_REF[:-5]+".cat"
-	ForceConv =  get_force_conv(sci_cat,ref_cat)
-
-
-	# FITS_SCI, FITS_REF, ra, dec = get_sci_ref(sci_stack, ref_stack)
+	ref_stack = os.path.dirname(FITS_REF)	
 	ra, dec = get_ra_dec(FITS_SCI)
 
-	sci_header = fits.getheader(FITS_SCI)
-	ref_header = fits.getheader(FITS_REF)
-	
-	FITS_REF_OLD, FITS_SCI_OLD = FITS_REF, FITS_SCI
-	FITS_SCI, sci_bkg_path = remove_bkg_crop(FITS_SCI, f"{FILE_BASENAME}_science_bkgsub.fits", sci_header, ra, dec)
-	FITS_REF, ref_bkg_path = remove_bkg_crop(FITS_REF, f"{FILE_BASENAME}_reference_bkgsub.fits", ref_header, ra, dec)
-	
-	# align with Orion's method
-	FITS_REF_OLD = FITS_REF
 
-	
+	### ------ ALIGNMENT ------ ###
+	# SCAMP via Orion's method
+	FITS_SCI, FITS_REF, scamp = util.multi_epoch_astrom(FITS_SCI, FITS_REF_al)
+
 	FITS_DIFF = dir_data+'/'+FILE_BASENAME+'.sfftdiff.fits'			# difference
 	FITS_REF_al = FITS_REF[:-5] + '.aligned.fits'   # refernce aligned
 	
@@ -599,71 +587,48 @@ def SFFT(FITS_SCI, FITS_REF):
 		SUBTRACT_BACK='N', FILL_VALUE=np.nan, VERBOSE_TYPE='NORMAL', VERBOSE_LEVEL=2)
 
 
-	print('\nMeLOn CheckPoint: IMAGE ALIGNMENT WITH SWARP DONE!\n')
+	### ------ MASKING ------ ###
 
-	FITS_SCI, FITS_REF = util.multi_epoch_astrom(FITS_SCI, FITS_REF)
+	rms_mask_sci = rms_mask(FITS_SCI)
+	rms_mask_ref = rms_mask(FITS_REF_al)
+	 
+	FITS_mSCI = mask(FITS_SCI, rms_mask_sci, rms_mask_ref)
+	FITS_mREF = mask(FITS_REF_al, rms_mask_sci, rms_mask_ref)
 
 	
-	
-	
-	print('Ref. Image aligned: '+FITS_REF_al)
-	print('Diff. Image:'+FITS_DIFF)
+	### ------ SOURCE CATALOG ------ ###
+
+	sci_cat, sci_weight_path = gen_cat(FITS_SCI)
+	ref_cat, ref_weight_path = gen_cat(FITS_REF)
+	# sci_cat = get_catalog(FITS_SCI)
+	# ref_cat = get_catalog(FITS_REF)
+	ForceConv =  get_force_conv(sci_cat ,ref_cat)
 
 	if ForceConv=='SCI':
-		cat_file = ref_cat
+		cat = ref_cat
 		cat_img = FITS_REF
-		
 	else:
-		cat_file = sci_cat
+		cat = sci_cat
 		cat_img = FITS_SCI
-		
-		
 	
-	
-	all_coords = get_all_coords(cat_file,cat_img)
+	all_coords = get_all_coords(cat)
 
-	PixA_DIFF, SFFTPrepDict = Easy_SparsePacket.ESP(FITS_REF=FITS_REF_al, FITS_SCI=FITS_SCI,
+
+	### ------ SUBTRACTION ------ ###
+
+	PixA_DIFF, SFFTPrepDict = Easy_SparsePacket.ESP(FITS_REF=FITS_mREF, FITS_SCI=FITS_mSCI,
 								FITS_DIFF=FITS_DIFF, FITS_Solution=None, ForceConv=ForceConv, GKerHW=GKerHW,
-								KerHWRatio=KerHWRatio, KerHWLimit=(4, 20), KerPolyOrder=KerPolyOrder, 
+								KerHWRatio=KerHWRatio, KerHWLimit=(5, 20), KerPolyOrder=KerPolyOrder, 
 								BGPolyOrder=BGPolyOrder, ConstPhotRatio=ConstPhotRatio, MaskSatContam=False, 
 								GAIN_KEY=GAIN_KEY, SATUR_KEY=SATUR_KEY, BACK_TYPE='MANUAL', BACK_VALUE=0.0, 
 								BACK_SIZE=64, BACK_FILTERSIZE=2, DETECT_THRESH=2, DETECT_MINAREA=5, 
 								DETECT_MAXAREA=0, DEBLEND_MINCONT=1e-4, BACKPHOTO_TYPE='LOCAL', 
-								ONLY_FLAGS=[0], BoundarySIZE=500, XY_PriorSelect=all_coords, PointSource_MINELLIP=0.3, MatchTol=None, 
-								MatchTolFactor=3.0, StarExt_iter=4, XY_PriorBan=None,
+								ONLY_FLAGS=[0], BoundarySIZE=100, XY_PriorSelect=all_coords, PointSource_MINELLIP=0.3, MatchTol=3.0, 
+								MatchTolFactor=MatchTol, StarExt_iter=4, XY_PriorBan=None,
 								PostAnomalyCheck=False, PAC_RATIO_THRESH=5.0, BACKEND_4SUBTRACT=BACKEND_4SUBTRACT, 
 								CUDA_DEVICE_4SUBTRACT=CUDA_DEVICE_4SUBTRACT,
 								NUM_CPU_THREADS_4SUBTRACT=NUM_CPU_THREADS_4SUBTRACT)[:2]
 	
-	# (2, 20)
-	
-	# MAG_OFFSET = -2.5 * np.log10(ConstPhotRatio) # 0.5
-	# SFFTPrepDict["MAG_OFFSET"] = MAG_OFFSET
-
-
-
-	  
-	# PixA_DIFF, SFFTPrepDict = Easy_SparsePacket.ESP(FITS_REF=FITS_REF_al, FITS_SCI=FITS_SCI, \
-	# 								 FITS_DIFF=FITS_DIFF, FITS_Solution=None, ForceConv=ForceConv, GKerHW=None, \
-	# 								 KerHWRatio=KerHWRatio, KerHWLimit=(2, 20), KerPolyOrder=KerPolyOrder, \
-	# 								 BGPolyOrder=BGPolyOrder, ConstPhotRatio=ConstPhotRatio, MaskSatContam=False, \
-	# 								 GAIN_KEY=GAIN_KEY, SATUR_KEY=SATUR_KEY, BACK_TYPE='MANUAL', BACK_VALUE=0.0, \
-	# 								 BACK_SIZE=64, BACK_FILTERSIZE=2, DETECT_THRESH=2, DETECT_MINAREA=5, \
-	# 								 DETECT_MAXAREA=0, DEBLEND_MINCONT=1e-4, BACKPHOTO_TYPE='LOCAL', \
-	# 								 ONLY_FLAGS=[0], BoundarySIZE=30, XY_PriorSelect=None, Hough_MINFR=0.1, \
-	# 								 Hough_PeakClip=0.7, BeltHW=0.2, PointSource_MINELLIP=0.3, MatchTol=None, \
-	# 								 MatchTolFactor=3.0, COARSE_VAR_REJECTION=COARSE_VAR_REJECTION, \
-	# 								 CVREJ_MAGD_THRESH=CVREJ_MAGD_THRESH, ELABO_VAR_REJECTION=ELABO_VAR_REJECTION, \
-	# 								 EVREJ_RATIO_THREH=5.0, EVREJ_SAFE_MAGDEV=0.04, StarExt_iter=4, XY_PriorBan=None, \
-	# 								 PostAnomalyCheck=False, PAC_RATIO_THRESH=5.0, BACKEND_4SUBTRACT=BACKEND_4SUBTRACT, \
-	# 								 CUDA_DEVICE_4SUBTRACT=CUDA_DEVICE_4SUBTRACT, \
-	# 								 NUM_CPU_THREADS_4SUBTRACT=NUM_CPU_THREADS_4SUBTRACT)[:2]
-
-	# util.display(FITS_SCI)
-	# util.display(FITS_REF)
-	# util.display(FITS_DIFF)
-	
-
 
 	# get_diff_stats(SFFTPrepDict, PixA_DIFF)
 
@@ -690,21 +655,7 @@ def SFFT(FITS_SCI, FITS_REF):
 		  
 	# 		savename, threshname = util.make_cutout(FITS_DIFF, source_ra, source_dec)
 
-	# sci_bkg, ref_bkg, sci_cutout, ref_cutout
-	return FITS_SCI, FITS_REF, FITS_DIFF, PixA_DIFF, SFFTPrepDict, sci_bkg_path, ref_bkg_path
-
-
-
-	
-
-	
-	# sci_cat = sfft_util.source_extract(FITS_SCI)
-	# # print(sci_cat)
-	# ref_cat = sfft_util.source_extract(FITS_REF)
-	
-	# print("Sources in sci:",len(sci_cat))
-	# print("Sources in ref:",len(ref_cat))
-	# print("Sources in dif:",len(sources))
+	return FITS_SCI, FITS_REF, FITS_DIFF, PixA_DIFF, SFFTPrepDict, None, None #sci_bkg_path, ref_bkg_path
 
 
 
