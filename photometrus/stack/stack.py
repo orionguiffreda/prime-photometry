@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
-from photometrus.astrom.astrometry import sextract, scamp
+from photometrus.astrom.astrometry import sextract, scamp, local_scamp
 from photometrus.photometry.photometry import photometry
 from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
 from photometrus.utils.utils import combine_header_and_fits, remove_wcs_headers
@@ -154,12 +154,13 @@ def badpixmask(subpath, chip):
 
 
 def astromfin(directory, chip):
-    if not chip:
-        raise ValueError('Specify a chip when using this functionality!')
+    if os.path.isdir(directory):
+        if not chip:
+            raise ValueError('Specify a chip when using this functionality!')
     print('Re-running astrometry on swarped image! Running sextractor...')
     catpath = swarp_sx(directory, chip)
     print('Applying 4th order scamp fit to stacked image...')
-    scamp(directory, swarpcat=catpath)
+    local_scamp(directory, swarpcat=catpath)
     print('Combining scamp .head and stacked image...')
     swarp_missfits(directory, chip)
     try:
