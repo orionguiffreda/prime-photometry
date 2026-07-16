@@ -92,7 +92,7 @@ def scamp(imgdir, distortdeg=None, swarpcat=None, band=None):
         command = command + addition
         # print('Executing command: %s' % command)
         try:
-            subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
+            subprocess.run(command.split(), check=True, timeout=timeout)
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f'*PROCESSING ARRESTED* \nSCAMP calculation time exceeded {timeout}s!  '
                                f'Recommend checking astrometry for this field!: {e}')
@@ -320,25 +320,31 @@ def improved_scamp(imgdir, band, distortdeg=None, swarpcat=None, bulge=None):
     # subprocess.run(command.split(), check=True)
 
 
-def local_scamp(imgdir, band, distortdeg=4, swarpcat=None, bulge=None):
+def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None):
 
-    fits_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.new')]
-    firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
+    if swarpcat:
+        if os.path.isfile(imgdir):
+            firsthdr = fits.getheader(os.path.join(imgdir, imgdir))
+        else:
+            fits_list = [f for f in sorted(os.listdir(imgdir)) if f.startswith('coadd.Open-') and f.endswith('.fits')]
+            firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
 
-    cat_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
-    firstcat = os.path.join(imgdir, cat_list[0])
+        img_list = swarpcat
+    else:
+        fits_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.new')]
+        firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
+
+        cat_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+        firstcat = os.path.join(imgdir, cat_list[0])
+
+        img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+        img_list = ','.join(img_list)
 
     raImage = firsthdr['CRVAL1']
     decImage = firsthdr['CRVAL2']
     coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
 
     gaia_cat_name, cols = local_scamp_query(coords=coords, width=48, chosen_frame='fk5')
-
-    if swarpcat:
-        img_list = swarpcat
-    else:
-        img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
-        img_list = ','.join(img_list)
 
     # scamp coord error conversion
     astr_acc = 0.01 / (60 * 60 * 1000)       # mas (coord error) to degrees
