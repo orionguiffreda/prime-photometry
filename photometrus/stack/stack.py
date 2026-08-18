@@ -16,6 +16,8 @@ import numpy as np
 import fnmatch
 import matplotlib.pyplot as plt
 import pandas as pd
+from astropy.stats import SigmaClip
+from photutils.background import Background2D, SExtractorBackground
 
 # sys.path.insert(0,'C:\PycharmProjects\prime-photometry\photometrus')
 from photometrus.astrom.astrometry import sextract, scamp, local_scamp
@@ -216,10 +218,127 @@ def astrom_check(imgdir):
             os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
 
 
-def swarp(imgdir, finout):
+def make_weight_map(image_adu, chip, use_badmask=True, coadd=True, bkg_percent=1.3):
+    """
+    construct weight map in ADU
+    """
+
+    data_adu = fits.getdata(image_adu)
+    # fill_value = 10000
+    # data_adu = np.nan_to_num(data_adu, nan=fill_value, posinf=fill_value, neginf = -1*fill_value) # fill NaNs to high noise default
+
+    hdr = fits.getheader(image_adu)
+    new_path = f"{image_adu}.weightmap.fits"
+
+    # gain = 1.8 # e- / ADU
+    # # shot noise from electron statistics
+    # sky_file = os.path.dirname(os.path.dirname(image_adu)) +'/sky/'+ hdr['SKY_FILE']
+    # raw_adu = data_adu + fits.getdata(sky_file) * hdr["SKY_FAC"]
+    # poisson_noise = np.nan_to_num(np.sqrt((raw_adu) / gain), 0) # sigma_ADU = sigma_e- / gain = sqrt(ADU * g) / g = sqrt(ADU / g)
+
+    # weight_map = fits.getdata(os.path.dirname(image_adu)+'/weight'+os.path.basename(image_adu)[5:])
+    bad_mask = data_adu == 0
+
+    # background noise (read noise, flat fielding, sky subtraction, nonlinearity correction)
+    bkg_rms = Background2D(data_adu,
+                           box_size=32,
+                           filter_size=5,
+                           sigma_clip=SigmaClip(sigma=3),
+                           bkg_estimator=SExtractorBackground(),
+                           mask=bad_mask).background_rms  # uses source extractor background estimator
+
+    fits.writeto(os.path.dirname(image_adu) + '/rms_coadd.fits', bkg_rms, hdr, overwrite=True)
+    print("wrote to", os.path.dirname(image_adu) + '/rms_coadd.fits')
+
+    bkg_rms[bkg_rms == 0] = np.percentile(bkg_rms, 99)
+
+    # print(f"Zero pixels: {np.sum(bkg_rms == 0)}")
+    # print(f"bkg_rms range: {np.min(bkg_rms):.4f} - {np.max(bkg_rms):.4f}")
+    # print(f"bkg_rms percentiles: {np.percentile(bkg_rms, 99)}")
+
+    sigma_2 = bkg_rms ** 2  # + poisson_noise**2
+    weight = 1 / sigma_2
+
+    print("MEANS data:", np.nanmean(data_adu), ", bkg:", np.nanmean(bkg_rms), ", noise:", np.nanmean(sigma_2), ", weight:",
+          np.nanmean(weight))
+
+    if not coadd:
+        mask = gen_mask_file_name('badpixmask_new_c%i.fits' % chip)
+        badmask = fits.getdata(mask)
+        # badmask = np.fliplr(badmask)  # noticing the maps were flipped
+        badmask = badmask.astype(bool)  # 1 is good, use
+        weight[~badmask] = 0
+
+    # set any weights to zero which are below a certain value
+
+    print(np.median(weight), np.std(weight))
+
+    bkg_thresh = bkg_percent * np.median(bkg_rms)
+    noisy_areas = bkg_rms > bkg_percent * bkg_thresh  # mask noisy areas
+    print("setting rms areas above", bkg_thresh, "to zero")
+    weight[noisy_areas] = 0
+
+    # print("weight after mask:", np.mean(weight))
+
+    fits.writeto(new_path, weight, hdr, overwrite=True)
+    return new_path
+
+
+#%%
+def use_bad_pix_mask_as_map(image_adu, chip):
+    """
+    Simply use the bad pix mask as the input weight map
+    """
+    mask = gen_mask_file_name('badpixmask_c%i.fits' % chip)
+    badmask = fits.getdata(mask)
+    # sflat = fits.getdata('/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/sflat.J.20251210-20251217.C4.fits')
+
+    # badmask = badmask * sflat
+
+    new_path = f"{image_adu}.weightmap.fits"
+
+    hdr = fits.getheader(image_adu)
+    fits.writeto(new_path, badmask, hdr, overwrite=True)
+    print(new_path)
+    return new_path
+
+
+#%%
+def make_weight_maps(images, chip):
+    """
+    Make weight maps for input list of dither images, based on poisson noise, background (read) noise, and bad pixel maps
+
+    Parameters
+    ----------
+    images: list
+        list of filepaths for input images
+    chip: int
+        chip for observations
+    """
+
+    print("Making weight map from poisson noise, bkg noise, bad px mask, ...")
+    # maybe im applying this rotated 90 deg because the corners look super noisy
+    weight_maps = ""
+    for image_adu in images:
+        weight_maps+= use_bad_pix_mask_as_map(image_adu, chip)+","
+        # weight_maps += make_weight_map(image_adu, chip) + ","
+    return weight_maps
+
+#%%
+def remove_small_weights(weight_file):
+    weight = fits.getdata(weight_file)
+    print(np.median(weight)/1.3)
+    weight_cutoff = np.median(weight)/1.3
+    # print("setting weights below", weight_cutoff, "to zero")
+    # weight[weight < weight_cutoff] = 0
+    fits.writeto(weight_file, weight, fits.getheader(weight_file), overwrite=True)
+
+
+def swarp(imgdir, finout, chip):
     print('SWARP Stacking!')
     image_fnames = get_astrom_files(imgdir)
     image_fnames.sort()
+
     # header = fits.getheader(image_fnames[-1])
     header = gen_stack_header(image_fnames)
     filter1 = header.get('FILTER1', 'unknown')
@@ -230,28 +349,42 @@ def swarp(imgdir, finout):
                                                         image_fnames[-1][-23:-15], image_fnames[0][-14])
         print(save_name)
         weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-23:-15],
-                                                        image_fnames[-1][-23:-15], image_fnames[0][-14])
+                                                           image_fnames[-1][-23:-15], image_fnames[0][-14])
     else:
         save_name = 'coadd.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
                                                         image_fnames[-1][-24:-16], image_fnames[0][-15])
         print(save_name)
         weight_name = 'weight.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-24:-16],
-                                                        image_fnames[-1][-24:-16], image_fnames[0][-15])
+                                                           image_fnames[-1][-24:-16], image_fnames[0][-15])
 
     os.chdir(str(finout))
-    #save_name = 'coaddastr.fits'
-    #weight_name = 'coaddastrweight.fits'
+    # save_name = 'coaddastr.fits'
+    # weight_name = 'coaddastrweight.fits'
 
     sw = gen_config_file_name('default.swarp')
 
+    use_weight_map = True
+    if use_weight_map:
+        weight_maps = make_weight_maps(image_fnames, chip)
+        print('Generating weight map:', weight_name)
+
+        com = f"swarp {os.path.join(imgdir, '*.flat' + ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name} -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {weight_maps}"
+        print(com)
+
+    else:
+        com = f"swarp {os.path.join(imgdir, '*.flat' + ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}"
+
     try:
-        com = f'swarp {os.path.join(imgdir, '*.flat'+ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}'
+
+        # WEIGHT_SUFFIX .weight.fits (instead of weight image)
+
         subprocess.run(com, shell=True, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as err:
         print(f"SWARP failed with exit code {err.returncode}")
         print(f"STDERR:\n{err.stderr}")
         print(f"STDOUT:\n{err.stdout}")
     print('Co-added image created, all done!')
+    remove_small_weights(weight_name)
     with fits.open(save_name, mode='update') as fin:
         fin[0].header.update(header)
 
@@ -470,7 +603,7 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
         astrom_check(subpath)
 
     if no_astrom:
-        swarp(subpath, stackpath)
+        swarp(subpath, stackpath, chip)
     elif astrom_only:
         astromfin(stackpath, chip)
     elif increm:
@@ -483,7 +616,7 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
             raise ValueError('Remember to specify chip number using default stacking behavior!  It is required for '
                              'absolute astrometry check!')
         # badpixmask(subpath=subpath, chip=chip)
-        swarp(subpath, stackpath)
+        swarp(subpath, stackpath, chip)
         astromfin(stackpath, chip)
 
 

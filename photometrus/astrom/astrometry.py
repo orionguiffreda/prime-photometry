@@ -320,7 +320,7 @@ def improved_scamp(imgdir, band, distortdeg=None, swarpcat=None, bulge=None):
     # subprocess.run(command.split(), check=True)
 
 
-def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None):
+def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
 
     if swarpcat:
         if os.path.isfile(imgdir):
@@ -386,7 +386,7 @@ def remove_head(directory):
                     print(f"Error removing file: {path} - {e}")
 
 
-def double_astrom(imgdir, band=None, use_local=False):
+def double_astrom(imgdir, band=None, use_local=True):
     # scamp function utilized (local or vizier)
     scamp_fctn = local_scamp if use_local else scamp
 
@@ -420,7 +420,7 @@ def astrometry(path, band=None, run_sex=False, run_scamp=False, run_miss=False, 
     if run_sex:
         sex(path)
     elif run_scamp:
-        scamp(path, band=band)
+        local_scamp(path, band=band)
     elif run_miss:
         missfits(path)
     elif double_solve:
@@ -435,7 +435,7 @@ def astrometry(path, band=None, run_sex=False, run_scamp=False, run_miss=False, 
         start_time = dt.now()
         remove_head(path)
         sex(path)
-        scamp(path, band=band)
+        local_scamp(path)
         missfits(path)
         end_time = dt.now()
         print('\nnormal astrometry time:', (end_time - start_time).total_seconds())

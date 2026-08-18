@@ -95,17 +95,9 @@ def getchiplist(full_ramp_list, chip, rampnum=defaults["rampnum"]):
                 return ramplist
     return None
 
-# %% mflat creation
-"""
-def mflat(flatdir, chip):
-    print('generating master flats...')
-    try:
-        command = 'python ./preprocess/gen_flat.py -dir %s -chip %s' % (flatdir, chip)
-        print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True)
-    except subprocess.CalledProcessError as err:
-        print('Could not run with exit error %s'%err)
-"""
+# ramp image quality check
+
+
 
 
 # %% initial astrometry

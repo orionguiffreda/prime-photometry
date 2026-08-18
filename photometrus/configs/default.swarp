@@ -15,7 +15,8 @@ WEIGHT_TYPE            NONE            # BACKGROUND,MAP_RMS,MAP_VARIANCE
 WEIGHT_SUFFIX          .weight.fits    # Suffix to use for weight-maps
 WEIGHT_IMAGE                           # Weightmap filename if suffix not used
                                        # (all or for each weight-map)
- 
+
+BLANK_BADPIXELS        N
 #------------------------------- Co-addition ----------------------------------
  
 COMBINE                Y               # Combine resampled images (Y/N)?
@@ -43,7 +44,7 @@ RESAMPLE               Y               # Resample input images (Y/N)?
 RESAMPLE_DIR           .               # Directory path for resampled images
 RESAMPLE_SUFFIX        .resamp.fits    # filename extension for resampled images
  
-RESAMPLING_TYPE        LANCZOS2        # NEAREST,BILINEAR,LANCZOS2,LANCZOS3
+RESAMPLING_TYPE        BILINEAR        # NEAREST,BILINEAR,LANCZOS2,LANCZOS3
                                        # LANCZOS4 (1 per axis) or FLAGS
 OVERSAMPLING           1               # Oversampling in each dimension
                                        # (0 = automatic)

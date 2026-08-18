@@ -109,7 +109,12 @@ def gen_sky_image(science_data_directory,output_directory, sky_group_size=None,s
 def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=None, sigma=None, nan_thresh=0):
     warnings.simplefilter('ignore', category=AstropyWarning)
     image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if
-                    f.endswith('.ramp.new') or f.endswith('.flat.fits')]
+                    f.endswith('.ramp.new') or f.endswith('.flat.fits') or f.endswith('.flat.new')]
+    if image_fnames[0].endswith('.new'):
+        corr = 1
+    else:
+        corr = 0
+
     nfiles = len(image_fnames)
     if sky_group_size is None:
         sky_group_size = nfiles
@@ -117,8 +122,8 @@ def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=
     header = fits.getheader(image_fnames[-1])
     filter1 = header.get('FILTER1', 'unknown')
     filter2 = header.get('FILTER2', 'unknown')
-    save_name = 'sky.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-20:-12],
-                                                    image_fnames[-1][-20:-12], image_fnames[0][-11])
+    save_name = 'sky.{}-{}.{}-{}.C{}.fits'.format(filter1, filter2, image_fnames[0][-20+corr:-12+corr],
+                                                    image_fnames[-1][-20+corr:-12+corr], image_fnames[0][-11+corr])
     #save_name = 'sky.test.fits'
     #save_name = os.path.join(output_directory, save_name)
     print(save_name)

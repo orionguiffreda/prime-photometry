@@ -224,6 +224,12 @@
         '/nfs/xion4/prime/Data/reramp/C2/%SERIAL%C2.fits.ramp',
         '/nfs/xion4/prime/Data/reramp/C3/%SERIAL%C3.fits.ramp',
         '/nfs/xion4/prime/Data/reramp/C4/%SERIAL%C4.fits.ramp'
+      ],
+      'regen': [
+        '/mnt/photometry/unarchived/C1/%SERIAL_TRUNC%/%SERIAL%C1.ramp.fits',
+        '/mnt/photometry/unarchived/C2/%SERIAL_TRUNC%/%SERIAL%C2.ramp.fits',
+        '/mnt/photometry/unarchived/C3/%SERIAL_TRUNC%/%SERIAL%C3.ramp.fits',
+        '/mnt/photometry/unarchived/C4/%SERIAL_TRUNC%/%SERIAL%C4.ramp.fits'
       ]
     },
     'replace_list': [
