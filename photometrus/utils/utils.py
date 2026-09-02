@@ -1,8 +1,11 @@
 import os
 import re
+import json5
 import tempfile
 from astropy.io import fits
 import numpy as np
+
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 
 
@@ -112,3 +115,31 @@ def convert_table_to_ldac(tbl):
     new_hdulist = [hdulist[0], tbl1, tbl2]
     new_hdulist = fits.HDUList(new_hdulist)
     return new_hdulist
+
+
+def dump_args_to_json(args, unknown=None, output_path=None):
+    """
+    Dumps input argparse arguments to a json5 file
+
+    Parameters
+    ----------
+    args
+        args that come out of : args, unknown = parser.parse_known_args()
+    unknown
+        unknown args that come out of above
+    output_path : str
+        Optionally specify output path to json dump
+    """
+
+    args_dict = {k: (str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v)
+                 for k, v in vars(args).items()}
+    # args_dict.pop('output_cmd_file', None)
+    args_dict['unknown_args'] = unknown
+
+    if output_path != defaults['parent']:
+        json_dump_path = os.path.join(output_path, 'cmd_args.json5')
+    else:
+        json_dump_path = 'cmd_args.json5'
+    with open(json_dump_path, 'w') as f:
+        json5.dump(args_dict, f, indent=2)
+    print(f'Wrote argparse args to {json_dump_path}')

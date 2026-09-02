@@ -23,6 +23,10 @@ from photometrus.astrom import astrom_shift
 from photometrus.astrom import astrom_shift_new
 from photometrus.astrom import astrometry
 from photometrus.stack import stack
+from photometrus.preprocess.preprocess_functions import preprocess_fctns
+from photometrus.sky.sky_functions import sky_fctns
+from photometrus.astrom.astrom_functions import astrom_fctns
+from photometrus.stack.stack_functions import stack_fctns
 
 from photometrus.settings import (bulge_checker, auto_bulge_detect)
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
@@ -299,7 +303,7 @@ def astromatic_astrometry(subpath, band=None, sex=None):
     #        print('Could not run with exit error %s' % err)
     # else:
 
-    print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -double_solve -path {subpath} -band {band}')
+    print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -improved -path {subpath} -band {band}')
 
     astrometry.astrometry(path=subpath, band=band, improved=True)
 
@@ -545,8 +549,6 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 #     return bulge
 
 
-
-
 def master(
         parentdir=defaults['parent'], chip=defaults['chip'], band=defaults['band'], sigma=defaults['sigma'],
         date=defaults['date'], fullramplist=defaults['ramplist'], rot_val=defaults['rot_val'],
@@ -567,9 +569,32 @@ def master(
         rampdir = os.path.join(parentdir, 'C%i' % chip)
         initial_ramps = rampdir
 
+    preprocess_fctns(
+        imagepaths=initial_ramps,
+        FF_imagepaths=FFdir,
+        band=band,
+        chip=chip,
+        date=date,
+        kernel_stdev=2,
+        astrom_dir=astromdir
+    )
+
     # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
-    flatfielding(initial_ramps, FFdir, band, chip, date)
+    # flatfielding(initial_ramps, FFdir, band, chip, date)
+
     bulge = auto_bulge_detect(FFdir)
+
+    # sky_fctns(
+    #     FFdir=FFdir,
+    #     subdir=subdir,
+    #     skydir=skydir,
+    #     sigma=sigma,
+    #     chip=chip,
+    #     sky_override=sky_override,
+    #     sex=sex,
+    #     bulge=bulge
+    # )
+
     if sex or sky_override or bulge:
         pass
     else:
@@ -578,10 +603,25 @@ def master(
         skysub(FFdir, subdir, chip, sky_override, sex=True)
     else:
         skysub(FFdir, subdir, chip, skydir, sky_override)
+
+    # astrom_fctns(
+    #     astromdir=astromdir,
+    #     subdir=subdir,
+    #     chip=chip,
+    #     band=band,
+    #     rot_val=rot_val,
+    #     bulge=bulge
+    # )
+
     verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
-    # astrom_angle(astromdir, subdir, chip, rot_val)
-    # shift(astromdir, band, bulge=bulge)
     astromatic_astrometry(astromdir, band=band)
+
+    # stack_fctns(
+    #     astromdir=astromdir,
+    #     stackdir=stackdir,
+    #     chip=chip
+    # )
+
     stacking(astromdir, stackdir, chip)
     if compress:
         fpack(stackdir, chip)

@@ -4,6 +4,7 @@ Utility functions for photometry
 
 import random
 import os
+import shutil
 import numpy as np
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 import time
@@ -246,3 +247,10 @@ def removal(directory, end_names=None):
             # print(f"Removed file: {path}")
         except Exception as e:
             print(f"Error removing file: {path} - {e}")
+
+
+def copy_given_cat_to_dir(given_catalog, name, directory, survey):
+    given_cat_ecsvname = '%s.%s.ecsv' % (name, survey)
+    new_cat_path = os.path.join(directory, given_cat_ecsvname)
+
+    shutil.copy(given_catalog, new_cat_path)

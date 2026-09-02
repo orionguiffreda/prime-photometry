@@ -13,35 +13,43 @@ from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 
 def fetchstacks(stackpath, chip=None):
-    if not chip:
-        chips = defaults['chip']
+    if os.path.isfile(stackpath):
+        return [stackpath]
     else:
-        if type(chip) is list:
-            chips = chip
-        elif type(chip) is int:
-            chips = [chip]
+        if not chip:
+            chips = defaults['chip']
         else:
-            chips = chip.split(',')
-            chips = [int(f) for f in chips]
+            if type(chip) is list:
+                chips = chip
+            elif type(chip) is int:
+                chips = [chip]
+            else:
+                chips = chip.split(',')
+                chips = [int(f) for f in chips]
 
-    allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.')]
-    matchingstacks = sorted([img for img in allstacks if any(f'C{chosenchips}' in img for chosenchips in chips)])
-    if not matchingstacks:
-        raise FileNotFoundError('No stacks matching format and given chip(s) are found!')
-    else:
-        print('Matching stacked images: ', matchingstacks)
+        allstacks = [f for f in os.listdir(stackpath) if f.endswith('.fits') and f.startswith('coadd.')]
+        matchingstacks = sorted([img for img in allstacks if any(f'C{chosenchips}' in img for chosenchips in chips)])
+        if not matchingstacks:
+            raise FileNotFoundError('No stacks matching format and given chip(s) are found!')
+        else:
+            print('Matching stacked images: ', matchingstacks)
 
-    return matchingstacks
+        return matchingstacks
 
 
 def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
-                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut, no_plots, sx_cfg):
+                grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal, keep, det_cut, no_plots, photom_sx_cfg,
+                given_catalog
+                ):
     for img in matchingstacks:
-        wholeimgpath = os.path.join(stackpath, img)
+        if not os.path.isfile(stackpath):
+            wholeimgpath = os.path.join(stackpath, img)
+        else:
+            wholeimgpath = img
         print('\nRunning photometry on: %s' % wholeimgpath)
         photometry.photometry(full_filename=wholeimgpath, band=band, survey=survey, grb_ra=grb_ra, grb_dec=grb_dec,
                            grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_only=grb_only, grb_name=grb_name, no_int_cal=no_int_cal,
-                              keep=keep, det_cut=det_cut, no_plots=no_plots, sx_cfg=sx_cfg)
+                              keep=keep, det_cut=det_cut, no_plots=no_plots, photom_sx_cfg=photom_sx_cfg, given_catalog=given_catalog)
 
     if len(matchingstacks) == 4:
         ellipticity_logger.logger(directory=stackpath)
@@ -54,7 +62,8 @@ def multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec,
 def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], chip=defaults['chip'], survey=defaults['survey'],
                       grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
                       grb_radius=defaults['grb_radius'], grb_only=defaults['grb_only'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'],
-                      keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots'], sx_cfg=defaults['sx_cfg']):
+                      keep=defaults['keep'], det_cut=defaults['det_cut'], no_plots=defaults['no_plots'], photom_sx_cfg=defaults['photom_sx_cfg'],
+                      given_catalog=defaults['catalog']):
 
     cmd_str = f'\nEquivalent argparse cmd: photometrus photometry -stackpath {stackpath} -band {band} -chip {chip}'
     if grb_ra:
@@ -65,7 +74,7 @@ def mastermultiphotom(stackpath=defaults['stackpath'], band=defaults['band'], ch
 
     matchingstacks = fetchstacks(stackpath, chip)
     multiphotom(stackpath, matchingstacks, band, survey, grb_ra, grb_dec, grb_coordlist, grb_radius, grb_only, grb_name, no_int_cal,
-                keep, det_cut, no_plots, sx_cfg)
+                keep, det_cut, no_plots, photom_sx_cfg, given_catalog)
 
 
 def main():
@@ -113,18 +122,21 @@ def main():
     parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
                                                      ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
                         default=defaults["det_cut"])
-    parser.add_argument('-sx_cfg', type=str,
+    parser.add_argument('-photom_sx_cfg', type=str,
                         help='[str] optionally specify different sxtrctr config file to use for main source extraction,'
                              'must be in .prime/config/ directory, '
                              'default = sex2.config',
-                        default=defaults["sx_cfg"])
+                        default=defaults["photom_sx_cfg"])
+    parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated '
+                                                   'catalog for photometry INSTEAD of querying, put in full file path.',
+                        default=defaults["catalog"])
 
     args, unknown = parser.parse_known_args()
     # print(args)
 
     mastermultiphotom(args.stackpath, args.band, args.chip, args.survey, args.grb_ra, args.grb_dec, args.grb_coordlist,
                       args.grb_radius, args.grb_only, args.grb_name, args.no_int_cal, args.keep, args.det_cut, args.no_plots,
-                      args.sx_cfg)
+                      args.photom_sx_cfg, args.catalog)
 
 
 if __name__ == "__main__":

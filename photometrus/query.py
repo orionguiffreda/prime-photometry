@@ -840,8 +840,8 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 
 
 def query(
-        raImage, decImage, band, w, data, crop, acc_comp_lvl=0.4, survey=None, given_catalog_path=None,
-        mag_lower_lim=PHOTOMETRY_MAG_LOWER_LIMIT, mag_upper_lim=PHOTOMETRY_MAG_UPPER_LIMIT, bulge=False,
+        raImage, decImage, band, w, data, crop=defaults['crop'], acc_comp_lvl=defaults['gaia_acc_comp_lvl'], survey=None,
+        given_catalog_path=None, mag_lower_lim=PHOTOMETRY_MAG_LOWER_LIMIT, mag_upper_lim=PHOTOMETRY_MAG_UPPER_LIMIT, bulge=False,
         magtype=defaults['magtype']
 ):
 

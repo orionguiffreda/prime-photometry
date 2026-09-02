@@ -358,6 +358,8 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
     print(f'Executing command: {command}')
     os.system(command)
 
+    return img_list
+
 
 def missfits(imgdir):
     os.chdir(imgdir)

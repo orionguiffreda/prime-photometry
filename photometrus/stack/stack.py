@@ -12,6 +12,7 @@ from astropy.io import fits
 import astropy.units as u
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
+from astropy.wcs import WCS
 import numpy as np
 import fnmatch
 import matplotlib.pyplot as plt
@@ -24,6 +25,8 @@ from photometrus.astrom.astrometry import sextract, scamp, local_scamp
 from photometrus.photometry.photometry import photometry
 from photometrus.settings import gen_config_file_name, auto_bulge_detect, gen_mask_file_name
 from photometrus.utils.utils import combine_header_and_fits, remove_wcs_headers
+
+from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
 
@@ -155,7 +158,7 @@ def badpixmask(subpath, chip):
     return old_storage_dir
 
 
-def astromfin(directory, chip):
+def astromfin(directory, chip, stack_sx_cfg=defaults["stack_sx_cfg"]):
     if os.path.isdir(directory):
         if not chip:
             raise ValueError('Specify a chip when using this functionality!')
@@ -216,6 +219,8 @@ def astrom_check(imgdir):
         print(' Renaming offending images to avoid stacking issues...')
         for img_name in bad_imgs:
             os.rename(img_name, img_name.replace('.flat.','.flat.EXCL.'))
+
+    return med_ra, med_dec
 
 
 def make_weight_map(image_adu, chip, use_badmask=True, coadd=True, bkg_percent=1.3):
@@ -289,7 +294,7 @@ def use_bad_pix_mask_as_map(image_adu, chip):
     """
     Simply use the bad pix mask as the input weight map
     """
-    mask = gen_mask_file_name('badpixmask_c%i.fits' % chip)
+    mask = gen_mask_file_name('badpixmask_new_c%i.fits' % chip)
     badmask = fits.getdata(mask)
     # sflat = fits.getdata('/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/sflat.J.20251210-20251217.C4.fits')
 
@@ -303,7 +308,15 @@ def use_bad_pix_mask_as_map(image_adu, chip):
     return new_path
 
 
-#%%
+def apply_wcs_to_weight_maps(image_adu, weight_img_path):
+    image_hdr = fits.getheader(image_adu)
+    with fits.open(weight_img_path, mode='update') as hdul:
+        hdu = hdul[0]
+        wcs = WCS(image_hdr)
+        hdu.header.update(wcs.to_header())
+        hdul.flush()
+
+
 def make_weight_maps(images, chip):
     """
     Make weight maps for input list of dither images, based on poisson noise, background (read) noise, and bad pixel maps
@@ -316,13 +329,33 @@ def make_weight_maps(images, chip):
         chip for observations
     """
 
-    print("Making weight map from poisson noise, bkg noise, bad px mask, ...")
+    print("Generating weight map list ...")
     # maybe im applying this rotated 90 deg because the corners look super noisy
     weight_maps = ""
     for image_adu in images:
-        weight_maps+= use_bad_pix_mask_as_map(image_adu, chip)+","
+        image_path, image_base = os.path.split(image_adu)
+        weight_img_base = os.path.join(image_path, image_base.split('.')[0])
+        weight_img_path = f"{weight_img_base}.weightmap.fits"
+
+        apply_wcs_to_weight_maps(image_adu, weight_img_path)
+
+        weight_maps += f"{weight_img_path}" + ","
+        # weight_maps+= use_bad_pix_mask_as_map(image_adu, chip)+","
         # weight_maps += make_weight_map(image_adu, chip) + ","
     return weight_maps
+
+
+def write_weight_maps_to_list(weight_maps, stack_dir):
+    weight_map_list = weight_maps.rstrip(",").split(",")
+
+    list_path = os.path.join(stack_dir, "weightmaps.list")
+    with open(list_path, "w") as file:
+        for path in weight_map_list:
+            file.write(path.strip() + "\n")
+
+    list_path = '@'+list_path
+    return list_path
+
 
 #%%
 def remove_small_weights(weight_file):
@@ -366,6 +399,9 @@ def swarp(imgdir, finout, chip):
     use_weight_map = True
     if use_weight_map:
         weight_maps = make_weight_maps(image_fnames, chip)
+        if len(weight_maps.split(',')) >= 150:
+            print(f' Large amount of maps detected! (>150), writing weight map paths to list in {finout}')
+            weight_maps = write_weight_maps_to_list(weight_maps=weight_maps, stack_dir=finout)
         print('Generating weight map:', weight_name)
 
         com = f"swarp {os.path.join(imgdir, '*.flat' + ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name} -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {weight_maps}"
@@ -384,7 +420,7 @@ def swarp(imgdir, finout, chip):
         print(f"STDERR:\n{err.stderr}")
         print(f"STDOUT:\n{err.stdout}")
     print('Co-added image created, all done!')
-    remove_small_weights(weight_name)
+    # remove_small_weights(weight_name)
     with fits.open(save_name, mode='update') as fin:
         fin[0].header.update(header)
 
@@ -528,7 +564,7 @@ def swarp_alt(imgdir, imout):
     print('2nd set co-added image created, all done!')
 
 
-def swarp_sx(imgpath, chip):
+def swarp_sx(imgpath, chip, stack_sx_cfg=defaults["stack_sx_cfg"]):
     # imgpath can be either full file path to stack or directory where stack is in
 
     if os.path.isdir(imgpath):
@@ -538,7 +574,7 @@ def swarp_sx(imgpath, chip):
             sx = gen_config_file_name('bulge_new.config')
             ap = gen_config_file_name('tempsource.param')
         else:
-            sx = gen_config_file_name('sex.config')
+            sx = gen_config_file_name(stack_sx_cfg)
             ap = gen_config_file_name('astrom_coadd.param')
 
         stackimg = [f for f in sorted(os.listdir(imgpath)) if fnmatch.fnmatch(f, 'coadd.*.C%i.fits' % chip)]
@@ -594,18 +630,20 @@ def swarp_missfits(imgpath, chip):
 #%%
 
 
-def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False, mosaic=False):
+def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, increm=False, alt=False, mosaic=False,
+          stack_sx_cfg=defaults["stack_sx_cfg"]
+          ):
     # if args.mask:
         # otherdir = badpixmask(args.parent,args.sub,args.chip)
         # print('removing temp dir...')
         # shutil.rmtree(otherdir)
     if not mosaic:
-        astrom_check(subpath)
+        med_ra, med_dec = astrom_check(subpath)
 
     if no_astrom:
         swarp(subpath, stackpath, chip)
     elif astrom_only:
-        astromfin(stackpath, chip)
+        astromfin(stackpath, chip, stack_sx_cfg=stack_sx_cfg)
     elif increm:
         swarp_increm(subpath, stackpath, num)
     elif alt:
@@ -637,10 +675,15 @@ def main():
     parser.add_argument('-sub', type=str, help='[str] Processed images path')
     parser.add_argument('-stack', type=str, help='[str] Output stacked image path')
     parser.add_argument('-num', type=int, help='*USE ONLY W/ -INCREM* [int] # of individual imgs to increment by, default=5', default=5)
-    #parser.add_argument('-parent', type=str, help='*USE ONLY W/ -MASK FLAG* [str] Parent directory where all img folders are stored', default=None)
+    parser.add_argument('-stack_sx_cfg', type=str,
+                        help='[str] Specify different sxtrctr config file to use for absolute astrometry on stacked image,'
+                             'must be in .prime/config/ directory, '
+                             'default = sex_astrom.config',
+                        default=defaults["stack_sx_cfg"])
     args, unknown = parser.parse_known_args()
 
-    stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt, args.mosaic)
+    stack(args.sub, args.stack, args.chip, args.num, args.no_astrom, args.astrom_only, args.increm, args.alt, args.mosaic,
+    args.stack_sx_cfg)
 
 
 if __name__ == "__main__":

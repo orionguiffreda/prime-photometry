@@ -187,9 +187,13 @@ def gen_pipeline_file_name():
 
 
 def gen_config_file_name(filename):
+    """Generates filepath for configs in .prime/config/, unless an existing filepath is specified"""
     # base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
     # base_dir = gen_pipeline_file_name()
-    return os.path.join(gen_config_dir(), filename)
+    if os.path.isfile(filename):
+        return filename
+    else:
+        return os.path.join(gen_config_dir(), filename)
 
 
 def load_settings(settings_file='photometrus.json5'):
