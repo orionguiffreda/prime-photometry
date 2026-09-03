@@ -7,6 +7,8 @@ import os
 import argparse
 import warnings
 import shutil
+import numpy as np
+from astropy.convolution import interpolate_replace_nans, Gaussian2DKernel
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 #%%
@@ -30,6 +32,7 @@ def flatfield(science_data, output_data_dir, flat_img_path):
     flat = fits.getdata(flat_img_path)
     if type(science_data) is list:
         print('Flat fielding initial ramps...')
+        flatnewpaths = []
         for imagepath in science_data:
             # copy initial ramp into flat dir
             if imagepath.endswith('.fz'):
@@ -49,15 +52,41 @@ def flatfield(science_data, output_data_dir, flat_img_path):
 
             # flat-field copied ramp
             cropimage, header = flat_fielding_hdr_update(img_path=flatnewpath, flat_img_path=flat_img_path)
+            cropimage[cropimage >= 65000] = np.nan
             ff_image = cropimage/flat
+
+            # print(f' Running masking and interpolation on {flatnewpath}')
+            # directory = '/mnt/photometry/pipeline_testing_dir/raw_ramp_bad_pix/field2104_20260517/raws/'
+            # satulimMap = fits.getdata(os.path.join(directory, 'satulim.C4.fits.20251004'))[4:4092, 4:4092]
+            # badpixmap = fits.getdata('/mnt/photometry/pipeline_testing_dir/bad_pix_mask/masks/badpixmask_new_c4.fits')
+            #
+            # ff_image[badpixmap == 0] = np.nan
+            # satmasked = ff_image >= satulimMap
+            # ff_image[satmasked] = np.nan
+
+            # def interpolate_bad_pix(image, kernel_stdev=2):
+            #     kernel = Gaussian2DKernel(x_stddev=kernel_stdev)
+            #     nan_percent = 100 * np.count_nonzero(np.isnan(image)) / (image.shape[0] * image.shape[1])
+            #     print(' start_nan_percentage: {}'.format(nan_percent))
+            #     print(' Running kernel interpolation...')
+            #     filled = interpolate_replace_nans(image, kernel)
+            #     remaining_nans = np.isnan(filled).sum()
+            #     end_nan_percent = 100 * remaining_nans / (image.shape[0] * image.shape[1])
+            #     print(' end_nan_percentage: {}'.format(end_nan_percent))
+            #     return filled
+            #
+            # ff_image = interpolate_bad_pix(image=ff_image, kernel_stdev=4)
+
             # write interim temp file
             tmp_path = flatnewpath+'.tmp'
             fits.HDUList(fits.PrimaryHDU(header=header, data=ff_image)).writeto(tmp_path, overwrite=True)
             # replace temp w/ flat field path
             os.replace(tmp_path, flatnewpath)
+            flatnewpaths.append(flatnewpath)
             if len(science_data) == 1:
                 return flatnewpath
         print('Flat fielding completed!')
+        return flatnewpaths
 
     elif os.path.isdir(science_data):
         image_fnames = [os.path.join(science_data, f) for f in os.listdir(science_data) if f.endswith('ramp.fits') or f.endswith('ramp.new')]
@@ -65,6 +94,7 @@ def flatfield(science_data, output_data_dir, flat_img_path):
         print('Flat fielding imgs...')
         for f in image_fnames:
             cropimage, header = flat_fielding_hdr_update(img_path=f, flat_img_path=flat_img_path)
+            cropimage[cropimage >= 65000] = np.nan
             ff_image = cropimage/flat
             output_fname = os.path.basename(f)
             if f.endswith('.ramp.fits'):
@@ -77,6 +107,7 @@ def flatfield(science_data, output_data_dir, flat_img_path):
 
     elif os.path.isfile(science_data):
         cropimage, header = flat_fielding_hdr_update(img_path=science_data, flat_img_path=flat_img_path)
+        cropimage[cropimage >= 65000] = np.nan
         ff_image = cropimage / flat
         output_fname = os.path.basename(science_data)
         output_fname = output_fname.replace('.ramp.new', '.flat.fits')

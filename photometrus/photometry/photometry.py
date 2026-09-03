@@ -50,7 +50,7 @@ from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETR
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 from photometrus.query import query
 from photometrus.photometry.photom_utils import (open_fits_robust, log_output, get_table_from_ldac, get_band,
-                                                 grb_rad_convert, ab_convert, removal)
+                                                 grb_rad_convert, ab_convert, removal, copy_given_cat_to_dir)
 from photometrus.photometry.GRB import GRB, newsourcesearch
 from photometrus.photometry.plots import single_plots, photometry_plots
 
@@ -214,11 +214,11 @@ def img(directory, imageName, crop):
 # run sextractor on swarped img to find sources
 
 
-def sex1(imageName, det_cut, grb_flag=False, sx_cfg=defaults['sx_cfg']):
+def sex1(imageName, det_cut, grb_flag=False, photom_sx_cfg=defaults['photom_sx_cfg']):
     print('Running sextractor on img to initially find sources...')
     aper_str = ''
 
-    configFile = gen_config_file_name(sx_cfg)
+    configFile = gen_config_file_name(photom_sx_cfg)
     if grb_flag:
         paramName = gen_config_file_name('tempsource.param')
         catalogName = imageName + '.cat'
@@ -235,8 +235,8 @@ def sex1(imageName, det_cut, grb_flag=False, sx_cfg=defaults['sx_cfg']):
                     'fixed aperture size (pix)')
             hdul.close()
 
-    if sx_cfg != defaults['sx_cfg']:
-        print(f' Custom sxtrctr cfg specified: {sx_cfg}')
+    if photom_sx_cfg != defaults['photom_sx_cfg']:
+        print(f' Custom sxtrctr cfg specified: {photom_sx_cfg}')
 
     weightName = 'weight'+imageName[5:]
     if os.path.isfile(weightName):
@@ -356,7 +356,7 @@ def psfex(catalogName, band, data, crop):
 # feed generated psf model back into sextractor w/ diff param (or could use that param from the start but its slower)
 
 
-def sex2(imageName, det_cut, catalogName, sx_cfg=defaults['sx_cfg']):
+def sex2(imageName, det_cut, catalogName, photom_sx_cfg=defaults['photom_sx_cfg']):
     # dynamic aperture photometry adjustment
     # init_cat = get_table_from_ldac(catalogName)
     # if isinstance(init_cat['FLUX_RADIUS'][0], np.ndarray):
@@ -382,10 +382,10 @@ def sex2(imageName, det_cut, catalogName, sx_cfg=defaults['sx_cfg']):
     print('Feeding psf model back into sextractor for fitting and flux calculation...')
     psfName = imageName + '.psf'
     psfcatalogName = imageName.replace(os.path.splitext(imageName)[1], '.photom.cat')
-    configFile = gen_config_file_name(sx_cfg)
+    configFile = gen_config_file_name(photom_sx_cfg)
     psfparamName = gen_config_file_name('photomPSF.param')
-    if sx_cfg != defaults['sx_cfg']:
-        print(f' Custom sxtrctr cfg specified: {sx_cfg}')
+    if photom_sx_cfg != defaults['photom_sx_cfg']:
+        print(f' Custom sxtrctr cfg specified: {photom_sx_cfg}')
 
     weightName = 'weight' + imageName[5:]
     if os.path.isfile(weightName):
@@ -450,6 +450,8 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         good_cat_stars = given_cat[(given_cat['FLAGS'] == 0) &
                                (given_cat['XWIN_IMAGE'] < (max_x - crop)) & (given_cat['XWIN_IMAGE'] > crop) &
                                (given_cat['YWIN_IMAGE'] < (max_y) - crop) & (given_cat['YWIN_IMAGE'] > crop)]
+
+        crop_cat_stars = good_cat_stars.copy()
 
         if 'POINTSOURCE' in given_cat.colnames:
             good_cat_stars = good_cat_stars[(good_cat_stars['FLAGS_MODEL'] == 0)]
@@ -1252,8 +1254,11 @@ def int_calibration(
     # Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, given_catalog_path=given_catalog, mag_lower_lim=mag_low_lim,
     #                                          mag_upper_lim=mag_high_lim, bulge=bulge, no_check=True)
     magcol = Q[0].colnames[2]
-    key0 = list(Q.keys())[0]
-    Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
+    if given_catalog:
+        Q = Q[Q[f'{band}MAG_{magtype}'] > mag_low_lim]
+    else:
+        key0 = list(Q.keys())[0]
+        Q = type(Q)([(key0, Q[0][Q[0][magcol] > mag_low_lim])])
 
     if grb_ra:
         psfcatalogName = name.replace(os.path.splitext(name)[1], '.photom.cat')
@@ -1545,7 +1550,7 @@ def photometry(
         mag_low_lim=defaults['mag_low'], mag_high_lim=defaults['mag_high'], no_plots=defaults['no_plots'],
         keep=defaults['keep'], grb_only=defaults['grb_only'], grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
         grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], no_int_cal=defaults['no_int_cal'], det_cut=defaults['det_cut'],
-        sx_cfg=defaults['sx_cfg']
+        photom_sx_cfg=defaults['photom_sx_cfg']
 ):
     global magtype
     global parallel
@@ -1558,7 +1563,7 @@ def photometry(
     parallel = defaults['parallel']
     grb_flag = False
 
-    comp_lvl = 0.3
+    comp_lvl = defaults['gaia_acc_comp_lvl']
 
     try:
         directory = os.path.dirname(full_filename)
@@ -1592,6 +1597,9 @@ def photometry(
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
 
+        if given_catalog:
+            copy_given_cat_to_dir(given_catalog=given_catalog, name=name, directory=directory, survey=chosen_survey)
+
         psf_check = name.replace(os.path.splitext(name)[1], f'{os.path.splitext(name)[1]}.psf')
         if not os.path.isfile(psf_check):
             raise FileNotFoundError(f'\n{psf_check} file not found! This indicates PSF photom data products '
@@ -1618,12 +1626,14 @@ def photometry(
         data, header, w, raImage, decImage, bulge, det_thresh, chip = img(directory, name, crop)
         Q, chosen_survey, mag_low_cutoff = query(raImage, decImage, band, w, data, crop, comp_lvl, survey, given_catalog, mag_low_lim,
                                                  mag_high_lim, bulge)
+        if given_catalog:
+            copy_given_cat_to_dir(given_catalog=given_catalog, name=name, directory=directory, survey=chosen_survey)
         if not grb_flag:
-            psfcatalogName = sex1(name, det_cut=det_thresh, sx_cfg=sx_cfg)
+            psfcatalogName = sex1(name, det_cut=det_thresh, photom_sx_cfg=photom_sx_cfg)
         else:
-            catalogName = sex1(name, det_cut=det_thresh, grb_flag=grb_flag, sx_cfg=sx_cfg)
+            catalogName = sex1(name, det_cut=det_thresh, grb_flag=grb_flag, photom_sx_cfg=photom_sx_cfg)
             psfex(catalogName, band, data, crop)
-            psfcatalogName = sex2(name, det_cut=det_thresh, catalogName=catalogName, sx_cfg=sx_cfg)
+            psfcatalogName = sex2(name, det_cut=det_thresh, catalogName=catalogName, photom_sx_cfg=photom_sx_cfg)
         good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
             tables(Q, data, w, psfcatalogName, crop, given_catalog))
         if len(idx_psfimage) == 0:
@@ -2011,7 +2021,7 @@ def main():
     parser.add_argument('-sigma', type=float, help='[float], # of sigma w/ which to sigma clip for '
                                                   'zero point calculation, default = 3',
                         default=defaults["sigma_photom"])
-    parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated'
+    parser.add_argument('-catalog', type=str, help='[str], optional field to supply an already generated '
                                                    'catalog for photometry INSTEAD of querying, put in full file path.',
                         default=defaults["catalog"])
     parser.add_argument('-mag_low', type=float, help='[float], Lower mag cutoff for survey query & crossmatch'
@@ -2046,11 +2056,11 @@ def main():
     parser.add_argument('-det_cut', type=float, help='[float], num of median image sigma to cut off sources'
                                                      ' (ex. det_thresh of 2 => cutoff = med - 2*sigma',
                         default=defaults["det_cut"])
-    parser.add_argument('-sx_cfg', type=str,
+    parser.add_argument('-photom_sx_cfg', type=str,
                         help='[str] optionally specify different sxtrctr config file to use for main source extraction,'
                              'must be in .prime/config/ directory, '
                              'default = sex2.config',
-                        default=defaults["sx_cfg"])
+                        default=defaults["photom_sx_cfg"])
 
     args, unknown = parser.parse_known_args()
     # print(args)
@@ -2059,7 +2069,7 @@ def main():
     photometry(args.filepath, args.band, args.crop, args.sigma, args.catalog, args.survey, args.mag_low,
                args.mag_high, args.no_plots, args.keep,
                args.grb_only, args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name,
-               args.no_int_cal, args.det_cut, args.sx_cfg)
+               args.no_int_cal, args.det_cut, args.photom_sx_cfg)
 
 
 if __name__ == "__main__":

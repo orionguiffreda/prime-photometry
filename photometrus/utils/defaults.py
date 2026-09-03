@@ -14,7 +14,13 @@ PROCESSING_DEFAULTS = dict(
     exp_query=False,
     no_plots=False, keep=False, grb_only=False, filepath=None, crop=300, sigma_photom=3, catalog=None,
     mag_low=PHOTOMETRY_MAG_LOWER_LIMIT, mag_high=PHOTOMETRY_MAG_UPPER_LIMIT, no_int_cal=False, det_cut=2, rampnum='0',
-    magtype='AUTO', parallel=False, sx_cfg='sex2.config'
+    magtype='AUTO', parallel=False, gaia_acc_comp_lvl=0.4,
+    shift_sx_cfg='sex_astrom2.config', astrom_sx_cfg='sex_astrom.config', stack_sx_cfg='sex_astrom.config',
+    photom_sx_cfg='sex2.config', bulge_sx_cfg='bulge_new.config',
+    default_preproc=['flatfielding', 'gen_bad_pix_mask_by_image'], default_sky_proc=['sky', 'skysub'],
+    default_astrom_proc=['verify_astrom', 'astromatic_astrometry'],
+    default_stack_proc=['stacking'],
+    output_cmd_file=False
 )
 
 FILE_DEFAULTS = dict(

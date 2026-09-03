@@ -45,7 +45,8 @@ backup_lists = {
     'raw': ['raw_fz',],
     'raw_fz': ['raw',],
     'ramp_fz': ['ramp', 'real_time_ramp', 'regen'],
-    'real_time_ramp': ['ramp', 'ramp_fz', 'regen']
+    'real_time_ramp': ['ramp', 'ramp_fz', 'regen'],
+    'regen': ['regen']
 }
 
 funpack_output_dir = path_replace(GET_DATA_SETTINGS['funpack_output_dir'])
@@ -140,7 +141,7 @@ def truncate_1000(number):
 
 def get_file_name(file_number, ftype, camera, funpack_fz=defaults['funpack_fz']):
     remote_file_format = remote_file_formats[ftype][camera]
-    if ftype.endswith('fz'):
+    if ftype.endswith('fz') or ftype.startswith('regen'):
         file_name = remote_file_format.format(file_number, truncate_1000(file_number))
         if funpack_fz:
             if os.path.exists(file_name):
@@ -251,13 +252,19 @@ def regen_ramp(file_number, nframe, camera):
     output_dir = funpack_output_dir.format(camera+1, truncate_1000(file_number), '{:08d}.ramp.fits'.format(file_number))
     file_numbers = [file_number+i for i in range(nframe)]
     nframes = [nframe for i in range(nframe)]
+    print('regenerating_ramp', file_number, nframe, camera)
     raw_files, missing_raw_files, filtered = get_file_names(
-        file_numbers, nframes, backup_file_types=backup_lists['raw'], ftype='raw', cameras=(camera,)
+        file_numbers, nframes, backup_file_types=backup_lists['raw'], ftype='raw', cameras=(camera+1,)
     )
+    print('raw_files')
+    print(raw_files)
     raw_files = raw_files[0]
+    print('selected raw_files')
+    print(raw_files)
     raw_files.sort()
     missing_raw_files = missing_raw_files[0]
     if missing_raw_files:
+        print('missing files: {}'.format(missing_raw_files))
         return 'does not exist'
     ext_dict = {'.fz': 1, '.fits': 0, '.ramp': 0}
     extension = ext_dict[os.path.splitext(raw_files[0])[1]]
@@ -269,6 +276,7 @@ def regen_ramp(file_number, nframe, camera):
         except OSError:
             print('{} exists, but seems to be corrupted. Regenerating file...')
     try:
+        print('regenerating ramp: {}'.format(output_file))
         superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
     except NoCalError:

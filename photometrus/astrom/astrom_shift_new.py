@@ -98,10 +98,17 @@ def imaging(directory, imageName, x_offset=0, x_guess=None, y_guess=None):
     if x_guess and y_guess:
         print('Applying initial shift guesses: x = %s, y = %s' % (x_guess, y_guess))
         guess_hdr = header.copy()
-        x_init = guess_hdr['CRPIX1']
-        y_init = guess_hdr['CRPIX2']
-        guess_hdr['CRPIX1'] = x_init + x_guess
-        guess_hdr['CRPIX2'] = y_init + y_guess
+        w = WCS(guess_hdr)
+
+        crpix1 = guess_hdr['CRPIX1']
+        crpix2 = guess_hdr['CRPIX2']
+
+        guess_crval1, guess_crval2 = w.all_pix2world(
+            [[crpix1 - x_guess, crpix2 - y_guess]], 1
+        )[0]
+
+        guess_hdr['CRVAL1'] = guess_crval1
+        guess_hdr['CRVAL2'] = guess_crval2
 
         pre = pre.replace('flat','init.flat')
         init_imagename = pre+ext
@@ -247,6 +254,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     except IndexError as e:
         # in case of strange failure in query, default to a 2mass query attempt
         try:
+            print(f'Default query logic failure: {e} \ndefaulting to 2mass')
             result = v.query_region(coords, width=str(checkwidth) + 'm', catalog='II/246/',
                                     frame=chosen_frame)
         except IndexError as e:
@@ -723,8 +731,20 @@ def iterate_and_test(
 
         # Copy header to avoid cumulative modification
         header_copy = header.copy()
-        header_copy['CRPIX1'] = header['CRPIX1'] + x_shift
-        header_copy['CRPIX2'] = header['CRPIX2'] + y_shift
+
+        w = WCS(header_copy)
+
+        crpix1 = header_copy['CRPIX1']
+        crpix2 = header_copy['CRPIX2']
+
+        # converting pix shifts to world coords for CRVAL adjustment (MUST SUBTRACT '- x_shift' for crval instead of
+        # adding like 'crpix + x_shift) due to how the math works
+        new_crval1, new_crval2 = w.all_pix2world(
+            [[crpix1 - x_shift, crpix2 - y_shift]], 1
+        )[0]
+
+        header_copy['CRVAL1'] = new_crval1
+        header_copy['CRVAL2'] = new_crval2
 
         imageshiftname = os.path.splitext(imageName)[0] + '.shift.fits'
         newpath = os.path.join(directory, imageshiftname)
@@ -801,15 +821,25 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             data = img[0].data
             header = img[0].header
 
+            w = WCS(header)
+
+            crval1 = header['CRVAL1']
+            crval2 = header['CRVAL2']
             crpix1 = header['CRPIX1']
             crpix2 = header['CRPIX2']
-            header['CRPIX1'] = crpix1 + xfinal_shift
-            header['CRPIX2'] = crpix2 + yfinal_shift
+
+            # converting pixel shifts to world coord shifts
+            new_crval1, new_crval2 = w.all_pix2world(
+                [[crpix1 - xfinal_shift, crpix2 - yfinal_shift]], 1
+            )[0]
+
+            header['CRVAL1'] = new_crval1
+            header['CRVAL2'] = new_crval2
 
             header.set('X_SHIFT', xfinal_shift, 'X Value CRPIX1 shift', after='WCSAXES')
             header.set('Y_SHIFT', yfinal_shift, 'Y Value CRPIX2 shift', after='X_SHIFT')
-            header.set('CRPIX1_OLD', crpix1, 'Initial CRPIX1 Value', after='Y_SHIFT')
-            header.set('CRPIX2_OLD', crpix2, 'Initial CRPIX2 Value', after='CRPIX1_OLD')
+            header.set('OLD_CV1', crval1, 'Initial CRVAL1 Value', after='Y_SHIFT')
+            header.set('OLD_CV2', crval2, 'Initial CRVAL2 Value', after='OLD_CV1')
 
             imageshiftname = os.path.splitext(f)[0]
             imageshiftname = imageshiftname + '.shift.new'

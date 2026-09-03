@@ -1275,7 +1275,7 @@ def newsourcesearch(ra, dec, imageName, survey, band, thresh, massCatCoords, goo
     print(f' {survey} limiting mag: {lim_mag}')
     PSFsources_new = PSFsources_nomatch[(PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] < lim_mag) &
                                         (PSFsources_nomatch[f'{band}MAG_{MAGTYPES[magtype]}'] > mag_low_lim)]
-    print('# of sources found after removing sources dimmer than %.2f & brighter than %.2f in %s mag: %i'
+    print('# of sources found after removing sources brighter than %.2f & dimmer than %.2f in %s mag: %i'
           % (mag_low_lim, lim_mag, MAGTYPES[magtype], len(PSFsources_new)))
 
     # Table gen

@@ -46,7 +46,8 @@ def subtract_sky_and_normalize(science_data_directory, output_data_dir, sky):
 def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
     if not os.path.isdir(output_data_dir):
         os.makedirs(output_data_dir)
-    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('flat.fits')]
+    image_fnames = [os.path.join(science_data_directory, f) for f in os.listdir(science_data_directory) if f.endswith('flat.fits')
+                    or f.endswith('flat.new')]
     image_fnames.sort()
     cropsky = fits.getdata(sky)
     hdr_sky = fits.getheader(sky)
@@ -83,7 +84,8 @@ def sky_flat_and_normalize(science_data_directory, output_data_dir, sky):
         #     print('Airmass ratio =',airmass_ratio)
         #     reduced_image = (cropimage - (cropsky * np.nanmedian(cropimage) * airmass_ratio))
         output_fname = os.path.basename(f)
-        output_fname = output_fname.replace('.flat.fits', '.sky.flat.fits')
+        output_ext = os.path.splitext(output_fname)[1]
+        output_fname = output_fname.replace(f'.flat{output_ext}', f'.sky.flat{output_ext}')
         output_fname = os.path.join(output_data_dir, output_fname)
         fits.HDUList(fits.PrimaryHDU(header=header, data=reduced_image)).writeto(output_fname, overwrite=True)
     print('Sky sub on FF imgs completed!')
