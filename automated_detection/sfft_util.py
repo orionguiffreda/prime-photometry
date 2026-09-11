@@ -181,7 +181,6 @@ def get_force_conv(sci_cat,ref_cat):
 	print("Convolving", ForceConv)
 	return ForceConv
 	
-	
 
 def get_bkg(image):
 	"""
@@ -231,7 +230,7 @@ def remove_bkg_crop(img, filename, header, ra, dec, crop = 1000):
 
 def get_good_mask(cat):
 	"""
-	generates a mask leaving only good point like sources for subtraction
+	Generates a mask leaving only good point like sources for subtraction
 	"""
 	px_per_arcsec = 1 / 0.49766 
 	flux_rad_col = cat['FLUX_RADIUS'] if len(cat['FLUX_RADIUS'].shape)==1 else cat['FLUX_RADIUS'][:,0]
@@ -244,7 +243,7 @@ def get_good_mask(cat):
 
 def reproject_xy(cat, imageName):
 	"""
-	reproject pixel coordinates to match WCS post alignment
+	Reproject pixel coordinates to match WCS post alignment
 	"""
 	img = fits.open(imageName)
 	head = img[0].header
@@ -622,6 +621,8 @@ def SFFT(FITS_SCI, FITS_REF):
 
 
 # Other subtraction methods from SFFT
+
+# Hough mode: parameters are reoptimized and it selects its own such as kernel size 
 # PixA_DIFF, SFFTPrepDict = Easy_SparsePacket.ESP(FITS_REF=FITS_REF_al, FITS_SCI=FITS_SCI, \
 # 								 FITS_DIFF=FITS_DIFF, FITS_Solution=None, ForceConv=ForceConv, GKerHW=None, \
 # 								 KerHWRatio=KerHWRatio, KerHWLimit=(5, 20), KerPolyOrder=KerPolyOrder, \
@@ -638,7 +639,7 @@ def SFFT(FITS_SCI, FITS_REF):
 # 								 CUDA_DEVICE_4SUBTRACT=CUDA_DEVICE_4SUBTRACT, \
 # 								 NUM_CPU_THREADS_4SUBTRACT=NUM_CPU_THREADS_4SUBTRACT)[:2]
 
-
+# Crowded mode
 # PixA_DIFF, SFFTPrepDict = Easy_CrowdedPacket.ECP(FITS_REF, FITS_SCI, FITS_DIFF=FITS_DIFF, FITS_Solution=None, ForceConv='AUTO', GKerHW=None, \
 #         KerHWRatio=2.0, KerHWLimit=(5, 20), KerPolyOrder=2, BGPolyOrder=2, ConstPhotRatio=False, \
 #         MaskSatContam=False, GAIN_KEY='GAIN', SATUR_KEY='SATURATE', BACK_TYPE='AUTO', \
@@ -649,6 +650,7 @@ def SFFT(FITS_SCI, FITS_REF):
 # 								 NUM_CPU_THREADS_4SUBTRACT=NUM_CPU_THREADS_4SUBTRACT)[:2]
 
 
+# Custom mode
 # PixA_DIFF, SFFTPrepDict = Customized_Packet.CP(FITS_REF, FITS_SCI, FITS_mREF, FITS_mSCI, ForceConv, GKerHW=5, \
 #         FITS_DIFF=FITS_DIFF, FITS_Solution=None, KerPolyOrder=2, BGPolyOrder=0, ConstPhotRatio=False, \
 #         BACKEND_4SUBTRACT=BACKEND_4SUBTRACT,CUDA_DEVICE_4SUBTRACT=CUDA_DEVICE_4SUBTRACT, \

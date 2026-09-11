@@ -189,8 +189,6 @@ def make_bogus_df(triplets):
 		else:
 			ref_photometry_row = {f"{key}_ref":val for key, val in ref_photometry_row.items()}
 
-		# print(sci_photometry_row)
-
 		try:
 			row.update({'ra': sci_photometry_row['RA'], 'declination':sci_photometry_row['DEC']})
 		except KeyError as e:
