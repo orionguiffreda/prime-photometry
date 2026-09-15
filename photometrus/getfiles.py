@@ -23,6 +23,7 @@ def path_replace(path):
         ('%SERIAL%', '{0:08d}'),
         ('%SERIAL_TRUNC%', '{1:08d}'),
         ('%CHIP%', '{0}'),
+        ('%RSYNCDIR%', '{2}'),
     )
     for replace_format in path_replace_format:
         path = path.replace(replace_format[0], replace_format[1])
@@ -42,8 +43,10 @@ file_prefix = '{0:08d}'
 
 backup_lists = {
     'ramp': ['real_time_ramp', 'ramp_fz', 'regen'],
-    'raw': ['raw_fz',],
-    'raw_fz': ['raw',],
+    'raw': ['raw_fz', 'archive_raw_fz', 'archive_recovery_raw_fz'],
+    'raw_fz': ['archive_raw_fz', 'archive_recovery_raw_fz' 'raw'],
+    'archive_raw_fz': ['archive_recovery_raw_fz', 'raw_fz', 'raw'],
+    'archive_recovery_raw_fz': ['archive_raw_fz', 'raw_fz', 'raw'],
     'ramp_fz': ['ramp', 'real_time_ramp', 'regen'],
     'real_time_ramp': ['ramp', 'ramp_fz', 'regen'],
     'regen': ['regen']
@@ -56,10 +59,23 @@ for _k, _v in remote_file_formats.items():
     for _i, fmt in enumerate(_v):
         remote_file_formats[_k][_i] = path_replace(fmt)
 
+archive_file_location_log = path_replace(GET_DATA_SETTINGS['archive_file_location_log'])
+
 replace_list = GET_DATA_SETTINGS['replace_list']
 
 class NoCalError(Exception):
     pass
+
+
+def gen_rsync_dir_dicts(chips=(1,2,3,4)):
+    rsync_dicts = []
+    for chip in chips:
+        rsync_log = read_csv(archive_file_location_log.format(chip), delimiter=' ', names=['truncate', 'data_size', 'nfiles', 'date', 'time', 'rsync_dir'], dtype=str)
+        rsync_dicts.append({row[1]['truncate']: row[1]['rsync_dir'] for row in rsync_log.iterrows()})
+    return rsync_dicts
+
+
+rsync_dir_dicts = gen_rsync_dir_dicts()
 
 
 def funpack(fpacked_file, funpacked_file):
@@ -140,9 +156,17 @@ def truncate_1000(number):
 
 
 def get_file_name(file_number, ftype, camera, funpack_fz=defaults['funpack_fz']):
-    remote_file_format = remote_file_formats[ftype][camera]
+    remote_file_format = remote_file_formats[ftype.replace('recovery_', '')][camera]
     if ftype.endswith('fz') or ftype.startswith('regen'):
-        file_name = remote_file_format.format(file_number, truncate_1000(file_number))
+        trunc = truncate_1000(file_number)
+        format_args = [file_number, trunc]
+        if ftype.startswith('archive'):
+            trunc_str = '{0:08d}'.format(trunc)
+            if ftype.startswith('archive_recovery'):
+                trunc_str = trunc_str + '_recovery'
+            format_args.append(rsync_dir_dicts[camera][trunc_str])
+        file_name = remote_file_format.format(*format_args)
+
         if funpack_fz:
             if os.path.exists(file_name):
                 output_dir = funpack_output_dir.format(camera+1, truncate_1000(file_number))
@@ -268,7 +292,9 @@ def regen_ramp(file_number, nframe, camera):
         return 'does not exist'
     ext_dict = {'.fz': 1, '.fits': 0, '.ramp': 0}
     extension = ext_dict[os.path.splitext(raw_files[0])[1]]
+    print(extension)
     output_file = os.path.join(output_dir, os.path.basename(raw_files[0]).replace('.fz', '').replace('.fits', '.ramp.fits'))
+    print('destination regenerated ramp will write to', output_file)
     if os.path.isfile(output_file):
         try:
             fits.getdata(output_file)
@@ -278,7 +304,9 @@ def regen_ramp(file_number, nframe, camera):
     try:
         print('regenerating ramp: {}'.format(output_file))
         superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
+        print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
+        print(header)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
     make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])

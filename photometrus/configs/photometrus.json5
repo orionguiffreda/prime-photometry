@@ -230,6 +230,12 @@
         '/mnt/photometry/unarchived/C2/%SERIAL_TRUNC%/%SERIAL%C2.ramp.fits',
         '/mnt/photometry/unarchived/C3/%SERIAL_TRUNC%/%SERIAL%C3.ramp.fits',
         '/mnt/photometry/unarchived/C4/%SERIAL_TRUNC%/%SERIAL%C4.ramp.fits'
+      ],
+      'archive_raw_fz': [
+        '%RSYNCDIR%/%SERIAL_TRUNC%/%SERIAL%C1.fits.fz',
+        '%RSYNCDIR%/%SERIAL_TRUNC%/%SERIAL%C2.fits.fz',
+        '%RSYNCDIR%/%SERIAL_TRUNC%/%SERIAL%C3.fits.fz',
+        '%RSYNCDIR%/%SERIAL_TRUNC%/%SERIAL%C4.fits.fz'
       ]
     },
     'replace_list': [
@@ -319,6 +325,7 @@
     }
   },
   'date_temperature_dict': {'20240403': 119.0},
-  'ramp_cal_directory': '/nfs/home/prime/hamada/nlc_result/'
+  'ramp_cal_directory': '/nfs/home/prime/hamada/nlc_result/',
+  'archive_file_location_log': '/nfs/prime01/work/LOG/rsync2OU_LOG/rsync_log_C%CHIP%.txt',
   }
 }
