@@ -1,3 +1,4 @@
+
 """
 Query functions: for individual catalogs & automatic query
 """
@@ -97,7 +98,7 @@ def gaia_vizier_query(coords, width, chosen_frame='fk5'):
     survey_name = 'GAIA'
     catNum = 'I/350/gaiaedr3'
     try:
-        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'RPmag'],
+        v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'e_RA_ICRS', 'e_DE_ICRS', 'RPmag', 'Epoch'],
                    column_filters={"Dup": "<1", "Nd": ">6"},
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
@@ -840,16 +841,16 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 
 
 def query(
-        raImage, decImage, band, w, data, crop=defaults['crop'], acc_comp_lvl=defaults['gaia_acc_comp_lvl'], survey=None,
+        raImage, decImage, band, w=None, data=None, crop=defaults['crop'], acc_comp_lvl=defaults['gaia_acc_comp_lvl'], survey=None,
         given_catalog_path=None, mag_lower_lim=PHOTOMETRY_MAG_LOWER_LIMIT, mag_upper_lim=PHOTOMETRY_MAG_UPPER_LIMIT, bulge=False,
-        magtype=defaults['magtype']
+        magtype=defaults['magtype'], query_width=PHOTOMETRY_QUERY_WIDTH
 ):
 
     mag_low_cutoff = mag_lower_lim
     mag_high_cutoff = mag_upper_lim
 
     # query box width
-    width = PHOTOMETRY_QUERY_WIDTH
+    width = query_width
 
     if given_catalog_path:
         Q = ascii.read(given_catalog_path)
@@ -903,37 +904,39 @@ def query(
 
         return Q, chosen_survey, mag_low_cutoff
 
-    # auto query
+    else:
 
-    fctns_for_band = [fctn for fctn in PHOTOMETRY_QUERY_FUNCTIONS[band]]
-    last_idx = fctns_for_band[-1]
+        # auto query
 
-    Q = None
-    chosen_survey = None
+        fctns_for_band = [fctn for fctn in PHOTOMETRY_QUERY_FUNCTIONS[band]]
+        last_idx = fctns_for_band[-1]
 
-    for fctn in fctns_for_band:
-        Q, chosen_survey = fctn(
-            coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
-            width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
-        )
+        Q = None
+        chosen_survey = None
 
-        if Q:
-            if len(Q[0]) > 0:
-                print('Queried source total = ', len(Q[0]))
-                if fctn != last_idx:
-                    gaia_comp = gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q)
-                    if gaia_comp >= acc_comp_lvl:
-                        print(f' Completion acceptable (>{acc_comp_lvl})! Moving on w/ catalog!\n')
-                        break
-                    else:
-                        print(f' Gaia completion < {acc_comp_lvl}, defaulting to next catalog..\n')
-            else:
-                print(' No sources found in survey in this area!')
+        for fctn in fctns_for_band:
+            Q, chosen_survey = fctn(
+                coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
+                width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
+            )
 
-    if Q is None:
-        raise ReferenceError('All catalogs failed to produce a result!')
+            if Q:
+                if len(Q[0]) > 0:
+                    print('Queried source total = ', len(Q[0]))
+                    if fctn != last_idx:
+                        gaia_comp = gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q)
+                        if gaia_comp >= acc_comp_lvl:
+                            print(f' Completion acceptable (>{acc_comp_lvl})! Moving on w/ catalog!\n')
+                            break
+                        else:
+                            print(f' Gaia completion < {acc_comp_lvl}, defaulting to next catalog..\n')
+                else:
+                    print(' No sources found in survey in this area!')
 
-    return Q, chosen_survey, mag_low_cutoff
+        if Q is None:
+            raise ReferenceError('All catalogs failed to produce a result!')
+
+        return Q, chosen_survey, mag_low_cutoff
 
 
 # LOCAL SHIFT COMPLEX QUERY FUNCTION
@@ -1166,6 +1169,8 @@ def query(
 def local_scamp_query(coords, width, chosen_frame):
     G, _ = gaia_query(coords=coords, width=width, chosen_frame=chosen_frame)
     gaia_data = G[0]
+
+    gaia_colnames = gaia_data.colnames
     # Mag error dummy column
     magerr = Column(data=np.ones(len(gaia_data[gaia_data.colnames[0]]))*2, name='mag_err', dtype=np.float32)
     gaia_data['mag_err'] = magerr
@@ -1176,8 +1181,8 @@ def local_scamp_query(coords, width, chosen_frame):
     gaia_data['FLAGS'] = flags_col
 
     # ra / dec error conversion, mas to degrees
-    gaia_data['ra_error'] = gaia_data['ra_error'] / (60 * 60 * 1000)
-    gaia_data['dec_error'] = gaia_data['dec_error'] / (60 * 60 * 1000)
+    gaia_data[gaia_colnames[2]] = gaia_data[gaia_colnames[2]] / (60 * 60 * 1000)
+    gaia_data[gaia_colnames[2]] = gaia_data[gaia_colnames[2]] / (60 * 60 * 1000)
 
     gaia_ldac_hdul = convert_table_to_ldac(gaia_data)
 
