@@ -262,6 +262,8 @@ def GRB(ra, dec, imageName, survey, band, thresh, massCatCoords, good_cat_stars,
                 sep = sep[0]
 
             sep_dist = sep.to(u.arcsec)
+            if not sep_dist.isscalar:
+                sep_dist = sep_dist.reshape(-1)[0]
             sep_dist = sep_dist / u.arcsec
 
             mag_diff_ar.append((mag_diff, col_magtype))
