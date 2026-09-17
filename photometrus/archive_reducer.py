@@ -188,14 +188,21 @@ def archive_reducer(
 	coord_file_object_field=_defaults['coord_file_object_field'],
 	coord_ra_field=_defaults['coord_ra_field'],
 	coord_dec_field=_defaults['coord_dec_field'],
-	frame=_defaults['frame'], unit=_defaults['unit'], grid_file=_defaults['grid_file'], parent=_defaults['parent'], rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'], sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'], no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'], survey=_defaults['survey'], no_reduce=False, combo_dict_file=None
-):
+	frame=_defaults['frame'], unit=_defaults['unit'], grid_file=_defaults['grid_file'], parent=_defaults['parent'], rot_val=_defaults['rot_val'], no_shift=_defaults['no_shift'], astromnet=_defaults['astromnet'], sky_override_path=_defaults['sky_override_path'], removal=_defaults['removal'], no_get_files=_defaults['no_get_files'], no_download=_defaults['no_download'], no_mflat=_defaults['no_mflat'], survey=_defaults['survey'], 
+	combo_dict_file=None, no_reduce=False, combo_out_file = None,):
+	
 	if combo_dict_file is not None:
 		execute_combo_dict_file(combo_dict_file, no_reduce)
 		return
- 
-	archive_command_filename = 'combo_commands_{}'.format(datetime.datetime.utcnow().isoformat())
-	archive_command_filename = os.path.join(os.getcwd(), 'combo_commands', archive_command_filename)
+
+	if combo_out_file: 
+		print("using custom path for output", combo_out_file)
+		archive_command_filename = combo_out_file
+	else:		
+		archive_command_filename = 'combo_commands_{}'.format(datetime.datetime.utcnow().isoformat())
+		archive_command_filename = os.path.join(os.getcwd(), archive_command_filename)
+		print("writing to",archive_command_filename)
+	
 	coord_df = get_coords(
 		coord_file, coord_file_sep=coord_file_sep, coord_ra_field=coord_ra_field, coord_dec_field=coord_dec_field,
 		frame=frame, unit=unit
@@ -220,111 +227,55 @@ def archive_reducer(
 	grids: list of grid tiles that go with each coordinate in coord_df
 	archive: dataframe of archival data about PRIME observations
 	"""
-	grid_search=True
-	GRB_follow_up=False
-		
-	if GRB_follow_up:
-		
-		for i, coord_dict in coord_df.iterrows():
-				if i>0:
-					break
-
-				object_df = get_GRB_follow_up(archive) # pass smth else here
-				object_dicts = object_df.to_dict(orient='records')
-			
-				print("coord dict",coord_dict)		
-				print("obj dict 1", object_dicts[0])
-				for object_dict in object_dicts:
-					bandpass = (object_dict['FILTER1']+object_dict['FILTER2']).replace('Open', '')
-						
-					combo_dict = dict(
-						target=object_dict['OBJNAME'], date=object_dict['date'].replace('-', ''),
-						band=bandpass,
-						chip=str(object_dict['CHIP']), # take from the archive when its not from grid
-						parentdir=os.path.join(
-							parent, coord_dict[coord_file_object_field], # name these what they are called in archive?
-							'{}-{}'.format(object_dict['OBJNAME'], object_dict['date']), bandpass
-						),
-						grb_ra=coord_dict['coords'].icrs.ra.deg, grb_dec=coord_dict['coords'].icrs.dec.deg, # make these object dict
-						rot_val=rot_val, no_shift=no_shift, astromnet=astromnet,
-						sky_override_path=sky_override_path, removal=removal, no_get_files=no_get_files,
-						no_download=no_download, no_mflat=no_mflat, survey=survey,
-					)
-					print('combo command dict:')
-					print(combo_dict)
-					with open(archive_command_filename, 'a') as f:
-						f.write('{}\n'.format(combo_dict))
-					try:
-						if not no_reduce:
-							combo(**combo_dict)
-						else:
-							print('no_reduce')
-					except Exception:
-						tb = traceback.format_exc()
-						print(combo_dict)
-						print(tb)
-
 
 	
-	if grid_search:
-		for i, coord_dict in coord_df.iterrows():
-			print("coord dict",coord_dict)
-			# objname = coord_dict.get('full_name', None)
-			# if objname is None:
-			# 	continue
-			coord_dict = coord_dict.to_dict()
-			if grids[i] is None:
-				continue
+	for i, coord_dict in coord_df.iterrows():
+		print("coord dict",coord_dict)
+		# objname = coord_dict.get('full_name', None)
+		# if objname is None:
+		# 	continue
+		coord_dict = coord_dict.to_dict()
+		if grids[i] is None:
+			continue
+		
+		grid_tiles = grids[i].to_dict(orient='records')
+		print(grid_tiles)
+		for grid_tile in grid_tiles:
+			print("tile:",grid_tile)
+			object_df = find_objname_commands(grid_tile['ObjectName'], archive)			
+			object_dicts = object_df.to_dict(orient='records')	
 			
-			grid_tiles = grids[i].to_dict(orient='records')
-			print(grid_tiles)
-			for grid_tile in grid_tiles:
-				print("tile:",grid_tile)
-				object_df = find_objname_commands(grid_tile['ObjectName'], archive)
-		
-				# object_df_coords = find_objname_commands(objname, archive) # from coords not from grid?
-
-
-				
-				object_dicts = object_df.to_dict(orient='records')	
-				# print("OBJ DICT",object_dict)
-				
-				for object_dict in object_dicts:
-					# is_nasa_non_grid_field = (not object_dict['OBJNAME'].lower().startswith("field")) & (object_dict['OBSERVER'] == 'NASA')
-		
-					# if not is_nasa_non_grid_field: # if not (is_nasa_non_field or is_grid):
-					# 	continue
-					# access additional metadata from grids?
-		
-					bandpass = (object_dict['FILTER1']+object_dict['FILTER2']).replace('Open', '')
-						
-					combo_dict = dict(
-						target=object_dict['OBJNAME'], date=object_dict['date'].replace('-', ''),
-						band=bandpass,
-						chip=str(grid_tile['chip']), # should chip come from grid_tile, not archive? 
-						parentdir=os.path.join(
-							parent, coord_dict[coord_file_object_field],
-							'{}-{}'.format(object_dict['OBJNAME'], object_dict['date']), bandpass
-						),
-						grb_ra=coord_dict['coords'].icrs.ra.deg, grb_dec=coord_dict['coords'].icrs.dec.deg,
-						rot_val=rot_val, no_shift=no_shift, astromnet=astromnet,
-						sky_override_path=sky_override_path, removal=removal, no_get_files=no_get_files,
-						no_download=no_download, no_mflat=no_mflat, survey=survey,
-					)
-					print('combo command dict:')
+			for object_dict in object_dicts:
+	
+				bandpass = (object_dict['FILTER1']+object_dict['FILTER2']).replace('Open', '')
+					
+				combo_dict = dict(
+					target=object_dict['OBJNAME'], date=object_dict['date'].replace('-', ''),
+					band=bandpass,
+					chip=str(grid_tile['chip']), # should chip come from grid_tile, not archive? 
+					parentdir=os.path.join(
+						parent, coord_dict[coord_file_object_field],
+						'{}-{}'.format(object_dict['OBJNAME'], object_dict['date']), bandpass
+					),
+					grb_ra=coord_dict['coords'].icrs.ra.deg, grb_dec=coord_dict['coords'].icrs.dec.deg,
+					rot_val=rot_val, no_shift=no_shift, astromnet=astromnet,
+					sky_override_path=sky_override_path, removal=removal, no_get_files=no_get_files,
+					no_download=no_download, no_mflat=no_mflat, survey=survey,
+				)
+				print('combo command dict:')
+				print(combo_dict)
+				with open(archive_command_filename, 'a') as f:
+					f.write('{}\n'.format(combo_dict))
+				try:
+					if not no_reduce:
+						combo(**combo_dict)
+					else:
+						print('no_reduce')
+				except Exception:
+					tb = traceback.format_exc()
 					print(combo_dict)
-					with open(archive_command_filename, 'a') as f:
-						f.write('{}\n'.format(combo_dict))
-					try:
-						if not no_reduce:
-							combo(**combo_dict)
-						else:
-							print('no_reduce')
-					except Exception:
-						tb = traceback.format_exc()
-						print(combo_dict)
-						print(tb)
-			
+					print(tb)
+		
 
 	
 def test_main():
@@ -399,13 +350,15 @@ def main():
 	parser.add_argument('-no_reduce', action='store_true', help='optional flag, use if you *DO NOT* want to'
 															   ' actually reduce the data, and just want the list of '
 															   ' coommands')
+	parser.add_argument('-combo_out_file', type=str, help='[str] optional flag, use filepath for output combo file') 
+
 	parser.add_argument('-combo_dict_file', type=str, help='[str] optional flag, use combo dict file instead of coord_file') 
 
 	args, unknown = parser.parse_known_args()
 	archive_reducer(
 		coord_file=args.coord_file, coord_file_sep=args.coord_file_sep, coord_file_object_field=args.coord_file_object_field, coord_ra_field=args.coord_ra_field, coord_dec_field=args.coord_dec_field,
 		frame=args.frame, unit=args.unit, grid_file=args.grid_file, parent=args.parent, rot_val=args.rot_val, no_shift=args.no_shift, astromnet=args.astromnet, sky_override_path=args.sky_override,
-		removal=args.removal, no_get_files=args.no_get_files, no_download=args.no_download, no_mflat=args.no_mflat, survey=args.survey, no_reduce=args.no_reduce, combo_dict_file=args.combo_dict_file
+		removal=args.removal, no_get_files=args.no_get_files, no_download=args.no_download, no_mflat=args.no_mflat, survey=args.survey, no_reduce=args.no_reduce, combo_dict_file=args.combo_dict_file, combo_out_file=args.combo_out_file
 	)
 if __name__ == '__main__':
 	main()

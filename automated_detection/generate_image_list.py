@@ -22,9 +22,8 @@ import astropy.units as u
 
 
 import photometrus_utils as util
-import sfft_util
 import assess_processed_data_util as gen_util
-from assess_processed_data_util import list_dirs, list_files, contains, combine_mag, constrain_dt
+from assess_processed_data_util import list_dirs, list_files, contains, combine_mag, constrain_dt, add_galactic_coords
 
 
 def chip_search(file_list):
@@ -49,6 +48,22 @@ def chip_search(file_list):
 	return None, None
 		
 
+def get_ecsv(directory):
+	files = os.listdir(directory)
+	ecsv_files = [f for f in files if f.startswith('GRB') and f.endswith('.ecsv')]
+	ecsv_chip_file, ecsv_chip = chip_search(ecsv_files)
+
+	has_ecsv = len(ecsv_files) > 0
+	ecsv = None
+	if ecsv_chip:
+		ecsv = ecsv_chip_file
+	elif has_ecsv:
+		ecsv = ecsv_files[0] # select first one
+	else:
+		print("non detection (no ecsv):")
+		return ""
+	
+	return ecsv
 
 def fix_dates(df):
 	"""
@@ -100,11 +115,11 @@ def fetch_prime_data(transient_file = "~/PycharmProjects/prime-photometry-fiona/
 
 	candidates['status']=''
 	# candidates['GRB']=''
-	triplets = pd.read_csv("data_results/triplets_recent.csv")
-	print("num triplets:", len(triplets))
-	print("num triplets small rad:", len(pd.read_csv("data_results/triplets_small_radius.csv")))
+	# triplets = pd.read_csv("data_results/triplets_recent.csv")
+	# print("num triplets:", len(triplets))
+	# print("num triplets small rad:", len(pd.read_csv("data_results/triplets_small_radius.csv")))
 	
-	triplet_names = list(triplets["full_name"])
+	triplet_names = list(candidates["full_name"])
 	
 	print(triplet_names)
 	
@@ -139,9 +154,8 @@ def fetch_prime_data(transient_file = "~/PycharmProjects/prime-photometry-fiona/
 
 				# photometry has been run such that coadds are copied into bogus directory and photometry is run 
 
-				coadd_files = [f for f in files if f.startswith("coadd") and f.endswith('.fits')]
-				coadd_files = [f for f in coadd_files if not f.endswith('aligned.fits') and not f.endswith('masked.fits') and not f.endswith('weightmap.fits')]
-
+				pattern = re.compile(r'C\d\.fits$')
+				coadd_files = [f for f in files if f.startswith("coadd") and pattern.search(f)]
 				coadd_chip_file, coadd_chip = chip_search(coadd_files)
 				
 
@@ -166,7 +180,6 @@ def fetch_prime_data(transient_file = "~/PycharmProjects/prime-photometry-fiona/
 				fits_file = fits_files[0] # select the first one
 				header = fits.getheader(fits_file)
 
-				ecsv_files = [f for f in files if f.startswith('GRB') and f.endswith('.ecsv')]
 				
 				if False: # rerun photometry methods to determine if detection
 
@@ -194,21 +207,7 @@ def fetch_prime_data(transient_file = "~/PycharmProjects/prime-photometry-fiona/
 					except Exception as e:
 						print(e)
 
-				files = os.listdir(stack_path) # new files
-
-
-				ecsv_files = [f for f in files if f.startswith('GRB') and f.endswith('.ecsv')]
-				ecsv_chip_file, ecsv_chip = chip_search(ecsv_files)
-
-				
-				has_ecsv = len(ecsv_files) > 0
-				ecsv = None
-				if ecsv_chip:
-					ecsv = ecsv_chip_file
-				elif has_ecsv:
-					ecsv = ecsv_files[0] # select first one
-				else:
-					print("non detection (no ecsv):")
+				ecsv = get_ecsv(stack_path)
 					
 					
 				row={
@@ -227,7 +226,7 @@ def fetch_prime_data(transient_file = "~/PycharmProjects/prime-photometry-fiona/
 				row.update({key: header[key] for key in header_keys})
 
 				# add in data from ecsv
-				if len(ecsv_files)>0:
+				if ecsv!="":
 					df = pd.read_csv(row["ecsv_path"], sep='\\s+', comment='#')
 					ecsv_data = df.to_dict(orient='records')  # list of dicts, one per row
 					for ecsv_dict in ecsv_data:
@@ -352,7 +351,7 @@ def find_single_detections(scis):
 	parent_re = re.compile(r"'parentdir':\s*'([^']+)'")
 	band_re = re.compile(r"'band':\s*'([^']+)'")
 	
-	with open("combo_commands/combo_commands_2026-01-28T15:38:20.474500") as f:
+	with open("../combo_commands/combo_commands_2026-01-28T15:38:20.474500") as f:
 		for line in f:
 			parent = parent_re.search(line).group(1)
 			field = os.path.basename(os.path.dirname(parent))[:-11] # truncate to remove date
@@ -514,7 +513,20 @@ def add_fields(df, basic_cuts = False):
 		df = df[abs(df["b"]) > 16]
 		df = df[abs(df['days_since_discovery'])<20]
 
+	df['ref_idx'] = 0
+
 	return df
+
+def get_ref_field(row, field):
+	"""
+	get ref field from malformed
+	"""
+	ref_list = row.field
+	if not isinstance(ref_list, list):
+		ref_list = literal_eval(row.ref_coadd_path)
+		
+	return ref_list[row.ref_idx]
+	
 
 	
 if __name__ == "__main__":

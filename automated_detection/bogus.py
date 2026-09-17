@@ -95,7 +95,7 @@ def make_bogus_df(triplets):
 	data = []
 	for i, triplet in triplets.iterrows():
 
-		image_keys = ['full_name', 'field', 'truncated_field', 'band', 'chip', 'coadd_path', 'discoverydate', 'EXPTIMEE', 'DITHTYP', 'DITHRAD', 'DITH_REP', 'NINT', 'ROTOFF', 'RA', 'DEC', 'field_date', 'days_since_discovery', 'role', 'ref_coadd_path', 'ref_field', 'ref_chip',  'ref_days_since_discovery', 'objid', 'name_prefix', 'name', 'edge', 'px_from_edge', 'b', 'sfft_diff', 'diff_cat', 'sci_rms', 'ref_rms', 'diff_rms', 'sci_fwhm', 'ref_fwhm', 'sci_cat_len', 'ref_cat_len', 'diff_cat_len']
+		image_keys = ['full_name', 'field', 'truncated_field', 'band', 'chip', 'coadd_path', 'discoverydate', 'EXPTIMEE', 'DITHTYP', 'DITHRAD', 'DITH_REP', 'NINT', 'ROTOFF', 'RA', 'DEC', 'field_date', 'days_since_discovery', 'role', 'ref_coadd_path', 'ref_field', 'ref_chip',  'ref_days_since_discovery', 'objid', 'name_prefix', 'name', 'edge', 'px_from_edge', 'b', 'sfft_diff', 'diff_cat', 'sci_rms', 'ref_rms', 'diff_rms', 'sci_fwhm', 'ref_fwhm']#, 'sci_cat_len', 'ref_cat_len', 'diff_cat_len']
 			
 		row = {key: val for key, val in triplet[image_keys].items()}
 		
@@ -210,13 +210,13 @@ def make_bogus_df(triplets):
 	return df
 	
 
-def make_df():
+def make_df(csv = "subtracted_triplets.csv"):
 
 	"""
 	Assemble a dataframe of real and bogus metadata for machine learning
 	"""
 	# triplets = pd.read_csv("data_results/triplets_small_radius.csv")
-	triplets = pd.read_csv("subtracted_triplets.csv")
+	triplets = pd.read_csv(csv)
 	bogus = make_bogus_df(triplets.copy())
 	triplets['bogus']=0
 	bogus['bogus']=1
@@ -225,7 +225,7 @@ def make_df():
 	print(len(bogus), "boguses found!")
 
 	triplet_df = pd.concat([triplets, bogus])
-	triplet_df.to_csv("data_results/full_data.csv")
+	# triplet_df.to_csv("data_results/full_data.csv")
 
 	return triplet_df
 

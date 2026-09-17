@@ -8,6 +8,10 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 from photutils.background import Background2D, MedianBackground, SExtractorBackground
 from scipy.ndimage import gaussian_filter
 
+import time
+from pathlib import Path
+import glob
+import shutil
 
 from astropy.io import fits, ascii
 from astropy.table import Table
@@ -22,12 +26,9 @@ from regions import Regions
 
 
 from sfft.EasySparsePacket import Easy_SparsePacket
-from sfft.EasyCrowdedPacket import Easy_CrowdedPacket
-from sfft.CustomizedPacket import Customized_Packet
+# from sfft.EasyCrowdedPacket import Easy_CrowdedPacket
+# from sfft.CustomizedPacket import Customized_Packet
 from sfft.utils.pyAstroMatic.PYSWarp import PY_SWarp
-import time
-from pathlib import Path
-import glob
 
 import photometrus.photometry.photometry as photometry
 import photometrus.stack.stack as stack
@@ -359,7 +360,7 @@ def get_diff_stats(SFFTPrepDict, PixA_DIFF):
 	# mask_diff = (~SFFTPrepDict['Active-Mask'] & ~SFFTPrepDict['Union-NaN-Mask'])
 	rms_diff = rms(PixA_DIFF, "DIFF")
 	
-	return rms_ref, rms_sci, rms_diff_predicted, rms_diff
+	return rms_ref, rms_sci, rms_diff, SFFTPrepDict['FWHM_SCI'], SFFTPrepDict['FWHM_REF'], SFFTPrepDict['MAG_OFFSET']
 
 
 
@@ -372,6 +373,13 @@ def crop_mask(cat, x_px_max, y_px_max, crop=300):
 	cat = cat[mask]
 	return cat
 
+def make_df(cat):
+
+	names = [name for name in cat.colnames if len(cat[name].shape) <= 1]
+	cat = cat[names]
+	df = cat.to_pandas()
+	return df
+	
 
 def ztf_cuts(cat, PixA_DIFF, crop=300):
 
@@ -389,10 +397,6 @@ def ztf_cuts(cat, PixA_DIFF, crop=300):
 
 	
 	# remove multi dimensional cols
-	names = [name for name in cat.colnames if len(cat[name].shape) <= 1]
-	cat = cat[names]
-	df = cat.to_pandas()
-	
 
 	# uncomment for cuts
 
@@ -509,7 +513,7 @@ def SFFT(FITS_SCI, FITS_REF):
 	print(dir_data)
 	
 	t = time.time()
-	FILE_BASENAME = f"sub_6_24_{t}"
+	FILE_BASENAME = f"sub_{t}"
 	
 	# * computing backend and resourse 
 	BACKEND_4SUBTRACT = 'Numpy'	 # FIXME {'Cupy', 'Numpy'}, Use 'Numpy' if you only have CPUs
@@ -526,7 +530,7 @@ def SFFT(FITS_SCI, FITS_REF):
 	BGPolyOrder = 0 #2 # trivial for sparse (already sky subtracted)			# As above but for CROWDED field
 	ConstPhotRatio =  False	  #False	# FIXME Constant photometric ratio between images? dont scale them
 	PriorBanMask = None			 # FIXME None or a boolean array with same shape of science/reference.
-	MatchTol = 3 # pixel difference required for source match
+	MatchTolFactor = 3 # (fwhm_sci/<tol>)^2 + (fwhm_ref/<tol>)^2 = pixel tolerance
 	
 	COARSE_VAR_REJECTION = False #True	 # FIXME Coarse Variable Rejection? {True, False}
 	CVREJ_MAGD_THRESH = 0.12		# FIXME magnitude threshold for Coarse Variable Rejection
@@ -539,14 +543,19 @@ def SFFT(FITS_SCI, FITS_REF):
 
 	### ------ ALIGNMENT ------ ###
 	# SCAMP via Orion's method
-	FITS_SCI, FITS_REF, scamp = util.multi_epoch_astrom(FITS_SCI, FITS_REF_al)
 
-	FITS_DIFF = dir_data+'/'+FILE_BASENAME+'.sfftdiff.fits'			# difference
-	FITS_REF_al = FITS_REF[:-5] + '.aligned.fits'   # refernce aligned
-	
+	FITS_REF_abs_astr = FITS_REF[:-5] + '.abs_astr.fits'   
+	FITS_REF_al = FITS_REF[:-5] + '.aligned.fits'   
+	FITS_DIFF = dir_data+'/'+FILE_BASENAME+'.sfftdiff.fits'
+
+	shutil.copy(FITS_REF,FITS_REF_abs_astr)
+
+	for i in range(5):
+		sci, FITS_REF_abs_astr = util.multi_epoch_astrom(FITS_SCI, FITS_REF_abs_astr)
+
 	
 	# align with swarp
-	PY_SWarp.PS(FITS_obj=FITS_REF, FITS_ref=FITS_SCI, FITS_resamp=FITS_REF_al, \
+	PY_SWarp.PS(FITS_obj=FITS_REF_abs_astr, FITS_ref=FITS_SCI, FITS_resamp=FITS_REF_al, \
 		GAIN_KEY=GAIN_KEY, SATUR_KEY=SATUR_KEY, OVERSAMPLING=1, RESAMPLING_TYPE='LANCZOS3', \
 		SUBTRACT_BACK='N', FILL_VALUE=np.nan, VERBOSE_TYPE='NORMAL', VERBOSE_LEVEL=2)
 
@@ -590,8 +599,8 @@ def SFFT(FITS_SCI, FITS_REF):
 								GAIN_KEY=GAIN_KEY, SATUR_KEY=SATUR_KEY, BACK_TYPE='MANUAL', BACK_VALUE=0.0, 
 								BACK_SIZE=64, BACK_FILTERSIZE=2, DETECT_THRESH=2, DETECT_MINAREA=5, 
 								DETECT_MAXAREA=0, DEBLEND_MINCONT=1e-4, BACKPHOTO_TYPE='LOCAL', 
-								ONLY_FLAGS=[0], BoundarySIZE=100, XY_PriorSelect=all_coords, PointSource_MINELLIP=0.3, MatchTol=3.0, 
-								MatchTolFactor=MatchTol, StarExt_iter=4, XY_PriorBan=None,
+								ONLY_FLAGS=[0], BoundarySIZE=100, XY_PriorSelect=all_coords, PointSource_MINELLIP=0.3, MatchTol=None, 
+								MatchTolFactor=MatchTolFactor, StarExt_iter=4, XY_PriorBan=None,
 								PostAnomalyCheck=False, PAC_RATIO_THRESH=5.0, BACKEND_4SUBTRACT=BACKEND_4SUBTRACT, 
 								CUDA_DEVICE_4SUBTRACT=CUDA_DEVICE_4SUBTRACT,
 								NUM_CPU_THREADS_4SUBTRACT=NUM_CPU_THREADS_4SUBTRACT)[:2]

@@ -1,5 +1,5 @@
 import photometrus.photometry.photometry as photometry
-from photometrus.stack.stack import swarp_sx, swarp_missfits
+from photometrus.stack.stack import swarp_sx, swarp_missfits, make_weight_map
 from photometrus.settings import gen_config_file_name
 
 import subprocess
@@ -19,6 +19,8 @@ import astropy.units as u
 from astropy.coordinates import Angle, SkyCoord
 from astropy.wcs import WCS
 from astropy.visualization import astropy_mpl_style, ZScaleInterval
+from astropy.table import Table
+
 
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
@@ -118,9 +120,9 @@ def get_reg(imageName, reg_name = "GRB_query_thresh.reg"):
 	return plt_primeregs_all
 
 def grb_cutout(imageName, GRBcoords, photoDistThresh, grb_thresh, name_ext, regprimename=None, regsurvname=None):
-	"""
-	Save cutout of source as a png 
-	"""
+		"""
+		Save cutout of source as a png 
+		"""
 		imgdata = fits.getdata(imageName)
 		image_dir = os.path.dirname(imageName)
 		img = fits.open(imageName)
@@ -240,7 +242,7 @@ def multi_epoch_astrom(base_epoch_path, matching_epoch_path):
 	out_name = multi_epoch_scamp(input_epoch_cat_path=match_cat_path, base_epoch_cat_path=base_cat_path)
 	swarp_missfits(imgpath=matching_epoch_path, chip=match_chip)
 	# print("sci, ref, new?", base_epoch_path, matching_epoch_path, out_name)
-	return base_epoch_path, matching_epoch_path, out_name
+	return base_epoch_path, matching_epoch_path
 
 
 
@@ -333,6 +335,27 @@ def distance(ra1, dec1, ra2, dec2):
 	ang_sep = round(ang_sep.arcsec, 3)
 	return ang_sep
 
+
+def distance_to_source(FITS_DIFF, ra, dec):
+
+	"""
+	Return the minimum distance between externally observed transient and extracted catalog 
+	"""
+
+	weight_path = make_weight_map(FITS_DIFF, None, coadd=True, bkg_percent=2)
+	cat_file = sex1(FITS_DIFF, det_cut=2.0, weightName=weight_path)
+	diff_cat = Table.read(cat_file, hdu=2)
+	
+	# one SkyCoord holding ALL sources at once
+	source_coords = SkyCoord(ra=diff_cat['ALPHA_J2000'], dec=diff_cat['DELTA_J2000'], unit='deg')
+	target_coord = SkyCoord(ra=ra, dec=dec, unit='deg')
+	
+	seps = source_coords.separation(target_coord) 
+	best_idx = seps.argmin()
+	
+	min_distance = seps[best_idx].arcsec 
+	return min_distance, cat_file
+	
 
 
 	
