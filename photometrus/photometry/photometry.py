@@ -6,6 +6,7 @@ import os
 import sys
 import re
 import random
+import multiprocessing as mp
 from multiprocessing import Process, Barrier, Event, Queue
 from queue import Empty
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
@@ -1683,10 +1684,12 @@ def photometry(
                     print('\nMultiprocessing mag intercept calibration!'
                           '\nResults will be written to log files!')
 
-                    sync_queue = Queue()
-                    continue_queue = Queue()
+                    ctx = mp.get_context("fork")
 
-                    auto_calib = Process(target=full_int_calibration,
+                    sync_queue = ctx.Queue()
+                    continue_queue = ctx.Queue()
+
+                    auto_calib = ctx.Process(target=full_int_calibration,
                                          args=(
                                              name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
                                              given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
@@ -1698,7 +1701,7 @@ def photometry(
                                          )
                     )
 
-                    psf_calib = Process(target=full_int_calibration,
+                    psf_calib = ctx.Process(target=full_int_calibration,
                                         args=(
                                             name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
                                             given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
@@ -1710,7 +1713,7 @@ def photometry(
                                         )
                     )
 
-                    aper_calib = Process(target=full_int_calibration,
+                    aper_calib = ctx.Process(target=full_int_calibration,
                                         args=(
                                             name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
                                             given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
@@ -1839,10 +1842,12 @@ def photometry(
                     print('\nMultiprocessing mag intercept calibration (only AUTO & APER)!'
                           '\nResults will be written to log files!')
 
-                    sync_queue = Queue()
-                    continue_queue = Queue()
+                    ctx = mp.get_context("fork")
 
-                    auto_calib = Process(target=full_int_calibration,
+                    sync_queue = ctx.Queue()
+                    continue_queue = ctx.Queue()
+
+                    auto_calib = ctx.Process(target=full_int_calibration,
                                          args=(
                                              name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
                                              given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
@@ -1854,7 +1859,7 @@ def photometry(
                                          )
                     )
 
-                    aper_calib = Process(target=full_int_calibration,
+                    aper_calib = ctx.Process(target=full_int_calibration,
                                         args=(
                                             name, directory, band, chip, crop, data, sigma, Q, chosen_survey,
                                             given_catalog, good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, massCatCoords,
