@@ -1182,7 +1182,7 @@ def local_scamp_query(coords, width, chosen_frame):
 
     # ra / dec error conversion, mas to degrees
     gaia_data[gaia_colnames[2]] = gaia_data[gaia_colnames[2]] / (60 * 60 * 1000)
-    gaia_data[gaia_colnames[2]] = gaia_data[gaia_colnames[2]] / (60 * 60 * 1000)
+    gaia_data[gaia_colnames[3]] = gaia_data[gaia_colnames[3]] / (60 * 60 * 1000)
 
     gaia_ldac_hdul = convert_table_to_ldac(gaia_data)
 
