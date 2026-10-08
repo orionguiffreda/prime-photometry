@@ -267,7 +267,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     keycheck = result.keys()
 
-    errbitoptions_2mass = ['!= null','~0??', '~?0?']     # 2mass errbits column, 1st is for J and 2nd is for H
+    errbitoptions_2mass = ['!= null','0??', '?0?']     # 2mass errbits column, 1st is for J and 2nd is for H
     if band == 'J':
         errbit_2mass = errbitoptions_2mass[1]
     elif band == 'H':
@@ -324,17 +324,40 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                         try:
                             if catNum == last_idx:
                                 print('\nVizier catalogs exhausted, switching to local 2MASS query...')
-                                Q = local_query_box(ra_center=raImage,
-                                                    dec_center=decImage,
-                                                    width=str(effective_boxsize) + 'm',
-                                                    dbname='prime_2mass_local',
-                                                    tablename='twomass_local',
-                                                    columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
-                                                    column_filters={
-                                                        f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
-                                                        "cc_flg": errbits_2M,
-                                                    }
-                                                    )
+                                try:
+                                    Q = local_query_box(ra_center=raImage,
+                                                        dec_center=decImage,
+                                                        width=str(effective_boxsize) + 'm',
+                                                        dbname='prime_2mass_local',
+                                                        tablename='twomass_local',
+                                                        columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                                                        column_filters={
+                                                            f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
+                                                            "cc_flg": errbits_2M,
+                                                        }
+                                                        )
+                                except Exception as e:
+                                    print('Error in local query, defaulting to Vizier.')
+                                    print(f"Error details: {e}")
+
+                                    v = Vizier(columns=[cols[0], cols[1], cols[2]],
+                                               column_filters={
+                                                   cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
+                                                   f"{band.lower()}Flag": "<4",
+                                                   f"{band}perrbits": errbits_constraint,
+                                                   f"{band}1perrb": errbits_constraint,
+                                                   f"{band}flags": errbits_constraint,
+                                                   "Cflg": errbits_2M,
+                                                   "Hclass": "== -1",
+                                                   "Class": "== 0",
+                                                   "Nd": ">6"
+                                               }, row_limit=-1)
+
+                                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
+                                                       width=str(effective_boxsize) + 'm',
+                                                       catalog=catNum, cache=False,
+                                                       frame=chosen_frame)
+
                             else:
                                 v = Vizier(columns=[cols[0], cols[1], cols[2]],
                                            column_filters={
@@ -399,10 +422,13 @@ def sex1(imageName, bulge=False):
     try:
         command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE NONE'
                    % (imageName, configFile, catname, paramName))
-        #print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # print('Executing command: %s' % command)
+        rval = subprocess.run(command.split(), check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as err:
-        print('Could not run sextractor with exit error %s'%err)
+        print(f"SExtractor failed with exit code {err.returncode}")
+        print(f"STDERR:\n{err.stderr}")
+        print(f"STDOUT:\n{err.stdout}")
+        raise Exception('Sextractor failed to run, is the stacked image quality adequate?')
     return catname
 
 
