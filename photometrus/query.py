@@ -770,6 +770,7 @@ PHOTOMETRY_QUERY_FUNCTIONS = {
     }
 
 try:
+    print('Running check to determine if local catalogs are intact...')
     Q = local_query_box(ra_center=100,
                         dec_center=-50,
                         dbname='prime_vhs_local',
@@ -778,6 +779,7 @@ try:
                         columns=["ra", "dec", f"Jmag", f"e_Jmag"]
                         )
 except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+    print(' Local catalog not found, removing local-only surveys from hierarchy')
     PHOTOMETRY_QUERY_FUNCTIONS = {
         'Z': [viking_query, vvv_query, vhs_query, panstarrs_query, sdss_query, des_query],
         'Y': [viking_query, vvv_query, vhs_query, las_query, panstarrs_query, des_query],
