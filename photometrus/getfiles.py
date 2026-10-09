@@ -304,9 +304,9 @@ def regen_ramp(file_number, nframe, camera):
     try:
         print('regenerating ramp: {}'.format(output_file))
         superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
-        print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
+        # print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
-        print(header)
+        # print(header)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
     make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])

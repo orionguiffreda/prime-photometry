@@ -761,12 +761,29 @@ def des_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     return Q, survey_name
 
 
+# Check if local query is intact on machine, if not, remove local-only surveys
 PHOTOMETRY_QUERY_FUNCTIONS = {
-    'Z': [viking_query, vvv_query, vhs_query, gcs_query, panstarrs_query, sdss_query, des_query],
-    'Y': [viking_query, vvv_query, vhs_query, las_query, gcs_query, panstarrs_query, des_query],
-    'J': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
-    'H': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query]
-}
+        'Z': [viking_query, vvv_query, vhs_query, gcs_query, panstarrs_query, sdss_query, des_query],
+        'Y': [viking_query, vvv_query, vhs_query, las_query, gcs_query, panstarrs_query, des_query],
+        'J': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
+        'H': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query]
+    }
+
+try:
+    Q = local_query_box(ra_center=100,
+                        dec_center=-50,
+                        dbname='prime_vhs_local',
+                        tablename='twomass_sources',
+                        width='28m',
+                        columns=["ra", "dec", f"Jmag", f"e_Jmag"]
+                        )
+except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+    PHOTOMETRY_QUERY_FUNCTIONS = {
+        'Z': [viking_query, vvv_query, vhs_query, panstarrs_query, sdss_query, des_query],
+        'Y': [viking_query, vvv_query, vhs_query, las_query, panstarrs_query, des_query],
+        'J': [viking_query, vvv_query, vhs_query, las_query, twomass_query],
+        'H': [viking_query, vvv_query, vhs_query, las_query, twomass_query]
+    }
 
 
 # GAIA COMPLETION QUERY
