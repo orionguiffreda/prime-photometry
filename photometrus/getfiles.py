@@ -67,6 +67,10 @@ class NoCalError(Exception):
     pass
 
 
+class MissingCalError(Exception):
+    pass
+
+
 def gen_rsync_dir_dicts(chips=(1,2,3,4)):
     rsync_dicts = []
     for chip in chips:
@@ -185,6 +189,7 @@ def get_temperature_date(datetime, temperature):
     """
     temperature_date_dict = GET_DATA_SETTINGS['temperature_date_dict']
     cutoff_dates = sorted(temperature_date_dict.keys())
+    cutoff_dates.reverse()
     temp_dates = {}
     for cutoff_date in cutoff_dates:  # getting era with identical load files
         td = datetime - to_datetime(cutoff_date)
@@ -192,7 +197,7 @@ def get_temperature_date(datetime, temperature):
             temp_dates = temperature_date_dict[cutoff_date]
             break
     if not temp_dates:  # raise an error if no dataset exists
-        raise NoCalError
+        raise NoCalError("No calibration data for datetime {} and temperature {}".format(datetime, temperature))
     temperature_keys = temp_dates.keys()
     temperatures = np.asarray(list(temperature_keys), dtype=float)
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
@@ -201,7 +206,8 @@ def get_temperature_date(datetime, temperature):
         return date_list[0]
     else:
         date_array = np.asarray([to_datetime(d) for d in date_list])
-        nearest_date = np.abs(date_array-date_array).argmin()  # getting closest date with cal data
+        data_date_array = np.asarray([datetime for d in date_list])
+        nearest_date = np.abs(date_array-data_date_array).argmin()  # getting closest date with cal data
         return date_list[nearest_date]
 
 
@@ -230,7 +236,11 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
     sb = cal_files[0]
     if not os.path.isfile(sb):
         cal_files[0] = sb.replace('bias/superbias_minRMS.', 'bias/super_bias')
-    return [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
+    cal_files = [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
+    for cal_file in cal_files:
+        if not os.path.isfile(cal_file):
+            raise MissingCalError("Calibration file '{}' not found.".format(cal_file))
+    return cal_files
 
 
 def get_ramp_cal(header):
