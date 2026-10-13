@@ -21,6 +21,7 @@ from photometrus.sky import gen_sky
 from photometrus.sky import sky_sub
 from photometrus.astrom import astrom_shift
 from photometrus.astrom import astrom_shift_new
+from photometrus.astrom import astrom_shift_geom
 from photometrus.astrom import astrometry
 from photometrus.stack import stack
 
@@ -74,7 +75,7 @@ def shift(subdir, band, adv=False, old=False, single_solve=False, **kwargs):
         for imgname in appl_file_range:
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s' %
                   (subdir, imgname, band))
-            shift_x, shift_y, proc_single_img_path = astrom_shift_new.shift(directory=subdir, imagename=imgname, band=band, adv_solve=adv,
+            shift_x, shift_y, proc_single_img_path = astrom_shift_geom.shift(directory=subdir, imagename=imgname, band=band, adv_solve=adv,
                                                       single_solve=single_solve)
             if (shift_x != 0) or (shift_y != 0):
                 good_fits = fits
@@ -82,7 +83,7 @@ def shift(subdir, band, adv=False, old=False, single_solve=False, **kwargs):
 
             print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s -adv' %
                   (subdir, imgname, band))
-            shift_x, shift_y, proc_single_img_path = astrom_shift_new.shift(directory=subdir, imagename=imgname, band=band, adv_solve=True,
+            shift_x, shift_y, proc_single_img_path = astrom_shift_geom.shift(directory=subdir, imagename=imgname, band=band, adv_solve=True,
                                                       single_solve=single_solve)
             if (shift_x != 0) or (shift_y != 0):
                 good_fits = fits
