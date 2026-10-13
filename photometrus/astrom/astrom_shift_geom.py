@@ -9,7 +9,7 @@ import argparse
 import threading
 from datetime import datetime as dt
 
-import astroalign as aa
+# import astroalign as aa
 from astroquery.vizier import Vizier
 from astropy.io import fits
 import astropy.units as u
