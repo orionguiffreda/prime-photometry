@@ -118,8 +118,6 @@ def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=
     nfiles = len(image_fnames)
     if sky_group_size is None:
         sky_group_size = nfiles
-    elif nfiles < sky_group_size:
-        sky_group_size = nfiles
     image_fnames.sort()
     header = fits.getheader(image_fnames[-1])
     filter1 = header.get('FILTER1', 'unknown')
@@ -133,6 +131,8 @@ def gen_flat_sky_image(science_data_directory, output_directory, sky_group_size=
     ngroups = int(nfiles / sky_group_size)
     if ngroups*sky_group_size > nfiles:
         ngroups -= 1
+    elif nfiles < sky_group_size:
+        sky_group_size = nfiles
     median_array = []
     file_counter = 0
     group_start = dt.now()

@@ -529,8 +529,8 @@ def uhs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
                             column_filters=column_filters
                             )
     except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
-        print(f'Local UHS query unsuccessful, survey not available on Vizier!: Error: {e}')
-        Q = []
+        print(f'Local UHS query unsuccessful!: Error: {e}')
+        raise Exception('UKIDSS UHS is not available with vizier!')
 
     return Q, survey_name
 
@@ -570,8 +570,8 @@ def gps_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
                             column_filters=column_filters
                             )
     except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
-        print(f'Local GPS query unsuccessful, survey not available on Vizier!: Error: {e}')
-        Q = []
+        print(f'Local GPS query unsuccessful!: Error: {e}')
+        raise Exception('UKIDSS GPS is not available with vizier!')
 
     return Q, survey_name
 
@@ -611,8 +611,8 @@ def gcs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
                             column_filters=column_filters
                             )
     except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
-        print(f'Local GCS query unsuccessful, survey not available on Vizier!: Error: {e}')
-        Q = []
+        print(f'Local GCS query unsuccessful!: Error: {e}')
+        raise Exception('UKIDSS GCS is not available with vizier!')
 
     return Q, survey_name
 
@@ -648,8 +648,6 @@ def panstarrs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_
         print(f'Error: {e}')
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?')
-        Q = []
-
     return Q, survey_name
 
 
@@ -685,8 +683,6 @@ def skymapper_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
             ' Perhaps check skymapper coverage maps?')
-        Q = []
-        
     return Q, survey_name
 
 
@@ -722,7 +718,6 @@ def sdss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutof
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
             ' Perhaps check SDSS coverage maps?')
-        Q = []
     return Q, survey_name
 
 
@@ -763,15 +758,33 @@ def des_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
             ' Perhaps check DES coverage maps?')
-        Q = []
     return Q, survey_name
 
 
+# Check if local query is intact on machine, if not, remove local-only surveys
 PHOTOMETRY_QUERY_FUNCTIONS = {
         'Z': [viking_query, vvv_query, vhs_query, gcs_query, panstarrs_query, sdss_query, des_query],
         'Y': [viking_query, vvv_query, vhs_query, las_query, gcs_query, panstarrs_query, des_query],
         'J': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
         'H': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query]
+    }
+
+try:
+    print('Running check to determine if local catalogs are intact...')
+    Q = local_query_box(ra_center=100,
+                        dec_center=-50,
+                        dbname='prime_vhs_local',
+                        tablename='twomass_sources',
+                        width='28m',
+                        columns=["ra", "dec", f"Jmag", f"e_Jmag"]
+                        )
+except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+    print(' Local catalog not found, removing local-only surveys from hierarchy')
+    PHOTOMETRY_QUERY_FUNCTIONS = {
+        'Z': [viking_query, vvv_query, vhs_query, panstarrs_query, sdss_query, des_query],
+        'Y': [viking_query, vvv_query, vhs_query, las_query, panstarrs_query, des_query],
+        'J': [viking_query, vvv_query, vhs_query, las_query, twomass_query],
+        'H': [viking_query, vvv_query, vhs_query, las_query, twomass_query]
     }
 
 
