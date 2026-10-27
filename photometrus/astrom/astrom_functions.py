@@ -260,9 +260,9 @@ def astromatic_astrometry(astromdir, band=None, sex=None, **kwargs):
     os.chdir(gen_pipeline_file_name())
     print('using SXTRCTR and SCAMP to generate better astrometry...')
 
-    print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -improved -path {astromdir} -band {band}')
+    print(f'\nEquivalent argparse cmd: photometrus astrom astromatic -path {astromdir} -band {band}')
 
-    astrometry.astrometry(path=astromdir, band=band, improved=True)
+    astrometry.astrometry(path=astromdir, band=band)
 
 
 ASTROM_FCTNS = {

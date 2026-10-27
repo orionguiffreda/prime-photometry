@@ -1,6 +1,8 @@
 import os
 import re
 import json5
+import json
+import argparse
 import tempfile
 from astropy.io import fits
 import numpy as np
@@ -117,6 +119,32 @@ def convert_table_to_ldac(tbl):
     return new_hdulist
 
 
+def parentcreation(target, date, band):
+    """
+    Autogeneration of parent directories for processing
+
+    Parameters
+    ----------
+    target: str
+        target field, objname in log, ex. "field1234"
+    date: str
+        date of observation, in yyyymmdd format
+    band: str
+        filter, ex. "J"
+    """
+
+    field_dir_name = '%s_%s' % (target, date)
+    field_dir = os.path.join(defaults['parent'], field_dir_name)
+    parent_dir = os.path.join(field_dir, band)
+    print('\nDefault parent dir: %s' % parent_dir)
+    if not os.path.isdir(parent_dir):
+        print('Generating parent directory!\n')
+        os.makedirs(parent_dir)
+    else:
+        pass
+    return parent_dir, field_dir
+
+
 def dump_args_to_json(args, unknown=None, output_path=None):
     """
     Dumps input argparse arguments to a json5 file
@@ -143,3 +171,84 @@ def dump_args_to_json(args, unknown=None, output_path=None):
     with open(json_dump_path, 'w') as f:
         json5.dump(args_dict, f, indent=2)
     print(f'Wrote argparse args to {json_dump_path}')
+
+
+def load_json_args_file(path):
+    """
+    Reads in args from input json filepath
+
+    Parameters
+    ----------
+    path: str
+        input filepath for json file of args
+    """
+
+    print(f'Input json file specified: {path}')
+    with open(path, "r") as f:
+        if json5 is not None:
+            return json5.load(f)
+        return json.load(f)
+
+
+def parse_args_with_cmd_file(parser):
+    """
+    Checks for input json cmd file, then loads in args from there as defaults (still overwritten by any CLI args)
+
+    Parameters
+    ----------
+    parser: Argparse parser
+        Initial argparse parser object coming from script
+    """
+
+    # Check for input-cmd-file, examine that
+    peek_parser = argparse.ArgumentParser(add_help=False)
+    peek_parser.add_argument("-input_cmd_file", type=str, default=None)
+    peek_args, _ = peek_parser.parse_known_args()
+
+    unknown_from_file = {}
+
+    if peek_args.input_cmd_file:
+        file_values = load_json_args_file(peek_args.input_cmd_file)
+
+        # fills keys for real defined args, and handles unknowns
+        valid_dests = {action.dest for action in parser._actions}
+        known_values = {k: v for k, v in file_values.items() if k in valid_dests}
+        unknown_from_file = {k: v for k, v in file_values.items() if k not in valid_dests}
+
+        # File vals become default
+        parser.set_defaults(**known_values)
+
+    args, unknown_from_cli = parser.parse_known_args()
+    unknown = {"cli": unknown_from_cli, "file": unknown_from_file}
+    return args, unknown
+
+
+def handle_json_input_output(parser, target, date, band):
+    """
+    Argparse logic for handling json input files and output files
+
+    Parameters
+    ----------
+    parser: Argparse parser
+        Initial argparse parser object coming from script
+    target: str
+        target field, objname in log, ex. "field1234"
+    date: str
+        date of observation, in yyyymmdd format
+    band: str
+        filter, ex. "J"
+    """
+
+    args, unknown = parse_args_with_cmd_file(parser=parser)
+
+    if any(var is None for var in (target, date, band)):
+        raise ValueError('-target, -date, or -band not specified!  These must be specified to run processing!')
+
+    if args.output_cmd_file:
+        if args.parent != defaults['parent']:
+            json_outdir = args.parent
+        else:
+            json_outdir, _ = parentcreation(args.target, args.date, args.band)
+        dump_args_to_json(args, unknown, output_path=json_outdir)
+
+    return args, unknown

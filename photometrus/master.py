@@ -28,8 +28,9 @@ from photometrus.sky.sky_functions import sky_fctns
 from photometrus.astrom.astrom_functions import astrom_fctns
 from photometrus.stack.stack_functions import stack_fctns
 
-from photometrus.settings import (bulge_checker, auto_bulge_detect)
+from photometrus.settings import (bulge_checker, auto_bulge_detect, PIPELINE_STAGES)
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+from photometrus.utils.errors import MissingDataFilesError
 
 
 def makedirs(basedir, chip):
@@ -549,19 +550,29 @@ def intermediate_removal(astromdir, FFdir, subdir, rampdir=None):
 #     return bulge
 
 
+def stage_idx(name):
+    """Allows pipeline to jump between stages"""
+    STAGES = PIPELINE_STAGES
+    if name not in STAGES:
+        raise ValueError(f"start_stage must be one of {STAGES}, got {name!r}")
+    return STAGES.index(name)
+
+
 def master(
         parentdir=defaults['parent'], chip=defaults['chip'], band=defaults['band'], sigma=defaults['sigma'],
         date=defaults['date'], fullramplist=defaults['ramplist'], rot_val=defaults['rot_val'],
         sky_override=defaults['sky_override_path'], removal=defaults['removal'], bulge=defaults['bulge'],
-        sex=defaults['sex'], compress=defaults['compress'], rampnum=defaults['rampnum']
+        sex=defaults['sex'], compress=defaults['compress'], rampnum=defaults['rampnum'], start_stage=defaults['default_start_stage']
 ):
     start_time = dt.now()
 
+    start_point = stage_idx(start_stage)
     astromdir, FFdir, skydir, subdir, stackdir = makedirectories(parentdir, chip)
+
     if fullramplist:
         chipramplist = getchiplist(fullramplist, chip, rampnum=rampnum)
         if chipramplist is None:
-            raise ValueError('For some reason, given chip doesnt match to any sublist!  Do you have the right target and date? '
+            raise MissingDataFilesError('For some reason, given chip doesnt match to any sublist!  Do you have the right target and date? '
                              'Are there missing files when trying to retrieve?')
         initial_ramps = chipramplist
         rampdir = None
@@ -569,60 +580,67 @@ def master(
         rampdir = os.path.join(parentdir, 'C%i' % chip)
         initial_ramps = rampdir
 
-    preprocess_fctns(
-        imagepaths=initial_ramps,
-        FF_imagepaths=FFdir,
-        band=band,
-        chip=chip,
-        date=date,
-        kernel_stdev=2,
-        astrom_dir=astromdir
-    )
+    if start_point <= stage_idx('preprocess'):
+        preprocess_fctns(
+            imagepaths=initial_ramps,
+            FF_imagepaths=FFdir,
+            band=band,
+            chip=chip,
+            date=date,
+            kernel_stdev=2,
+            astrom_dir=astromdir
+        )
 
     # astrom_angle_list(astromdir, chipramplist, chip, rot_val)
     # flatfielding(initial_ramps, FFdir, band, chip, date)
 
     bulge = auto_bulge_detect(FFdir)
 
-    # sky_fctns(
-    #     FFdir=FFdir,
-    #     subdir=subdir,
-    #     skydir=skydir,
-    #     sigma=sigma,
-    #     chip=chip,
-    #     sky_override=sky_override,
-    #     sex=sex,
-    #     bulge=bulge
-    # )
+    if start_point <= stage_idx('sky'):
+        sky_fctns(
+            FFdir=FFdir,
+            subdir=subdir,
+            skydir=skydir,
+            sigma=sigma,
+            chip=chip,
+            sky_override=sky_override,
+            sex=sex,
+            bulge=bulge
+        )
 
-    if sex or sky_override or bulge:
-        pass
-    else:
-        sky(FFdir, skydir, sigma, chip)
-    if sex or bulge:
-        skysub(FFdir, subdir, chip, sky_override, sex=True)
-    else:
-        skysub(FFdir, subdir, chip, skydir, sky_override)
+    # if sex or sky_override or bulge:
+    #     pass
+    # else:
+    #     sky(FFdir, skydir, sigma, chip)
+    # if sex or bulge:
+    #     skysub(FFdir, subdir, chip, sky_override, sex=True)
+    # else:
+    #     skysub(FFdir, subdir, chip, skydir, sky_override)
 
-    # astrom_fctns(
-    #     astromdir=astromdir,
-    #     subdir=subdir,
-    #     chip=chip,
-    #     band=band,
-    #     rot_val=rot_val,
-    #     bulge=bulge
-    # )
+    if start_point <= stage_idx('astrom'):
+        astrom_fctns(
+            astromdir=astromdir,
+            subdir=subdir,
+            chip=chip,
+            band=band,
+            rot_val=rot_val,
+            bulge=bulge
+        )
 
-    verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
-    astromatic_astrometry(astromdir, band=band)
+    # verify_astrom(astromdir, subdir, chip, band, rot_val, bulge=bulge)
+    # astromatic_astrometry(astromdir, band=band)
 
-    # stack_fctns(
-    #     astromdir=astromdir,
-    #     stackdir=stackdir,
-    #     chip=chip
-    # )
+    if start_point <= stage_idx('stack'):
+        stack_fctns(
+            commands=['img_qual_filtering', 'stacking'],
+            astromdir=astromdir,
+            stackdir=stackdir,
+            chip=chip,
+            band=band,
+            stdev_limit=None,
+        )
 
-    stacking(astromdir, stackdir, chip)
+    # stacking(astromdir, stackdir, chip)
     if compress:
         fpack(stackdir, chip)
     if removal:
@@ -630,6 +648,7 @@ def master(
 
     end_time = dt.now()
     print('\nFull C%s processing time:' % chip, (end_time - start_time).total_seconds())
+
     # else:
     #     rampdir = os.path.join(parentdir,  'C%i' % chip)
     #     flatfielding(rampdir, FFdir, band, chip, date)
@@ -698,10 +717,14 @@ def main():
     parser.add_argument('-bulge', action='store_true',
                         help='optional flag, utilize setup specifically designed for bulge fields.  Hopefully we can'
                              ' automate this in the future')
+    parser.add_argument('-start_stage', type=str,
+                        help='[str], Optionally specify which stage of processing the pipeline starts on, useful for '
+                             f'bug fixing.  Options include: {PIPELINE_STAGES}, where default is {defaults['default_start_stage']}',
+                        default=defaults['default_start_stage'])
     args, unknown = parser.parse_known_args()
 
     master(args.parent, args.chip, args.band, args.sigma, args.date, args.ramplist, args.rot_val, args.sky_override,
-           args.removal, args.bulge, args.sex, args.compress, args.rampnum)
+           args.removal, args.bulge, args.sex, args.compress, args.rampnum, args.start_stage)
 
 
 if __name__ == "__main__":

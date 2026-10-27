@@ -77,7 +77,7 @@ def bckg_filter(full_img_list, stdev_limit=3, csv_path=None):
             print('SKY_FAC header val not found in image! Defaulting to 1')
             sky_fac = 1
 
-        print(f'     Sky Scaling Factor: {sky_fac}')
+        print(f'     Sky Scaling Factor: {sky_fac:.1f}')
         sky_fac = round(sky_fac, 1)
         sky_fac_arr.append(sky_fac)
 

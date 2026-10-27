@@ -184,8 +184,12 @@ def astrom_check(imgdir):
     imgdir: str
         Directory where input images are stored
     """
-
-    image_fnames = get_astrom_files(imgdir)
+    if isinstance(imgdir, list):
+        image_fnames = imgdir
+        image_fnames.sort()
+    else:
+        image_fnames = get_astrom_files(imgdir)
+        image_fnames.sort()
 
     image_hdrs = [fits.getheader(img) for img in image_fnames]
 
@@ -369,8 +373,14 @@ def remove_small_weights(weight_file):
 
 def swarp(imgdir, finout, chip):
     print('SWARP Stacking!')
-    image_fnames = get_astrom_files(imgdir)
-    image_fnames.sort()
+    if isinstance(imgdir, list):
+        image_fnames = imgdir
+        image_fnames.sort()
+        pruned = True
+    else:
+        image_fnames = get_astrom_files(imgdir)
+        image_fnames.sort()
+        pruned = False
 
     # header = fits.getheader(image_fnames[-1])
     header = gen_stack_header(image_fnames)
@@ -396,19 +406,26 @@ def swarp(imgdir, finout, chip):
 
     sw = gen_config_file_name('default.swarp')
 
+    if pruned:
+        swarp_target_str = ""
+        for img in image_fnames:
+            swarp_target_str += img + ","
+    else:
+        swarp_target_str = os.path.join(imgdir, '*.flat' + ext)
+
     use_weight_map = True
     if use_weight_map:
         weight_maps = make_weight_maps(image_fnames, chip)
         if len(weight_maps.split(',')) >= 150:
-            print(f' Large amount of maps detected! (>150), writing weight map paths to list in {finout}')
+            print(f' Large amount of maps detected! (>150), writing weight map paths to list file in {finout}')
             weight_maps = write_weight_maps_to_list(weight_maps=weight_maps, stack_dir=finout)
         print('Generating weight map:', weight_name)
 
-        com = f"swarp {os.path.join(imgdir, '*.flat' + ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name} -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {weight_maps}"
+        com = f"swarp {swarp_target_str} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name} -WEIGHT_TYPE MAP_WEIGHT -WEIGHT_IMAGE {weight_maps}"
         print(com)
 
     else:
-        com = f"swarp {os.path.join(imgdir, '*.flat' + ext)} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}"
+        com = f"swarp {swarp_target_str} -c {sw} -IMAGEOUT_NAME {save_name} -WEIGHTOUT_NAME {weight_name}"
 
     try:
 
@@ -655,7 +672,7 @@ def stack(subpath, stackpath, chip, num=5, no_astrom=False, astrom_only=False, i
                              'absolute astrometry check!')
         # badpixmask(subpath=subpath, chip=chip)
         swarp(subpath, stackpath, chip)
-        astromfin(stackpath, chip)
+        # astromfin(stackpath, chip)
 
 
 def main():

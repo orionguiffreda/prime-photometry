@@ -7,9 +7,10 @@ import subprocess
 import requests
 import argparse
 import threading
+import signal
 from datetime import datetime as dt
 
-# import astroalign as aa
+import astroalign as aa
 from astroquery.vizier import Vizier
 from astropy.io import fits
 import astropy.units as u
@@ -25,10 +26,14 @@ from collections import defaultdict
 import math
 import sys
 
-from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS,
+from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, ASTROM_QUERY_CATALOGS,
                                   AB_OFFSET_DICT,
                                   GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
+
+
+class _AlignTimeout(Exception):
+    pass
 
 
 def get_zp(band):
@@ -36,21 +41,6 @@ def get_zp(band):
     chosen_zp = zps[0]
 
     return chosen_zp
-
-
-def timed_input(prompt, timeout=60, default='Y'):
-    answer = [default]
-
-    def ask():
-        ans = input(prompt)
-        if ans:
-            answer[0] = ans
-
-    thread = threading.Thread(target=ask)
-    thread.daemon = True
-    thread.start()
-    thread.join(timeout)
-    return answer[0]
 
 
 # %% image info
@@ -214,7 +204,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
         mag_high_cutoff = maghigh
         mag_low_cutoff = maglow
     else:
-        catalog_dict = PHOTOMETRY_QUERY_CATALOGS
+        catalog_dict = ASTROM_QUERY_CATALOGS
         catalogs = []
         if band == 'J' or band == 'H':
             for k, v in catalog_dict.items():
@@ -283,7 +273,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     if bulge:
         acc_source_num = 500  # total number of sources allowed in full query before trying smaller box
     else:
-        acc_source_num = 1000
+        acc_source_num = 1500
 
     # contains changes in bounds to iterate through if too many sources:
     # format: [boxsize multiplier, mag lim scalar change, errbits column constraint]
@@ -562,13 +552,67 @@ def make_tables(directory, data, w, catname, Q, band, crop, zp, maglow=12, maghi
     return inner_primesources, inner_catsources, colnames
 
 
-def _find_transform(cat_xy, prime_xy, n_ctrl, pixel_tol, min_match_fraction):
-    old = aa.PIXEL_TOL, aa.MIN_MATCHES_FRACTION
-    aa.PIXEL_TOL, aa.MIN_MATCHES_FRACTION = pixel_tol, min_match_fraction
+def _find_transform(cat_xy, prime_xy, n_ctrl, pixel_tol, timeout=150):
+    def _handler(signum, frame):
+        raise _AlignTimeout(f'exceeded {timeout} s')
+
+    old_tol = aa.PIXEL_TOL
+    aa.PIXEL_TOL = pixel_tol
+    use_alarm = True
     try:
+        old_handler = signal.signal(signal.SIGALRM, _handler)
+    except ValueError:                 # not in the main thread: no timeout available
+        use_alarm = False
+    try:
+        if use_alarm:
+            signal.alarm(timeout)
         return aa.find_transform(cat_xy, prime_xy, max_control_points=n_ctrl)
     finally:
-        aa.PIXEL_TOL, aa.MIN_MATCHES_FRACTION = old
+        if use_alarm:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
+        aa.PIXEL_TOL = old_tol
+
+
+def effective_transform(M, ref_xy, use_scale=False):
+    """M: 3x3 astroalign transform (cat -> prime, 1-based pixels). With use_scale=False, keep only
+    the rotation plus the shift at CRPIX."""
+    if use_scale:
+        return M
+    th = np.arctan2(M[1, 0], M[0, 0])
+    A = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
+    ref = np.asarray(ref_xy, float)
+    Meff = np.eye(3)
+    Meff[:2, :2] = A
+    Meff[:2, 2] = M[:2, :2] @ ref + M[:2, 2] - A @ ref     # T(CRPIX) unchanged
+    return Meff
+
+
+def apply_transform_to_header(header, M):
+    """Copy of header whose WCS satisfies new_world2pix = T(old_world2pix), T = M."""
+    h = header.copy()
+    w = WCS(header)
+    ref = np.array([h['CRPIX1'], h['CRPIX2']], dtype=float)
+    q0 = (np.linalg.inv(M) @ np.array([ref[0], ref[1], 1.0]))[:2]      # T^-1(CRPIX)
+    h['CRVAL1'], h['CRVAL2'] = w.all_pix2world([q0], 1)[0]
+
+    Ainv = np.linalg.inv(M[:2, :2])
+    if 'CD1_1' in h:
+        cd = np.array([[h['CD1_1'], h.get('CD1_2', 0.0)], [h.get('CD2_1', 0.0), h['CD2_2']]])
+        (h['CD1_1'], h['CD1_2']), (h['CD2_1'], h['CD2_2']) = cd @ Ainv
+    else:   # PC matrix + CDELT
+        pc = np.array([[h.get('PC1_1', 1.0), h.get('PC1_2', 0.0)],
+                       [h.get('PC2_1', 0.0), h.get('PC2_2', 1.0)]])
+        (h['PC1_1'], h['PC1_2']), (h['PC2_1'], h['PC2_2']) = pc @ Ainv
+    return h
+
+
+def _thin(xy, cell_px):
+    """xy sorted brightest-first; keep the brightest source in each cell_px x cell_px cell."""
+    cx = np.floor((xy[:, 0] - xy[:, 0].min()) / cell_px).astype(int)
+    cy = np.floor((xy[:, 1] - xy[:, 1].min()) / cell_px).astype(int)
+    _, first = np.unique(cx * 100000 + cy, return_index=True)
+    return xy[np.sort(first)]
 
 
 def astroalign_shift(inner_primesources, inner_catsources, pixel_tol=2, max_control_points=400,
@@ -578,23 +622,29 @@ def astroalign_shift(inner_primesources, inner_catsources, pixel_tol=2, max_cont
     prime_xy = _xy_array(inner_primesources, prime_sort_col, is_mag=True)
     cat_xy = _xy_array(inner_catsources, cat_sort_col, is_mag=True)
 
-    n_ctrl = min(max(len(prime_xy), len(cat_xy)), max_control_points)
+    attempts = [(150, 20), (100, 30), (70, 45), (None, 180)]   # (cell size in px, timeout in s)
     result = None
-    for n, mmf in [(n_ctrl, 0.3), (n_ctrl, 0.1), (50, 0.1)]:
+    for cell, t in attempts:
+        if cell is None:
+            p_xy, c_xy = prime_xy, cat_xy
+            n = min(max(len(prime_xy), len(cat_xy)), max_control_points)
+        else:
+            p_xy, c_xy = _thin(prime_xy, cell), _thin(cat_xy, cell)
+            n = max(len(p_xy), len(c_xy))
         try:
-            result = _find_transform(cat_xy, prime_xy, n, pixel_tol, mmf)
-            print(f'astroalign succeeded with n_ctrl={n}, min_match_fraction={mmf}')
+            result = _find_transform(c_xy, p_xy, n, pixel_tol, timeout=t)
+            print(f'astroalign succeeded (cell={cell}, {len(p_xy)}/{len(c_xy)} points)')
             break
-        except (aa.MaxIterError, ValueError, TypeError) as e:
-            print(f'astroalign attempt (n_ctrl={n}, min_match_fraction={mmf}) failed: {e}')
+        except (aa.MaxIterError, ValueError, TypeError, _AlignTimeout) as e:
+            print(f'astroalign attempt (cell={cell}) failed: {type(e).__name__}: {e}')
     if result is None:
-        return 0, 0, 0
+        return 0, 0, 0, None
     tform, (cat_matched, prime_matched) = result
 
     rot_deg = np.degrees(tform.rotation)
     if abs(rot_deg) > max_rot_deg or abs(tform.scale - 1) > max_scale_dev:
         print(f'astroalign solution rejected (rotation={rot_deg:.3f} deg, scale={tform.scale:.5f})')
-        return 0, 0, 0
+        return 0, 0, 0, None
 
     # Re-match the FULL lists under the fitted transform
     M = tform.params
@@ -623,12 +673,12 @@ def astroalign_shift(inner_primesources, inner_catsources, pixel_tol=2, max_cont
 
     if n_ok < min_matches or sigma < min_sigma:
         print('astroalign solution rejected: match count not significant')
-        return 0, 0, n_ok
+        return 0, 0, n_ok, None
     if max_shift is not None and np.hypot(x_shift, y_shift) > max_shift:
         print(f'astroalign shift {np.hypot(x_shift, y_shift):.1f} pix exceeds max_shift, rejecting')
-        return 0, 0, n_ok
+        return 0, 0, n_ok, None
 
-    return x_shift, y_shift, n_ok
+    return x_shift, y_shift, n_ok, M, rot_deg
 
 
 def apply_shifts_to_cat(directory, catname, x_shift, y_shift):
@@ -710,11 +760,16 @@ def check_shift_fast(x_shift, y_shift, header, inner_primesources, inner_catsour
 
     n_p, n_c = len(inner_primesources), len(inner_catsources)
     completion = (len(idx_cat) / n_c) if n_p > n_c else (len(idx_prime) / n_p)
-    print(f'({x_shift:.5f}, {y_shift:.5f}) -> Crossmatch completion: {completion:.2f}')
+    print(f'Crossmatch completion: {completion:.2f}')
+
+    # for r in (1, 2, 3, 5):
+    #     _, ic, _, _ = cat.search_around_sky(prime, r * u.arcsec)
+    #     print(f'  completion within {r}": {len(np.unique(ic)) / n_c:.2f}')
+
     return completion
 
 
-def change_all_files(xfinal_shift, yfinal_shift, directory):
+def change_all_files(xfinal_shift, yfinal_shift, directory, transform=None, rotation=None):
     if xfinal_shift == 0 or yfinal_shift == 0:
         print('No agreement, thus cannot move forward with rewriting all files!')
     else:
@@ -735,16 +790,23 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             crpix1 = header['CRPIX1']
             crpix2 = header['CRPIX2']
 
-            # converting pixel shifts to world coord shifts
-            new_crval1, new_crval2 = w.all_pix2world(
-                [[crpix1 - xfinal_shift, crpix2 - yfinal_shift]], 1
-            )[0]
+            if transform is not None:
+                header = apply_transform_to_header(header, transform)
+            else:
+                # converting pixel shifts to world coord shifts
+                new_crval1, new_crval2 = w.all_pix2world(
+                    [[crpix1 - xfinal_shift, crpix2 - yfinal_shift]], 1
+                )[0]
 
-            header['CRVAL1'] = new_crval1
-            header['CRVAL2'] = new_crval2
+                header['CRVAL1'] = new_crval1
+                header['CRVAL2'] = new_crval2
 
-            header.set('X_SHIFT', xfinal_shift, 'X Value CRPIX1 shift', after='WCSAXES')
-            header.set('Y_SHIFT', yfinal_shift, 'Y Value CRPIX2 shift', after='X_SHIFT')
+            header.set('X_SHIFT', xfinal_shift, 'X Value shift', after='WCSAXES')
+            header.set('Y_SHIFT', yfinal_shift, 'Y Value shift', after='X_SHIFT')
+
+            if rotation is not None:
+                header.set('ROT_VAL', rotation, 'Corrected Rot. Value (deg)', before='X_SHIFT')
+
             header.set('OLD_CV1', crval1, 'Initial CRVAL1 Value', after='Y_SHIFT')
             header.set('OLD_CV2', crval2, 'Initial CRVAL2 Value', after='OLD_CV1')
 
@@ -889,28 +951,32 @@ def shift(
         print(f'\nLarge disparity in source number betw. PRIME & survey, min/max ratio: {round(source_num_ratio,3)}, '
               f'\nShift very likely to be inaccurate, assuming 0 shifts & skipping this image...')
         ultimate_shift_x = ultimate_shift_y = 0
+        transform = None
+        rotation = None
 
     else:
         try:
-            x_s, y_s, n_match = astroalign_shift(inner_primesources, inner_catsources, max_control_points=num,
-                                                 max_shift=length, cat_sort_col=colnames[2],
-                                                 ref_xy=(header['CRPIX1'], header['CRPIX2']))
-            if n_match == 0 or (x_s == 0 and y_s == 0):
-                ultimate_shift_x = ultimate_shift_y = 0
-            else:
-                completion = check_shift_fast(x_s, y_s, header, inner_primesources, inner_catsources, colnames,
-                                              bulge=bulge)
+            ref = (header['CRPIX1'], header['CRPIX2'])
+            x_s, y_s, n_match, M, rot_deg = astroalign_shift(inner_primesources, inner_catsources, max_control_points=num,
+                                                    max_shift=length, cat_sort_col=colnames[2], ref_xy=ref)
+            transform = None
+            rotation = None
+            ultimate_shift_x = ultimate_shift_y = 0
+            if M is not None:
+                Meff = effective_transform(M, ref, use_scale=True)
+                new_header = apply_transform_to_header(header, Meff)
+                completion = check_shift_fast(0, 0, new_header, inner_primesources, inner_catsources,
+                                              colnames, bulge=bulge)
                 if completion >= thresh_low:
-                    ultimate_shift_x, ultimate_shift_y = x_s, y_s
+                    ultimate_shift_x, ultimate_shift_y, transform, rotation = x_s, y_s, Meff, rot_deg
                 else:
                     print(f'WARNING: crossmatch completion {completion:.2f} < {thresh_low}, assuming 0 shift')
-                    ultimate_shift_x = ultimate_shift_y = 0
         except Exception as e:
             print(f'Error in final shift generation, assuming 0, error: {e}')
             ultimate_shift_x = ultimate_shift_y = 0
 
     if not single_solve:
-        change_all_files(ultimate_shift_x, ultimate_shift_y, directory)
+        change_all_files(ultimate_shift_x, ultimate_shift_y, directory, transform=transform, rotation=rotation)
         if ultimate_shift_x != 0:
             removal(directory)
 

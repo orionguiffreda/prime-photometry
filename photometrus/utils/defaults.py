@@ -20,6 +20,7 @@ PROCESSING_DEFAULTS = dict(
     default_preproc=['flatfielding', 'gen_bad_pix_mask_by_image'], default_sky_proc=['sky', 'skysub'],
     default_astrom_proc=['verify_astrom', 'astromatic_astrometry'],
     default_stack_proc=['stacking'],
+    default_start_stage='preprocess', no_photom=False,
     output_cmd_file=False
 )
 

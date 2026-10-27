@@ -93,7 +93,7 @@ def gen_bad_pix_mask_by_image(imagepaths, astrom_dir, chip, **kwargs):
         Path or paths to nan masked images
     """
 
-    badpixmap = fits.getdata(gen_mask_file_name('badpixmask_new_c%i.fits' % chip))
+    badpixmap = fits.getdata(gen_mask_file_name('badpixmask_new_c%i.fits.fz' % chip))
     # satulimMap = fits.getdata(gen_mask_file_name('satulim.C%i.fits' % chip))[4:4092, 4:4092]
 
     if type(imagepaths) is list:

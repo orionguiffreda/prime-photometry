@@ -64,14 +64,62 @@
     ]
   },
   "ASTROM_QUERY_CATALOGS": {
-    'VIRAC': [
-      'J,H',
-      'II/364/virac2'
+    '2MASS': [
+      'J',
+      'II/246/'
     ],
-    'GAIA': [
-      'J,H,Y,Z',
-      'I/350/gaiaedr3'
-    ]
+    'VHS': [
+      'J',
+      'II/367/'
+    ],
+    'VIKING': [
+      'J',
+      'II/382/viking4'
+    ],
+    'VVV_J': [
+      'J',
+      'II/348/vvv2'
+    ],
+    'UKIDSS_J': [
+      'J',
+      'II/319/las9'
+    ],
+    'PanSTARRS_Z': [
+      'Z',
+      'II/389/ps1_dr2'
+    ],
+    'Skymapper': [
+      'Z',
+      'II/379/smssdr4'
+    ],
+    'SDSS': [
+      'Z',
+      'V/154/sdss16'
+    ],
+    'DES_Z': [
+      'Z',
+      'II/371/des_dr2'
+    ],
+    'VVV_Z': [
+      'Z',
+      'II/348/vvv2'
+    ],
+    'VVV_Y': [
+      'Y',
+      'II/348/vvv2'
+    ],
+    'UKIDSS': [
+      'Y',
+      'II/319/las9'
+    ],
+    'PanSTARRS': [
+      'Y',
+      'II/389/ps1_dr2'
+    ],
+    'DES_Y': [
+      'Y',
+      'II/371/des_dr2'
+    ],
   },
   //AB mag surveys: DES, Skymapper, SDSS, & PSTARRS
   "AB_OFFSET_DICT": {
@@ -152,7 +200,7 @@
     'C1': 2.0,
     'C2': 2.0,
     'C3': 2.0,
-    'C4': 1.0
+    'C4': 2.0
   },
     // filter central wavelengths & fwhms (in nm): https://arxiv.org/pdf/2508.14474
   "PRIME_FILTERS_DICT": {
@@ -319,7 +367,7 @@
   'temperature_date_dict' : {
     '2023-06-15T23:00:00': {
       '117.0': ['20240904'],
-      '122.0': ['20250122'],
+      '122.0': ['20250112'],
       '111.5': ['20250220'],
       '114.0': ['20250320', '20250520'],
 
@@ -333,7 +381,6 @@
       '117.0': ['20251123', '20251127'],
       '112.0': ['20260204'],
       '114.5': ['20260320']
-    }
     }
   },
   'date_temperature_dict': {'20240403': 119.0},

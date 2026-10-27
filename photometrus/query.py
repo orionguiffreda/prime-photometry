@@ -386,7 +386,7 @@ def vvv_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
           % (catNum, frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
 
     column_filters = {
-        "%sap3" % band: f">{mag_low_cutoff:f}",
+        "%smag3" % band: f">{mag_low_cutoff:f}",
     }
 
     # errbits constraint
@@ -397,7 +397,7 @@ def vvv_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     column_filters[f"{band}perrbits"] = errbit_flg
 
     try:
-        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
+        v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag3' % band, 'e_%smag3' % band, 'mClass'],
                    column_filters=column_filters,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'

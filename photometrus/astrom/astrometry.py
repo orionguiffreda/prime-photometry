@@ -34,7 +34,7 @@ def sextract(imgdir, f, sx, ap):
     # print(pre + ext + ' sextracted!')
 
 
-def sex(imgdir):
+def sex(imgdir, param_file='astrom.param'):
     os.chdir(str(imgdir))
     bulge = auto_bulge_detect(imgdir)
     if bulge:
@@ -43,17 +43,23 @@ def sex(imgdir):
         ap = gen_config_file_name('tempsource.param')
     else:
         sx = gen_config_file_name('sex.config')
-        ap = gen_config_file_name('astrom.param')
+        ap = gen_config_file_name(param_file)
     threads = []
     print('Sextracting all images in %s' % imgdir)
-    for f in sorted(os.listdir(imgdir)):
-        if f.endswith('flat.fits') or f.endswith('.flat.new'):
-            thread = threading.Thread(target=sextract, args=(imgdir, f, sx, ap), name=f)
-            thread.start()
-            threads.append(thread)
+
+    fits_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if
+                 f.endswith('flat.fits') or f.endswith('.flat.new')]
+    for f in fits_list:
+        thread = threading.Thread(target=sextract, args=(imgdir, f, sx, ap), name=f)
+        thread.start()
+        threads.append(thread)
     for thread in threads:
         thread.join()
     print('Sextraction of all images complete!')
+
+    cat_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
+
+    return fits_list, cat_list
 
 
 def sexback(imgdir):
@@ -321,10 +327,11 @@ def improved_scamp(imgdir, band, distortdeg=None, swarpcat=None, bulge=None):
 
 
 def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
-
+    cfg_name = 'scamp_dense.conf'
     if swarpcat:
         if os.path.isfile(imgdir):
             firsthdr = fits.getheader(os.path.join(imgdir, imgdir))
+            fits_list = [imgdir]
         else:
             fits_list = [f for f in sorted(os.listdir(imgdir)) if f.startswith('coadd.Open-') and f.endswith('.fits')]
             firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
@@ -336,6 +343,12 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
 
         cat_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
         firstcat = os.path.join(imgdir, cat_list[0])
+
+        # hdul = fits.open(firstcat)
+        # firsttbl = Table(hdul['LDAC_OBJECTS'].data)
+        # src_num = len(firsttbl)
+        # if src_num >= 500:
+        #     cfg_name = 'scamp_dense.conf'
 
         img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
         img_list = ','.join(img_list)
@@ -349,7 +362,7 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
     # scamp coord error conversion
     astr_acc = 0.01 / (60 * 60 * 1000)       # mas (coord error) to degrees
 
-    sc = gen_config_file_name('scamp.conf')
+    sc = gen_config_file_name(cfg_name)
     command = (f'scamp {img_list} -c {sc} -ASTREF_CATALOG FILE -ASTREFCAT_NAME {gaia_cat_name} '
                f'-ASTREFMAG_LIMITS 8.5,20 -DISTORT_DEGREES {distortdeg} '
                f'-ASTREFCENT_KEYS {cols[0]},{cols[1]} -ASTREFERR_KEYS {cols[2]},{cols[3]} '
@@ -358,7 +371,7 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
     print(f'Executing command: {command}')
     os.system(command)
 
-    return img_list
+    return fits_list, img_list
 
 
 def missfits(imgdir):

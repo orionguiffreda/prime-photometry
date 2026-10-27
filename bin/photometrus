@@ -12,6 +12,7 @@ from photometrus.preprocess import astromangle_new
 from photometrus.preprocess import astromangle_wcs
 from photometrus.preprocess import gen_astrometry
 from photometrus.astrom import astrom_shift_new
+from photometrus.astrom import astrom_shift_geom
 from photometrus.astrom import astrom_shift
 from photometrus.astrom import astrometry
 from photometrus.astrom import astrom_img_sub
@@ -75,7 +76,7 @@ elif len(sys.argv) >= 2:
             # astromangle_new.main()
             astromangle_wcs.main()
         elif sys.argv[2] == 'shift':
-            astrom_shift_new.main()
+            astrom_shift_geom.main()
         elif sys.argv[2] == 'old_shift':
             astrom_shift.main()
         elif sys.argv[2] == 'astromatic':

@@ -189,13 +189,13 @@ def img(directory, imageName, crop):
     [raImage, decImage] = w.all_pix2world(data.shape[0] / 2, data.shape[1] / 2, 1)
 
     # get ra and dec of right, left, top and bottom of img for box size
-    [raREdge, decREdge] = w.all_pix2world(data.shape[0] - int(crop), data.shape[1] / 2, 1)
-    [raLEdge, decLEdge] = w.all_pix2world(int(crop), data.shape[1] / 2, 1)
-    [raTop, decTop] = w.all_pix2world(data.shape[0] / 2, data.shape[1] - int(crop), 1)
-    [raBot, decBot] = w.all_pix2world(data.shape[0] / 2, int(crop), 1)
-
-    height = (decTop - decBot) * 60
-    width = (raLEdge - raREdge) * 60
+    # [raREdge, decREdge] = w.all_pix2world(data.shape[0] - int(crop), data.shape[1] / 2, 1)
+    # [raLEdge, decLEdge] = w.all_pix2world(int(crop), data.shape[1] / 2, 1)
+    # [raTop, decTop] = w.all_pix2world(data.shape[0] / 2, data.shape[1] - int(crop), 1)
+    # [raBot, decBot] = w.all_pix2world(data.shape[0] / 2, int(crop), 1)
+    #
+    # height = (decTop - decBot) * 60
+    # width = (raLEdge - raREdge) * 60
 
     # detect if GB field
     case = header['OBJTYPE']
@@ -512,6 +512,12 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
 
         good_cat_stars = Q[0].copy()
 
+        # rad_col = ["1.0"] * len(good_cat_stars)
+        # newtext_cat = open('PRIME_cat_srcs.reg', 'w+')
+        # newtext_cat.write('fk5')
+        # for a, d, rad in zip(good_cat_stars[RA], good_cat_stars[DEC], rad_col):
+        #     newtext_cat.write(f'\ncircle({a}, {d}, {rad}") # color=green')
+
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
         except FileNotFoundError:
@@ -563,6 +569,13 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
              (flux_radius >= 1 / 0.498) &
              (psfsourceTable['FLAGS'] == 0)]
 
+        print(f'Approximate PRIME source total in image bounds = {len(cleanPSFSources)}')
+        # newtext_all = open('PRIME_all_srcs.reg', 'w+')
+        # newtext_all.write('fk5')
+        # for a, d, rad in zip(cleanPSFSources['ALPHA_J2000'], cleanPSFSources['DELTA_J2000'],
+        #                      cleanPSFSources['FLUX_RADIUS']):
+        #     newtext_all.write(f'\ncircle({a}, {d}, {rad}") # color=green')
+
         # if magtype == 'PSF':
         #     cleanPSFSources = cleanPSFSources[(cleanPSFSources['FLAGS_MODEL'] == 0)]
 
@@ -580,7 +593,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
                                                                               photoDistThresh * u.arcsec)
         # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
 
-        if 'Mclass' in colnames or 'mergedClass' in colnames:
+        if 'Mclass' in colnames or 'mergedClass' in colnames or 'mergedclass' in colnames:
             # pruning crossmatches to only include stars if applicable
             print('Found %d good cross-matches before pruning' % len(idx_psfmass))
             star_mask = np.isin(good_cat_stars[colnames[4]], [-1, -2])
@@ -719,6 +732,18 @@ def single_zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, i
 
             comberr = np.sqrt(caterr ** 2 + prime_err_col ** 2)
 
+            # # Clipping sources above 0.95 of quad error
+            # max_acc_comberr = np.max(caterr) * 0.95
+            # comberr_mask = comberr < max_acc_comberr
+            #
+            # comberr = comberr[comberr_mask]
+            # cat_mags = cat_mags[comberr_mask]
+            # prime_mag_col = prime_mag_col[comberr_mask]
+            # idx_mass = idx_mass[comberr_mask]
+            # idx_image = idx_image[comberr_mask]
+            #
+            # print(f'  Max Acc. Quad Error: {max_acc_comberr}, # of clipped sources: {len(caterr) - comberr_mask.sum()}')
+
             weights_noclip = 1 / (comberr ** 2)
 
             offsets = ma.array(cat_mags - prime_mag_col)
@@ -796,7 +821,7 @@ def single_zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, i
                             f'\nPhotometry likely NOT reliable, Recommend checking field, '
                             f'likely an astrometric & or stacking issue!')
 
-        return cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars
+        return cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars, idx_mass, idx_image
 
 
 def zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, imageName, band, survey, sigma, data,
@@ -1269,7 +1294,7 @@ def int_calibration(
     good_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, massCatCoords, crop_cat_stars = (
         tables(Q, data, w, psfcatalogName, crop, given_catalog))
 
-    cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars = single_zeropt(
+    cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars, idx_psfmass, idx_psfimage = single_zeropt(
         good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass, idx_psfimage, name, band, survey, sigma,
         data, crop)
 
@@ -1364,7 +1389,7 @@ def full_int_calibration(
                 sigma = sigma * multiplier
                 print(f'Sigma value increased for PSF in lower exp. time field: sigma = {sigma}')
 
-        cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars = single_zeropt(
+        cleanPSFSources, PSFSources, weights_noclip, clipped, ab_cat_stars, idx_psfmass, idx_psfimage = single_zeropt(
                                                     good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, idx_psfmass,
                                                     idx_psfimage, name, band, chosen_survey, sigma, data, crop
                                                 )

@@ -203,12 +203,27 @@ def get_temperature_date(datetime, temperature):
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
     date_list = temp_dates['{:.1f}'.format(temperatures[nearest_temp])]
     if len(date_list) == 1:
-        return date_list[0]
+        return date_list[0], date_list
     else:
         date_array = np.asarray([to_datetime(d) for d in date_list])
         data_date_array = np.asarray([datetime for d in date_list])
         nearest_date = np.abs(date_array-data_date_array).argmin()  # getting closest date with cal data
-        return date_list[nearest_date]
+        return date_list[nearest_date], date_list
+
+
+def get_ramp_cal_file(cal_file_format, chip, date, date_list, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
+    combined_format = os.path.join(base_dir, cal_file_format)
+    cal_file = combined_format.format(chip=chip, date=date)
+
+    # If the file doesn't exist for a given date, return cal file for a different date in the date_list
+    if not os.path.isfile(cal_file):
+        for date in date_list:
+            new_cal_file = combined_format.format(chip=chip, date=date)
+            if os.path.isfile(new_cal_file):
+                return new_cal_file
+        raise MissingCalError("Calibration file '{}' not found.".format(cal_file))
+    else:
+        return cal_file
 
 
 def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
@@ -226,20 +241,14 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
         except KeyError:
             print(GET_DATA_SETTINGS)
             raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
-    date = get_temperature_date(date, temperature)
-    coe_R = f"coe_R/coe_R.C{chip}.fits.cube.{date}"
-    coe_D = f"coe_D/coe_D.C{chip}.fits.cube.{date}"
-    darklim = f"darklim/darklim.C{chip}.fits.{date}"
-    superbias = f"bias/superbias_minRMS.C{chip}.fits.{date}"
-    satulim = f"satulim/satulim.C{chip}.fits.{date}"
-    cal_files = [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
-    sb = cal_files[0]
-    if not os.path.isfile(sb):
-        cal_files[0] = sb.replace('bias/superbias_minRMS.', 'bias/super_bias')
-    cal_files = [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
-    for cal_file in cal_files:
-        if not os.path.isfile(cal_file):
-            raise MissingCalError("Calibration file '{}' not found.".format(cal_file))
+    date, date_list = get_temperature_date(date, temperature)
+    coe_R = "coe_R/coe_R.C{chip}.fits.cube.{date}"
+    coe_D = "coe_D/coe_D.C{chip}.fits.cube.{date}"
+    darklim = "darklim/darklim.C{chip}.fits.{date}"
+    superbias = "bias/superbias_minRMS.C{chip}.fits.{date}"
+    satulim = "satulim/satulim.C{chip}.fits.{date}"
+    formats = (superbias, satulim, coe_R, coe_D, darklim)
+    cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
     return cal_files
 
 
