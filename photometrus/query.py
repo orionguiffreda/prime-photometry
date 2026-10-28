@@ -107,7 +107,7 @@ def gaia_vizier_query(coords, width, chosen_frame='fk5'):
         print(f'Error: {e}')
         print(
             'Error in Vizier query.  Is Vizier down?')
-
+        Q = []
     return Q, survey_name
 
 
@@ -171,7 +171,7 @@ def twomass_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag
         print(f'Error: {e}')
         print(
             'Error in Vizier query.  Is Vizier down?')
-
+        Q = []
     return Q, survey_name
 
 
@@ -250,6 +250,7 @@ def vhs_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
             'H band is also not well covered!')
+        Q = []
     return Q, survey_name
 
 
@@ -329,6 +330,7 @@ def viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
             'H band is also not well covered!'
             ' If you are in S.H., VIKING is only in a relatively smaller strip!')
+        Q = []
     return Q, survey_name
 
 
@@ -407,6 +409,7 @@ def vvv_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?  '
             'H band is also not well covered!')
+        Q = []
     return Q, survey_name
 
 
@@ -447,7 +450,7 @@ def las_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low
         print(
             'Error in Vizier query. Perhaps your image is not in the southern hemisphere sky?'
             '\n perhaps check UKIDSS coverage maps?')
-
+        Q = []
     return Q, survey_name
 
 
