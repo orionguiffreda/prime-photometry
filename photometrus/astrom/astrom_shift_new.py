@@ -24,7 +24,7 @@ import math
 import sys
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box)
+                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box, ASTROM_QUERY_CATALOGS)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):
@@ -155,14 +155,25 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
     try:
         print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
               % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
-        v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
-                                                     "%sperrbits" % band: errbits_vvv,
-                                                    "%s1perrb" % band: errbits_vvv,
-                                                    "%sflags" % band: errbits_vvv,
-                                                    "Cflg": errbits_2M,
-                                                    "Nd": ">6"}, row_limit=-1)
-        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
-                           catalog=catNum, cache=False, frame=chosen_frame)
+        # v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
+        #                                              "%sperrbits" % band: errbits_vvv,
+        #                                             "%s1perrb" % band: errbits_vvv,
+        #                                             "%sflags" % band: errbits_vvv,
+        #                                             "Cflg": errbits_2M,
+        #                                             "Nd": ">6"}, row_limit=-1)
+        # Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
+        #                    catalog=catNum, cache=False, frame=chosen_frame)
+        Q = local_query_box(ra_center=float(frame_long),
+                            dec_center=float(frame_lat),
+                            width=str(boxsize) + 'm',
+                            dbname='prime_2mass_local',
+                            tablename='twomass_local',
+                            columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                            column_filters={
+                                f"{band.lower()}mag": f"BETWEEN {maglow:f} AND {maghigh:f}",
+                                "cc_flg": errbits_2M,
+                            }
+                            )
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
 
         Q = local_query_box(ra_center=float(frame_long),
@@ -210,7 +221,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
         mag_high_cutoff = maghigh
         mag_low_cutoff = maglow
     else:
-        catalog_dict = PHOTOMETRY_QUERY_CATALOGS
+        catalog_dict = ASTROM_QUERY_CATALOGS
         catalogs = []
         if band == 'J' or band == 'H':
             for k, v in catalog_dict.items():
@@ -322,8 +333,10 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                               % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
                                  eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
                         try:
-                            if catNum == last_idx:
+                            if catNum == 'II/246/':
                                 print('\nVizier catalogs exhausted, switching to local 2MASS query...')
+                                if band == 'Y' or band == 'Z':
+                                    band = 'J'
                                 try:
                                     Q = local_query_box(ra_center=raImage,
                                                         dec_center=decImage,
@@ -963,7 +976,7 @@ def shift(
 
     start_time = dt.now()
 
-    set_vizier_mirror()
+    # set_vizier_mirror()
 
     maglow = 12
     maghigh = 14

@@ -78,7 +78,7 @@ elif len(sys.argv) >= 2:
         elif sys.argv[2] == 'shift':
             astrom_shift_geom.main()
         elif sys.argv[2] == 'old_shift':
-            astrom_shift.main()
+            astrom_shift_new.main()
         elif sys.argv[2] == 'astromatic':
             astrometry.main()
         elif sys.argv[2] == 'net':

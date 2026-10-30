@@ -45,6 +45,8 @@ PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/382/vi
 #     'H': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'twomass_query']
 # }
 
+AB_SURVEYS = {'DES_Y', 'DES_Z', 'Skymapper', 'PanSTARRS', 'PanSTARRS_Z', 'SDSS'}
+
 ASTROM_QUERY_CATALOGS = {
     'VIRAC': ['J,H','II/364/virac2'],
     'GAIA': ['J,H,Y,Z','I/350/gaiaedr3']

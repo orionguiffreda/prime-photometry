@@ -353,7 +353,7 @@ def viking_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cut
     errbit_flg = '<128'
     if errbits is not None:
         errbit_flg = errbits
-        column_filters[f"hClass"] = '-1'
+        # column_filters[f"hClass"] = '=-1'
 
     column_filters[f"{band}ppErrBits"] = errbit_flg
 
@@ -848,7 +848,7 @@ def gaia_crsmtch_check(coords, width, chosen_frame, w, data, crop, Q):
 def query(
         raImage, decImage, band, w=None, data=None, crop=defaults['crop'], acc_comp_lvl=defaults['gaia_acc_comp_lvl'], survey=None,
         given_catalog_path=None, mag_lower_lim=PHOTOMETRY_MAG_LOWER_LIMIT, mag_upper_lim=PHOTOMETRY_MAG_UPPER_LIMIT, bulge=False,
-        magtype=defaults['magtype'], query_width=PHOTOMETRY_QUERY_WIDTH
+        magtype=defaults['magtype'], query_width=PHOTOMETRY_QUERY_WIDTH, errbits=None
 ):
 
     mag_low_cutoff = mag_lower_lim
@@ -896,7 +896,8 @@ def query(
 
         Q, chosen_survey = chosen_fctn[0](
             coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
-            width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
+            width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame,
+            errbits=errbits
         )
 
         if not Q:
@@ -905,7 +906,7 @@ def query(
             if len(Q[0]) > 0:
                 print('Queried source total = ', len(Q[0]))
             else:
-                raise ValueError('No sources found in survey catalog!  No coverage?')
+                print('No sources found in survey catalog!  No coverage?')
 
         return Q, chosen_survey, mag_low_cutoff
 
@@ -922,7 +923,8 @@ def query(
         for fctn in fctns_for_band:
             Q, chosen_survey = fctn(
                 coords=coords, frame_long_str=frame_long_str, frame_lat_str=frame_lat_str, band=band,
-                width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame
+                width=width,mag_low_cutoff=mag_low_cutoff, mag_high_cutoff=mag_high_cutoff, chosen_frame=chosen_frame,
+                errbits=errbits
             )
 
             if Q:

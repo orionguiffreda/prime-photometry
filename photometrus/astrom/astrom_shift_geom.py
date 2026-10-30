@@ -26,9 +26,9 @@ from collections import defaultdict
 import math
 import sys
 
+from photometrus.query import query, twomass_query
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, ASTROM_QUERY_CATALOGS,
-                                  AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box)
+                                  AB_OFFSET_DICT, GB_QUERY_CATALOGS, AB_SURVEYS, set_vizier_mirror, local_query_box)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 
@@ -122,7 +122,6 @@ def imaging(directory, imageName, x_offset=0, x_guess=None, y_guess=None):
 def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, errbits='<=16', bulge=False):
     columns = ['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%s1ap3' % band,
                'e_%sap3' % band, '%smag' % band, "%smag3" % band, 'e_%smag' % band, '%smag' % band.lower()]
-
     # chosen coords
     if bulge:
         chosencoords = coords
@@ -175,94 +174,47 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
 
 
 def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge=False):
-    # new automatic survey picking
+    TWOMASS_CAT = 'II/246/'
 
-    # current catalogs
+    # ---- catalog selection -------------------------------------------------
     if bulge:
-        print('Galactic bulge field detected!  Adjusting query parameters accordingly...')
         catalog_dict = GB_QUERY_CATALOGS
-        catalogs = []
-        if band == 'J' or band == 'H' or band == 'Y':
-            for k, v in catalog_dict.items():
-                if v[0] == 'J':
-                    catalogs.append((k, v[1]))
-        elif band == 'Z':
-            for k, v in catalog_dict.items():
-                if v[0] == 'Z':
-                    catalogs.append((k, v[1]))
-        else:
-            print('Only J, H, Y, and Z band are supported!')
-        coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
-        coords = coords.galactic  # galactic conversion for bulge fields
-        chosen_frame = 'galactic'
-        frame_long = coords.l.deg
-        frame_long_str = 'l = %.4f' % frame_long
-        frame_lat = coords.b.deg
-        frame_lat_str = 'b = %.4f' % frame_lat
-        print('Converting coords to galactic: %s, %s' % (frame_long_str, frame_lat_str))
-
-        mag_high_cutoff = maghigh
-        mag_low_cutoff = maglow
+        # In the bulge, Y is served from the J-band catalog list
+        band_to_catband = {'J': 'J', 'H': 'J', 'Y': 'J', 'Z': 'Z'}
     else:
         catalog_dict = ASTROM_QUERY_CATALOGS
-        catalogs = []
-        if band == 'J' or band == 'H':
-            for k, v in catalog_dict.items():
-                if v[0] == 'J':
-                    catalogs.append((k, v[1]))
-        elif band == 'Z':
-            for k, v in catalog_dict.items():
-                if v[0] == 'Z':
-                    catalogs.append((k, v[1]))
-        elif band == 'Y':
-            for k, v in catalog_dict.items():
-                if v[0] == 'Y':
-                    catalogs.append((k, v[1]))
-        else:
-            print('Only J, H, Y, and Z band are supported!')
-        coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
-        chosen_frame = 'fk5'
-        frame_long = raImage
-        frame_long_str = 'RA: %.4f' % frame_long
-        frame_lat = decImage
-        frame_lat_str = 'DEC: %.4f' % frame_lat
+        band_to_catband = {'J': 'J', 'H': 'J', 'Y': 'Y', 'Z': 'Z'}
 
-        print('Non-bulge field, implementing wide mag range...')
-        mag_high_cutoff = 16
+    if band not in band_to_catband:
+        # Original only printed here and then crashed on catalogs[-1]
+        raise ValueError('Only J, H, Y, and Z band are supported! Got %r' % (band,))
+
+    catband = band_to_catband[band]
+    catalogs = [(k, v[1]) for k, v in catalog_dict.items() if v[0] == catband]
+    if not catalogs:
+        raise ValueError('No catalogs configured for band %s (bulge=%s)' % (band, bulge))
+
+    # ---- coordinates / magnitude limits ------------------------------------
+    coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
+    if bulge:
+        print('Galactic bulge field detected!  Adjusting query parameters accordingly...')
+        coords = coords.galactic  # galactic conversion for bulge fields
+        frame_long_str = 'l = %.4f' % coords.l.deg
+        frame_lat_str = 'b = %.4f' % coords.b.deg
+        print('Converting coords to galactic: %s, %s' % (frame_long_str, frame_lat_str))
+        mag_high_cutoff = maghigh
         mag_low_cutoff = maglow
+        acc_source_num = 500    # total sources allowed before trying a tighter query
+    else:
+        frame_long_str = 'RA: %.4f' % raImage
+        frame_lat_str = 'DEC: %.4f' % decImage
+        print('Non-bulge field, implementing wide mag range...')
+        mag_high_cutoff = 16    # NB: maghigh is ignored for non-bulge fields
+        mag_low_cutoff = maglow
+        acc_source_num = 1500
 
-    checkwidth = boxsize
-
-    not_null = '!=null'
-
-    # current columns
-    v = Vizier(columns=['RAJ2000', 'DEJ2000', 'RAICRS', 'DEICRS', 'RA_ICRS', 'DE_ICRS', '%sap3' % band, '%s1ap3' % band,
-                        '%smag' % band, "%smag3" % band, "%smag1" % band, '%smag' % band.lower(),
-                        '%sPSF' % band.lower(), '%spmag' % band.lower()])
-    # column_filters={'%sap3' % band: not_null, '%smag' % band: not_null, "%smag3" % band: not_null
-    #     ,'%smag' % band.lower(): not_null, '%sPSF' % band.lower(): not_null, '%spmag' % band.lower(): not_null
-    # })
-    try:
-        result = v.query_region(coords, width=str(checkwidth) + 'm', catalog=[f[1] for f in catalogs],
-                                frame=chosen_frame)
-        test = result[0]
-    except IndexError as e:
-        # in case of strange failure in query, default to a 2mass query attempt
-        try:
-            print(f'Default query logic failure: {e} \ndefaulting to 2mass')
-            result = v.query_region(coords, width=str(checkwidth) + 'm', catalog='II/246/',
-                                    frame=chosen_frame)
-        except IndexError as e:
-            raise Exception(f'Sadly, no current surveys available in current area in {band} band: {e}')
-
-    keys = result.format_table_list()
-
-    print('%s, %s, Box Width: %s arcmin... '
-          '\n%s band initial query resulting in: \n%s' % (frame_long_str, frame_lat_str, checkwidth, band, keys))
-
-    keycheck = result.keys()
-
-    errbitoptions_2mass = ['!= null', '0??', '?0?']  # 2mass errbits column, 1st is for J and 2nd is for H
+    # 2MASS quality-flag options: [not-null, J-band, H-band]
+    errbitoptions_2mass = ['!= null', '0??', '?0?']
     if band == 'J':
         errbit_2mass = errbitoptions_2mass[1]
     elif band == 'H':
@@ -270,111 +222,93 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     else:
         errbit_2mass = errbitoptions_2mass[0]
 
-    if bulge:
-        acc_source_num = 500  # total number of sources allowed in full query before trying smaller box
-    else:
-        acc_source_num = 1500
-
-    # contains changes in bounds to iterate through if too many sources:
-    # format: [boxsize multiplier, mag lim scalar change, errbits column constraint]
-    bounds_change_list = [[1.0, 0, 0, '<=16', '!= null'], [1.0, 0.5, 0, '<=16', '!= null'],
+    # format: [boxsize multiplier, mag-low shift, mag-high shift,
+    #          errbits constraint, 2MASS errbits constraint]
+    bounds_change_list = [[1.0, 0, 0, '<=16', '!= null'],
+                          [1.0, 0.5, 0, '<=16', '!= null'],
                           [1.0, 0.5, 0, '<16', errbit_2mass],
-                          [1.0, 0.5, 0.5, '<16', errbit_2mass], [1.0, 0.5, 0.75, '<16', errbit_2mass],
-                          [1.0, 0.5, 1.0, '<16', errbit_2mass], [1.0, 0.5, 1.25, '<16', errbit_2mass],
+                          [1.0, 0.5, 0.5, '<16', errbit_2mass],
+                          [1.0, 0.5, 0.75, '<16', errbit_2mass],
+                          [1.0, 0.5, 1.0, '<16', errbit_2mass],
+                          [1.0, 0.5, 1.25, '<16', errbit_2mass],
                           [0.85, 0.5, 1.25, '<16', errbit_2mass]]
 
-    success_flag = False
-    last_idx = catalogs[-1][1]
+    # ---- query loop --------------------------------------------------------
+    fallback = None  # last non-empty result that had too many sources
+
     for chosen_survey, catNum in catalogs:
-        for k in keycheck:
-            if catNum in k:
-                print('%s catalog found!' % k)
-                vhs_table = result[''.join(k)]
-                cols = vhs_table.colnames
-                vhs_band_col = vhs_table[cols[2]]
+        cat_mag_low = mag_low_cutoff
+        cat_mag_high = mag_high_cutoff
 
-                if not np.all(vhs_band_col.mask):
-                    print('Survey has coverage in %s band!' % band)
-                    print('Survey = %s' % k)
+        if chosen_survey in AB_SURVEYS:
+            print('Adjusting AB mags to VEGA...')
+            offset = AB_OFFSET_DICT.get(band, 0.0)
+            cat_mag_high -= offset
 
-                    # AB surveys
-                    if chosen_survey in ['DES_Y', 'DES_Z', 'Skymapper']:
-                        print('Adjusting AB mags to VEGA...')
-                        offset = AB_OFFSET_DICT.get(band, 0.0)
-                        mag_high_cutoff -= offset
+        # Non-2MASS catalogs always use the tighter source limit
+        max_sources = acc_source_num # if catNum == TWOMASS_CAT else 500
 
-                    no_sources_flag = False
+        for boxscale, low_shift, high_shift, errbits_constraint, errbits_2M in bounds_change_list:
+            errbits = [errbits_constraint, errbits_2M]
+            effective_boxsize = boxsize * boxscale
+            eff_mag_low_cutoff = cat_mag_low + low_shift
+            eff_mag_high_cutoff = cat_mag_high - high_shift
 
-                    for bounds in bounds_change_list:
-                        boxscale, low_lim_scalar, high_lim_scalar, errbits_constraint, errbits_2M = bounds
-                        errbits = [errbits_constraint, errbits_2M]
+            print('\nQuerying %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, '
+                  'err constraints: %s, %s'
+                  % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
+                     eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
+            try:
+                if catNum == TWOMASS_CAT:
+                    Q, _ = twomass_query(
+                        coords=coords,
+                        frame_long_str=frame_long_str,
+                        frame_lat_str=frame_lat_str,
+                        band=band,
+                        width=effective_boxsize,
+                        mag_low_cutoff=eff_mag_low_cutoff,
+                        mag_high_cutoff=eff_mag_high_cutoff,
+                        errbits=errbits_2M)
+                    print('Queried source total = ', len(Q[0]))
+                else:
+                    chosen_survey = chosen_survey.split('_')[0]
+                    Q, _, _ = query(
+                        raImage=raImage,
+                        decImage=decImage,
+                        band=band,
+                        survey=chosen_survey,
+                        query_width=effective_boxsize,
+                        mag_lower_lim=eff_mag_low_cutoff,
+                        mag_upper_lim=eff_mag_high_cutoff,
+                        errbits=errbits_constraint)
 
-                        effective_boxsize = boxsize * boxscale
-                        eff_mag_low_cutoff = mag_low_cutoff + low_lim_scalar
-                        eff_mag_high_cutoff = mag_high_cutoff - high_lim_scalar
+                if Q is None or len(Q) == 0 or len(Q[0]) == 0:
+                    print(f"No sources found in {catNum}, trying fallback if available...")
+                    break
 
-                        print('\nQuerying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, '
-                              'err constraints: %s, %s'
-                              % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
-                                 eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
-                        try:
-                            if catNum == last_idx:
-                                print('\nVizier catalogs exhausted, switching to local 2MASS query...')
-                                Q = local_query_box(ra_center=raImage,
-                                                    dec_center=decImage,
-                                                    width=str(effective_boxsize) + 'm',
-                                                    dbname='prime_2mass_local',
-                                                    tablename='twomass_local',
-                                                    columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
-                                                    column_filters={
-                                                        f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
-                                                        "cc_flg": errbits_2M,
-                                                    }
-                                                    )
-                            else:
-                                v = Vizier(columns=[cols[0], cols[1], cols[2]],
-                                           column_filters={
-                                               cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
-                                               f"{band.lower()}Flag": "<4",
-                                               f"{band}perrbits": errbits_constraint,
-                                               f"{band}1perrb": errbits_constraint,
-                                               f"{band}flags": errbits_constraint,
-                                               "Cflg": errbits_2M,
-                                               "Hclass": "== -1",
-                                               "Class": "== 0",
-                                               "Nd": ">6"
-                                           }, row_limit=-1)
+                nsrc = len(Q[0])
+                cols = Q[0].colnames
+                result = (Q, coords, catNum, cols[2], eff_mag_low_cutoff,
+                          eff_mag_high_cutoff, effective_boxsize, errbits)
 
-                                Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
-                                                   width=str(effective_boxsize) + 'm',
-                                                   catalog=catNum, cache=False,
-                                                   frame=chosen_frame)
+                if nsrc <= max_sources:
+                    return result
 
-                            if Q and len(Q[0]) > 0:
-                                print('Queried source total = ', len(Q[0]))
-                                if len(Q[0]) <= acc_source_num:
-                                    success_flag = True  # Mark success
-                                    break
-                                else:
-                                    print("Too many sources (>%i), trying different bounds..." % acc_source_num)
-                                    no_sources_flag = True
-                                    continue
-                            else:
-                                print(f"No sources found in {catNum}, trying fallback if available...")
-                                break
+                print("Too many sources (>%i), trying different bounds..." % max_sources)
+                fallback = result
 
-                        except Exception as e:
-                            print('Error in Vizier query.')
-                            print(f"Error details: {e}")
-                            continue
+            except Exception as e:
+                print('Error in query.')
+                print(f"Error details: {e}")
+                continue
 
-                    if success_flag:
-                        break  # Break out of keycheck loop as well
+    if fallback is not None:
+        print('WARNING: no catalog met the source-count limit; returning the last '
+              'over-limit result.')
+        return fallback
 
-        if success_flag:
-            break  # Break out of catalogs loop
-
-    return Q, coords, catNum, cols[2], eff_mag_low_cutoff, eff_mag_high_cutoff, effective_boxsize, errbits
+    raise RuntimeError('No sources found in any catalog for band %s at (%.4f, %.4f)'
+                       % (band, raImage, decImage))
 
 
 # %% sextraction / psfex
@@ -906,7 +840,7 @@ def shift(
 
     start_time = dt.now()
 
-    set_vizier_mirror()
+    # set_vizier_mirror()
 
     maglow = 12
     maghigh = 14

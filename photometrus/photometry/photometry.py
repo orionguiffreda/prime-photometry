@@ -732,17 +732,17 @@ def single_zeropt(good_cat_stars, crop_cat_stars, cleanPSFSources, PSFSources, i
 
             comberr = np.sqrt(caterr ** 2 + prime_err_col ** 2)
 
-            # # Clipping sources above 0.95 of quad error
-            # max_acc_comberr = np.max(caterr) * 0.95
-            # comberr_mask = comberr < max_acc_comberr
-            #
-            # comberr = comberr[comberr_mask]
-            # cat_mags = cat_mags[comberr_mask]
-            # prime_mag_col = prime_mag_col[comberr_mask]
-            # idx_mass = idx_mass[comberr_mask]
-            # idx_image = idx_image[comberr_mask]
-            #
-            # print(f'  Max Acc. Quad Error: {max_acc_comberr}, # of clipped sources: {len(caterr) - comberr_mask.sum()}')
+            # Clipping sources above 0.95 of quad error
+            max_acc_comberr = np.max(caterr) * 0.95
+            comberr_mask = comberr < max_acc_comberr
+
+            comberr = comberr[comberr_mask]
+            cat_mags = cat_mags[comberr_mask]
+            prime_mag_col = prime_mag_col[comberr_mask]
+            idx_mass = idx_mass[comberr_mask]
+            idx_image = idx_image[comberr_mask]
+
+            print(f'  Max Acc. Quad Error: {max_acc_comberr}, # of clipped sources: {len(caterr) - comberr_mask.sum()}')
 
             weights_noclip = 1 / (comberr ** 2)
 
@@ -1583,7 +1583,7 @@ def photometry(
 
     start_time = dt.now()
 
-    set_vizier_mirror()
+    # set_vizier_mirror()
 
     magtype = defaults['magtype']
     parallel = defaults['parallel']
