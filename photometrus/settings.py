@@ -27,6 +27,7 @@ import json5
 
 PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
 FLAT_DEFAULT_DIR = '/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/'
+PIPELINE_STAGES = ['preprocess', 'sky', 'astrom', 'stack']
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -43,6 +44,8 @@ PHOTOMETRY_QUERY_CATALOGS = {'VHS': ['J', 'II/367/'], 'VIKING': ['J', 'II/382/vi
 #     'J': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'twomass_query'],
 #     'H': ['viking_query', 'vvv_query', 'vhs_query', 'ukidss_query', 'twomass_query']
 # }
+
+AB_SURVEYS = {'DES_Y', 'DES_Z', 'Skymapper', 'PanSTARRS', 'PanSTARRS_Z', 'SDSS'}
 
 ASTROM_QUERY_CATALOGS = {
     'VIRAC': ['J,H','II/364/virac2'],
@@ -187,9 +190,13 @@ def gen_pipeline_file_name():
 
 
 def gen_config_file_name(filename):
+    """Generates filepath for configs in .prime/config/, unless an existing filepath is specified"""
     # base_dir = os.path.dirname(__file__)  # os.path.abspath('__file__')
     # base_dir = gen_pipeline_file_name()
-    return os.path.join(gen_config_dir(), filename)
+    if os.path.isfile(filename):
+        return filename
+    else:
+        return os.path.join(gen_config_dir(), filename)
 
 
 def load_settings(settings_file='photometrus.json5'):
@@ -209,6 +216,7 @@ def update_settings(settings_file='photometrus.json5'):
     global PHOTOMETRY_MAG_UPPER_LIMIT
     global PHOTOMETRY_QUERY_WIDTH
     global PHOTOMETRY_QUERY_CATALOGS
+    global ASTROM_QUERY_CATALOGS
     global AB_OFFSET_DICT
     global PHOTOMETRY_LIM_MAGS
     global GB_QUERY_CATALOGS
@@ -224,6 +232,7 @@ def update_settings(settings_file='photometrus.json5'):
     PHOTOMETRY_MAG_UPPER_LIMIT = settings['PHOTOMETRY_MAG_UPPER_LIMIT']
     PHOTOMETRY_QUERY_WIDTH = settings['PHOTOMETRY_QUERY_WIDTH']
     PHOTOMETRY_QUERY_CATALOGS = settings['PHOTOMETRY_QUERY_CATALOGS']
+    ASTROM_QUERY_CATALOGS = settings['ASTROM_QUERY_CATALOGS']
     AB_OFFSET_DICT = settings['AB_OFFSET_DICT']
     PHOTOMETRY_LIM_MAGS = settings['PHOTOMETRY_LIM_MAGS']
     GB_QUERY_CATALOGS = settings['GB_QUERY_CATALOGS']
@@ -480,11 +489,15 @@ def local_query_box(ra_center, dec_center, dbname, tablename,
 
     if column_filters:
         for col, expr in column_filters.items():
+            expr = expr.strip()
             if expr == '!= null':
-                adj_expr = 'IS NOT NULL'
+                where.append(f"{col} IS NOT NULL")
+            elif '?' in expr or '*' in expr:
+                negate = expr.startswith(('~', '!'))
+                pattern = expr.lstrip('~!=').replace('?', '_').replace('*', '%').replace("'", "''")
+                where.append(f"{col} {'NOT LIKE' if negate else 'LIKE'} '{pattern}'")
             else:
-                adj_expr = expr
-            where.append(f"{col} {adj_expr}")
+                where.append(f"{col} {expr}")
 
     if columns:
         print(' Specific cols specified, removing rows where column vals = None')

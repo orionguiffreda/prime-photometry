@@ -23,6 +23,7 @@ def path_replace(path):
         ('%SERIAL%', '{0:08d}'),
         ('%SERIAL_TRUNC%', '{1:08d}'),
         ('%CHIP%', '{0}'),
+        ('%RSYNCDIR%', '{2}'),
     )
     for replace_format in path_replace_format:
         path = path.replace(replace_format[0], replace_format[1])
@@ -42,8 +43,10 @@ file_prefix = '{0:08d}'
 
 backup_lists = {
     'ramp': ['real_time_ramp', 'ramp_fz', 'regen'],
-    'raw': ['raw_fz',],
-    'raw_fz': ['raw',],
+    'raw': ['raw_fz', 'archive_raw_fz', 'archive_recovery_raw_fz'],
+    'raw_fz': ['archive_raw_fz', 'archive_recovery_raw_fz' 'raw'],
+    'archive_raw_fz': ['archive_recovery_raw_fz', 'raw_fz', 'raw'],
+    'archive_recovery_raw_fz': ['archive_raw_fz', 'raw_fz', 'raw'],
     'ramp_fz': ['ramp', 'real_time_ramp', 'regen'],
     'real_time_ramp': ['ramp', 'ramp_fz', 'regen'],
     'regen': ['regen']
@@ -56,10 +59,27 @@ for _k, _v in remote_file_formats.items():
     for _i, fmt in enumerate(_v):
         remote_file_formats[_k][_i] = path_replace(fmt)
 
+archive_file_location_log = path_replace(GET_DATA_SETTINGS['archive_file_location_log'])
+
 replace_list = GET_DATA_SETTINGS['replace_list']
 
 class NoCalError(Exception):
     pass
+
+
+class MissingCalError(Exception):
+    pass
+
+
+def gen_rsync_dir_dicts(chips=(1,2,3,4)):
+    rsync_dicts = []
+    for chip in chips:
+        rsync_log = read_csv(archive_file_location_log.format(chip), delimiter=' ', names=['truncate', 'data_size', 'nfiles', 'date', 'time', 'rsync_dir'], dtype=str)
+        rsync_dicts.append({row[1]['truncate']: row[1]['rsync_dir'] for row in rsync_log.iterrows()})
+    return rsync_dicts
+
+
+rsync_dir_dicts = gen_rsync_dir_dicts()
 
 
 def funpack(fpacked_file, funpacked_file):
@@ -140,9 +160,17 @@ def truncate_1000(number):
 
 
 def get_file_name(file_number, ftype, camera, funpack_fz=defaults['funpack_fz']):
-    remote_file_format = remote_file_formats[ftype][camera]
+    remote_file_format = remote_file_formats[ftype.replace('recovery_', '')][camera]
     if ftype.endswith('fz') or ftype.startswith('regen'):
-        file_name = remote_file_format.format(file_number, truncate_1000(file_number))
+        trunc = truncate_1000(file_number)
+        format_args = [file_number, trunc]
+        if ftype.startswith('archive'):
+            trunc_str = '{0:08d}'.format(trunc)
+            if ftype.startswith('archive_recovery'):
+                trunc_str = trunc_str + '_recovery'
+            format_args.append(rsync_dir_dicts[camera][trunc_str])
+        file_name = remote_file_format.format(*format_args)
+
         if funpack_fz:
             if os.path.exists(file_name):
                 output_dir = funpack_output_dir.format(camera+1, truncate_1000(file_number))
@@ -161,6 +189,7 @@ def get_temperature_date(datetime, temperature):
     """
     temperature_date_dict = GET_DATA_SETTINGS['temperature_date_dict']
     cutoff_dates = sorted(temperature_date_dict.keys())
+    cutoff_dates.reverse()
     temp_dates = {}
     for cutoff_date in cutoff_dates:  # getting era with identical load files
         td = datetime - to_datetime(cutoff_date)
@@ -168,17 +197,33 @@ def get_temperature_date(datetime, temperature):
             temp_dates = temperature_date_dict[cutoff_date]
             break
     if not temp_dates:  # raise an error if no dataset exists
-        raise NoCalError
+        raise NoCalError("No calibration data for datetime {} and temperature {}".format(datetime, temperature))
     temperature_keys = temp_dates.keys()
     temperatures = np.asarray(list(temperature_keys), dtype=float)
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
     date_list = temp_dates['{:.1f}'.format(temperatures[nearest_temp])]
     if len(date_list) == 1:
-        return date_list[0]
+        return date_list[0], date_list
     else:
         date_array = np.asarray([to_datetime(d) for d in date_list])
-        nearest_date = np.abs(date_array-date_array).argmin()  # getting closest date with cal data
-        return date_list[nearest_date]
+        data_date_array = np.asarray([datetime for d in date_list])
+        nearest_date = np.abs(date_array-data_date_array).argmin()  # getting closest date with cal data
+        return date_list[nearest_date], date_list
+
+
+def get_ramp_cal_file(cal_file_format, chip, date, date_list, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
+    combined_format = os.path.join(base_dir, cal_file_format)
+    cal_file = combined_format.format(chip=chip, date=date)
+
+    # If the file doesn't exist for a given date, return cal file for a different date in the date_list
+    if not os.path.isfile(cal_file):
+        for date in date_list:
+            new_cal_file = combined_format.format(chip=chip, date=date)
+            if os.path.isfile(new_cal_file):
+                return new_cal_file
+        raise MissingCalError("Calibration file '{}' not found.".format(cal_file))
+    else:
+        return cal_file
 
 
 def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
@@ -196,17 +241,15 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
         except KeyError:
             print(GET_DATA_SETTINGS)
             raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
-    date = get_temperature_date(date, temperature)
-    coe_R = f"coe_R/coe_R.C{chip}.fits.cube.{date}"
-    coe_D = f"coe_D/coe_D.C{chip}.fits.cube.{date}"
-    darklim = f"darklim/darklim.C{chip}.fits.{date}"
-    superbias = f"bias/superbias_minRMS.C{chip}.fits.{date}"
-    satulim = f"satulim/satulim.C{chip}.fits.{date}"
-    cal_files = [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
-    sb = cal_files[0]
-    if not os.path.isfile(sb):
-        cal_files[0] = sb.replace('bias/superbias_minRMS.', 'bias/super_bias')
-    return [os.path.join(base_dir, f) for f in (superbias, satulim, coe_R, coe_D, darklim)]
+    date, date_list = get_temperature_date(date, temperature)
+    coe_R = "coe_R/coe_R.C{chip}.fits.cube.{date}"
+    coe_D = "coe_D/coe_D.C{chip}.fits.cube.{date}"
+    darklim = "darklim/darklim.C{chip}.fits.{date}"
+    superbias = "bias/superbias_minRMS.C{chip}.fits.{date}"
+    satulim = "satulim/satulim.C{chip}.fits.{date}"
+    formats = (superbias, satulim, coe_R, coe_D, darklim)
+    cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
+    return cal_files
 
 
 def get_ramp_cal(header):
@@ -268,7 +311,9 @@ def regen_ramp(file_number, nframe, camera):
         return 'does not exist'
     ext_dict = {'.fz': 1, '.fits': 0, '.ramp': 0}
     extension = ext_dict[os.path.splitext(raw_files[0])[1]]
+    print(extension)
     output_file = os.path.join(output_dir, os.path.basename(raw_files[0]).replace('.fz', '').replace('.fits', '.ramp.fits'))
+    print('destination regenerated ramp will write to', output_file)
     if os.path.isfile(output_file):
         try:
             fits.getdata(output_file)
@@ -278,7 +323,9 @@ def regen_ramp(file_number, nframe, camera):
     try:
         print('regenerating ramp: {}'.format(output_file))
         superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
+        # print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
         header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
+        # print(header)
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
     make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])

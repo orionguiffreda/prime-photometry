@@ -10,7 +10,8 @@ from datetime import datetime as dt
 from photometrus import multi_master
 from photometrus.photometry import multi_photom
 from photometrus.photometry import ellipticity_logger
-from photometrus.settings import PIPELINE_DEFAULT_DIR
+from photometrus.settings import PIPELINE_DEFAULT_DIR, PIPELINE_STAGES
+from photometrus.utils.utils import handle_json_input_output, parentcreation
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
 
 #%%
@@ -21,16 +22,20 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
           sky_override_path=defaults['sky_override_path'], removal=defaults['removal'], no_get_files=defaults['no_get_files'],
           no_download=defaults['no_download'], no_mflat=defaults['no_mflat'], rampnum=defaults['rampnum'], bulge=defaults['bulge'],survey=defaults['survey'],
           grb_ra=defaults['grb_ra'], grb_dec=defaults['grb_dec'], grb_coordlist=defaults['grb_coordlist'],
-          grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], sx_cfg=defaults['sx_cfg'],
+          grb_radius=defaults['grb_radius'], grb_name=defaults['grb_name'], start_stage=defaults['default_start_stage'],
+          no_photom=defaults['no_photom'], photom_sx_cfg=defaults['photom_sx_cfg'],
           auto_mode=defaults['automode'], input_ramp_lists=defaults['ramplist'], header_filter=None
           ):
     # print('combo date', date)
+
+    if any(var is None for var in (target, date, band)):
+        raise ValueError('-target, -date, or -band not specified!  These must be specified to run processing!')
 
     if parentdir != defaults['parent']:
         chosen_parent = parentdir
         stackpath = os.path.join(chosen_parent, 'stack')
     else:
-        chosen_parent, field_dir = multi_master.parentcreation(target, date, band)
+        chosen_parent, field_dir = parentcreation(target, date, band)
         stackpath = os.path.join(chosen_parent, 'stack')
 
     if not chip:
@@ -43,9 +48,12 @@ def combo(target=defaults['target'], date=defaults['date'], band=defaults['band'
         start_time = dt.now()
         multi_master.multi_master(target, date, band, f, chosen_parent, rot_val, no_shift, astromnet, no_download,
                                   sky_override_path, removal, no_get_files, no_mflat, rampnum, bulge, auto_mode=auto_mode,
+                                  start_stage=start_stage,
                                   input_ramp_lists=input_ramp_lists, header_filter=header_filter)
-        multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra=grb_ra, grb_dec=grb_dec,
-                                       grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name, sx_cfg=sx_cfg)
+        if not no_photom:
+            multi_photom.mastermultiphotom(stackpath, band, f, survey, grb_ra=grb_ra, grb_dec=grb_dec,
+                                           grb_coordlist=grb_coordlist, grb_radius=grb_radius, grb_name=grb_name,
+                                           photom_sx_cfg=photom_sx_cfg)
 
         end_time = dt.now()
         print(f'\nTotal C{f} pipeline processing time:', (end_time - start_time).total_seconds())
@@ -133,18 +141,53 @@ def main():
                              ' arcmin, or deg w/ an underscore.  Ex. "-grb_radius 3_arcmin" will specify an area of 3 '
                              'arcminutes.  If just a number is applied, it defaults to arcsec.',
                         default=defaults['grb_radius'])
-    parser.add_argument('-sx_cfg', type=str,
-                        help='[str] optionally specify different sxtrctr config file to use for main source extraction,'
-                             'must be in .prime/config/ directory, '
+    parser.add_argument('-start_stage', type=str,
+                        help='[str], Optionally specify which stage of processing the pipeline starts on, useful for '
+                             f'bug fixing.  Options include: {PIPELINE_STAGES}, where default is {defaults['default_start_stage']}',
+                        default=defaults['default_start_stage'])
+    parser.add_argument('-no_photom', action='store_true',
+                        help='optional flag, use to not run photometry, only image processing', default=defaults['no_photom'])
+    parser.add_argument('-photom_sx_cfg', type=str,
+                        help='[str] Specify different sxtrctr config file to use for main source extraction, '
                              'default = sex2.config',
-                        default=defaults["sx_cfg"])
+                        default=defaults["photom_sx_cfg"])
+    # parser.add_argument('-shift_sx_cfg', type=str,
+    #                     help='[str] Specify different sxtrctr config file to use for astrom_shift translation correction script, '
+    #                          'default = sex_astrom2.config',
+    #                     default=defaults["shift_sx_cfg"])
+    # parser.add_argument('-astrom_sx_cfg', type=str,
+    #                     help='[str] Specify different sxtrctr config file to use for improved astromatic astrometry, '
+    #                          'default = sex_astrom.config',
+    #                     default=defaults["astrom_sx_cfg"])
+    # parser.add_argument('-stack_sx_cfg', type=str,
+    #                     help='[str] Specify different sxtrctr config file to use for absolute astrometry on stacked image, '
+    #                          'default = sex_astrom.config',
+    #                     default=defaults["stack_sx_cfg"])
+    # parser.add_argument('-bulge_sx_cfg', type=str,
+    #                     help='[str] Specify different sxtrctr config file to use for bulge fields, '
+    #                          'default = bulge_new.config',
+    #                     default=defaults["bulge_sx_cfg"])
+    parser.add_argument('-output_cmd_file', action='store_true',
+                        help='optional flag, dumps all argparse arguments to json5 file',
+                        default=defaults['output_cmd_file'])
+    parser.add_argument('-input_cmd_file', type=str,
+                        help='[str] Specify input json5 cmd filepath for pipeline to use, should be a file from '
+                             '-output_cmd_file. Args specified in the json file will act as defaults for this pipeline'
+                             ' run, but the new defaults CAN be overwritten by CLI args.',
+                        default=None)
+
     args, unknown = parser.parse_known_args()
     # print('main', args.date)
     # print('args', args)
     # print('urnknown', unknown)
+
+    args, unknown = handle_json_input_output(parser=parser, target=args.target, date=args.date, band=args.band)
+
     combo(args.target, args.date, args.band, args.chip, args.parent, args.rot_val, args.no_shift, args.astromnet,
           args.sky_override, args.removal, args.no_get_files, args.no_download, args.no_mflat, args.rampnum, args.bulge, args.survey,
-          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name, args.sx_cfg, defaults['automode'], defaults['ramplist'],
+          args.grb_ra, args.grb_dec, args.grb_coordlist, args.grb_radius, args.grb_name, args.start_stage, args.no_photom,
+          args.photom_sx_cfg,
+          defaults['automode'], defaults['ramplist'],
           header_filter=args.header_filter)
 
 

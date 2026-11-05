@@ -24,7 +24,7 @@ import math
 import sys
 
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box)
+                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box, ASTROM_QUERY_CATALOGS)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):
@@ -98,10 +98,17 @@ def imaging(directory, imageName, x_offset=0, x_guess=None, y_guess=None):
     if x_guess and y_guess:
         print('Applying initial shift guesses: x = %s, y = %s' % (x_guess, y_guess))
         guess_hdr = header.copy()
-        x_init = guess_hdr['CRPIX1']
-        y_init = guess_hdr['CRPIX2']
-        guess_hdr['CRPIX1'] = x_init + x_guess
-        guess_hdr['CRPIX2'] = y_init + y_guess
+        w = WCS(guess_hdr)
+
+        crpix1 = guess_hdr['CRPIX1']
+        crpix2 = guess_hdr['CRPIX2']
+
+        guess_crval1, guess_crval2 = w.all_pix2world(
+            [[crpix1 - x_guess, crpix2 - y_guess]], 1
+        )[0]
+
+        guess_hdr['CRVAL1'] = guess_crval1
+        guess_hdr['CRVAL2'] = guess_crval2
 
         pre = pre.replace('flat','init.flat')
         init_imagename = pre+ext
@@ -148,14 +155,25 @@ def cat_query(coords, band, boxsize, catNum, magcol, maglow=12.5, maghigh=14.5, 
     try:
         print('Querying Vizier %s around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s, errbits constraints: %s, %s'
               % (catNum, frame_long_str, frame_lat_str, boxsize, maglow, maghigh, errbits_vvv, errbits_2M))
-        v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
-                                                     "%sperrbits" % band: errbits_vvv,
-                                                    "%s1perrb" % band: errbits_vvv,
-                                                    "%sflags" % band: errbits_vvv,
-                                                    "Cflg": errbits_2M,
-                                                    "Nd": ">6"}, row_limit=-1)
-        Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
-                           catalog=catNum, cache=False, frame=chosen_frame)
+        # v = Vizier(columns=columns, column_filters={"%s" % magcol: "%s .. %s" % (maglow, maghigh),
+        #                                              "%sperrbits" % band: errbits_vvv,
+        #                                             "%s1perrb" % band: errbits_vvv,
+        #                                             "%sflags" % band: errbits_vvv,
+        #                                             "Cflg": errbits_2M,
+        #                                             "Nd": ">6"}, row_limit=-1)
+        # Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(boxsize) + 'm',
+        #                    catalog=catNum, cache=False, frame=chosen_frame)
+        Q = local_query_box(ra_center=float(frame_long),
+                            dec_center=float(frame_lat),
+                            width=str(boxsize) + 'm',
+                            dbname='prime_2mass_local',
+                            tablename='twomass_local',
+                            columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                            column_filters={
+                                f"{band.lower()}mag": f"BETWEEN {maglow:f} AND {maghigh:f}",
+                                "cc_flg": errbits_2M,
+                            }
+                            )
     except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
 
         Q = local_query_box(ra_center=float(frame_long),
@@ -203,7 +221,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
         mag_high_cutoff = maghigh
         mag_low_cutoff = maglow
     else:
-        catalog_dict = PHOTOMETRY_QUERY_CATALOGS
+        catalog_dict = ASTROM_QUERY_CATALOGS
         catalogs = []
         if band == 'J' or band == 'H':
             for k, v in catalog_dict.items():
@@ -247,6 +265,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
     except IndexError as e:
         # in case of strange failure in query, default to a 2mass query attempt
         try:
+            print(f'Default query logic failure: {e} \ndefaulting to 2mass')
             result = v.query_region(coords, width=str(checkwidth) + 'm', catalog='II/246/',
                                     frame=chosen_frame)
         except IndexError as e:
@@ -259,7 +278,7 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
 
     keycheck = result.keys()
 
-    errbitoptions_2mass = ['!= null','~0??', '~?0?']     # 2mass errbits column, 1st is for J and 2nd is for H
+    errbitoptions_2mass = ['!= null','0??', '?0?']     # 2mass errbits column, 1st is for J and 2nd is for H
     if band == 'J':
         errbit_2mass = errbitoptions_2mass[1]
     elif band == 'H':
@@ -314,19 +333,44 @@ def complex_query(raImage, decImage, band, boxsize, maglow=12, maghigh=14, bulge
                               % (catNum, frame_long_str, frame_lat_str, effective_boxsize,
                                  eff_mag_low_cutoff, eff_mag_high_cutoff, errbits_constraint, errbits_2M))
                         try:
-                            if catNum == last_idx:
+                            if catNum == 'II/246/':
                                 print('\nVizier catalogs exhausted, switching to local 2MASS query...')
-                                Q = local_query_box(ra_center=raImage,
-                                                    dec_center=decImage,
-                                                    width=str(effective_boxsize) + 'm',
-                                                    dbname='prime_2mass_local',
-                                                    tablename='twomass_local',
-                                                    columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
-                                                    column_filters={
-                                                        f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
-                                                        "cc_flg": errbits_2M,
-                                                    }
-                                                    )
+                                if band == 'Y' or band == 'Z':
+                                    band = 'J'
+                                try:
+                                    Q = local_query_box(ra_center=raImage,
+                                                        dec_center=decImage,
+                                                        width=str(effective_boxsize) + 'm',
+                                                        dbname='prime_2mass_local',
+                                                        tablename='twomass_local',
+                                                        columns=["ra", "dec", f"{band.lower()}mag", f"e_{band.lower()}mag"],
+                                                        column_filters={
+                                                            f"{band.lower()}mag": f"BETWEEN {eff_mag_low_cutoff:f} AND {eff_mag_high_cutoff:f}",
+                                                            "cc_flg": errbits_2M,
+                                                        }
+                                                        )
+                                except Exception as e:
+                                    print('Error in local query, defaulting to Vizier.')
+                                    print(f"Error details: {e}")
+
+                                    v = Vizier(columns=[cols[0], cols[1], cols[2]],
+                                               column_filters={
+                                                   cols[2]: f"{eff_mag_low_cutoff:f}..{eff_mag_high_cutoff:f}",
+                                                   f"{band.lower()}Flag": "<4",
+                                                   f"{band}perrbits": errbits_constraint,
+                                                   f"{band}1perrb": errbits_constraint,
+                                                   f"{band}flags": errbits_constraint,
+                                                   "Cflg": errbits_2M,
+                                                   "Hclass": "== -1",
+                                                   "Class": "== 0",
+                                                   "Nd": ">6"
+                                               }, row_limit=-1)
+
+                                    Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)),
+                                                       width=str(effective_boxsize) + 'm',
+                                                       catalog=catNum, cache=False,
+                                                       frame=chosen_frame)
+
                             else:
                                 v = Vizier(columns=[cols[0], cols[1], cols[2]],
                                            column_filters={
@@ -391,10 +435,13 @@ def sex1(imageName, bulge=False):
     try:
         command = ('sex %s -c %s -CATALOG_NAME %s -PARAMETERS_NAME %s -CHECKIMAGE_TYPE NONE'
                    % (imageName, configFile, catname, paramName))
-        #print('Executing command: %s' % command)
-        rval = subprocess.run(command.split(), check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # print('Executing command: %s' % command)
+        rval = subprocess.run(command.split(), check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as err:
-        print('Could not run sextractor with exit error %s'%err)
+        print(f"SExtractor failed with exit code {err.returncode}")
+        print(f"STDERR:\n{err.stderr}")
+        print(f"STDOUT:\n{err.stdout}")
+        raise Exception('Sextractor failed to run, is the stacked image quality adequate?')
     return catname
 
 
@@ -723,8 +770,20 @@ def iterate_and_test(
 
         # Copy header to avoid cumulative modification
         header_copy = header.copy()
-        header_copy['CRPIX1'] = header['CRPIX1'] + x_shift
-        header_copy['CRPIX2'] = header['CRPIX2'] + y_shift
+
+        w = WCS(header_copy)
+
+        crpix1 = header_copy['CRPIX1']
+        crpix2 = header_copy['CRPIX2']
+
+        # converting pix shifts to world coords for CRVAL adjustment (MUST SUBTRACT '- x_shift' for crval instead of
+        # adding like 'crpix + x_shift) due to how the math works
+        new_crval1, new_crval2 = w.all_pix2world(
+            [[crpix1 - x_shift, crpix2 - y_shift]], 1
+        )[0]
+
+        header_copy['CRVAL1'] = new_crval1
+        header_copy['CRVAL2'] = new_crval2
 
         imageshiftname = os.path.splitext(imageName)[0] + '.shift.fits'
         newpath = os.path.join(directory, imageshiftname)
@@ -801,15 +860,25 @@ def change_all_files(xfinal_shift, yfinal_shift, directory):
             data = img[0].data
             header = img[0].header
 
+            w = WCS(header)
+
+            crval1 = header['CRVAL1']
+            crval2 = header['CRVAL2']
             crpix1 = header['CRPIX1']
             crpix2 = header['CRPIX2']
-            header['CRPIX1'] = crpix1 + xfinal_shift
-            header['CRPIX2'] = crpix2 + yfinal_shift
+
+            # converting pixel shifts to world coord shifts
+            new_crval1, new_crval2 = w.all_pix2world(
+                [[crpix1 - xfinal_shift, crpix2 - yfinal_shift]], 1
+            )[0]
+
+            header['CRVAL1'] = new_crval1
+            header['CRVAL2'] = new_crval2
 
             header.set('X_SHIFT', xfinal_shift, 'X Value CRPIX1 shift', after='WCSAXES')
             header.set('Y_SHIFT', yfinal_shift, 'Y Value CRPIX2 shift', after='X_SHIFT')
-            header.set('CRPIX1_OLD', crpix1, 'Initial CRPIX1 Value', after='Y_SHIFT')
-            header.set('CRPIX2_OLD', crpix2, 'Initial CRPIX2 Value', after='CRPIX1_OLD')
+            header.set('OLD_CV1', crval1, 'Initial CRVAL1 Value', after='Y_SHIFT')
+            header.set('OLD_CV2', crval2, 'Initial CRVAL2 Value', after='OLD_CV1')
 
             imageshiftname = os.path.splitext(f)[0]
             imageshiftname = imageshiftname + '.shift.new'
@@ -907,7 +976,7 @@ def shift(
 
     start_time = dt.now()
 
-    set_vizier_mirror()
+    # set_vizier_mirror()
 
     maglow = 12
     maghigh = 14

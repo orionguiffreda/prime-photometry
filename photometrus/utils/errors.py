@@ -1,0 +1,2 @@
+class MissingDataFilesError(ValueError):
+    pass

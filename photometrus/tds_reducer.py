@@ -6,7 +6,8 @@ import pandas as pd
 import argparse
 import os
 
-from photometrus.multi_master import (multi_master, parentcreation)
+from photometrus.multi_master import multi_master
+from photometrus.utils.utils import parentcreation
 from photometrus.photometry.multi_photom import mastermultiphotom
 
 
