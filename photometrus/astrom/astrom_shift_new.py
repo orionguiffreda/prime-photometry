@@ -23,8 +23,9 @@ from collections import defaultdict
 import math
 import sys
 
+from photometrus.query import local_query_box
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, PHOTOMETRY_QUERY_CATALOGS, AB_OFFSET_DICT,
-                                  GB_QUERY_CATALOGS, set_vizier_mirror, local_query_box, ASTROM_QUERY_CATALOGS)
+                                  GB_QUERY_CATALOGS, set_vizier_mirror, ASTROM_QUERY_CATALOGS)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 def get_zp(band):

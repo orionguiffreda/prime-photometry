@@ -150,7 +150,8 @@
     'GPS': 21.0,
     'GCS': 20.6,
     'DES_Y': 21.7,
-    'PanSTARRS': 21.4
+    'PanSTARRS': 21.4,
+    'VMC': 19.3
   },
   //chip avg zp (for bulge field astrom)
   //# 23.88

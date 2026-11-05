@@ -5,18 +5,20 @@ Query functions: for individual catalogs & automatic query
 
 import numpy as np
 import pandas as pd
+import math
 import astropy.units as u
-from astroquery.vizier import Vizier
-from astropy.coordinates import Angle, SkyCoord
 from requests.exceptions import ConnectionError, Timeout
 from astroquery.exceptions import RemoteServiceError
 from astropy.io import ascii
 from astropy.io import fits
 from astropy.table import Table, Column
+from astroquery.vizier import Vizier
+from astropy.coordinates import Angle, SkyCoord
+from astroquery.utils import TableList
 import psycopg2
 
 from photometrus.settings import (PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT, AB_OFFSET_DICT,
-                                  PHOTOMETRY_QUERY_WIDTH, local_query_box, gen_config_file_name)
+                                  PHOTOMETRY_QUERY_WIDTH, gen_config_file_name)
 
 from photometrus.utils.utils import convert_table_to_ldac
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
@@ -86,6 +88,157 @@ def example_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cu
             'Error in Vizier query')
     return Q, survey_name              
 """
+
+# LOCAL SQL QUERY LOGIC
+
+
+def ang_convert(ang):
+    """
+    Converts input to appropriate degree equivalent for query (ex. 33m -> 33 arcmin to degree).  Use just a number or 'd' for
+    degrees, m for arcmin, and s for arcsec
+    """
+
+    if isinstance(ang, (float, int)):
+        arcconvert = ang
+    elif not any(char.isalpha() for char in ang) or 'd' in ang:
+        if 'd' in ang:
+            ang = ang.split('d')[0]
+        arcconvert = float(ang)
+    elif 'm' in ang:
+        angsplit = ang.split('m')
+        rad_f = float(angsplit[0])
+        arcconvert = rad_f / 60
+    elif 's' in ang:
+        angsplit = ang.split('s')
+        rad_f = float(angsplit[0])
+        arcconvert = rad_f / 3600
+    else:
+        print('Only arcsec, arcmin, and deg are supported! Default = deg')
+        raise Exception('Use supported units.')
+    return arcconvert
+
+
+def local_query_box(ra_center, dec_center, dbname, tablename,
+                    width, height=None,
+                    columns=None,
+                    column_filters=None):
+
+    """
+    Replicates astroquery's query_region box query functionality using the local psql db.
+
+    Parameters
+    ----------
+    ra_center: float
+        RA coordinate for query
+    dec_center: float
+        Dec coordinate for query
+    width: float, int, or str
+        full width of box query. If float or int or str w/ 'd' (ex. '2d'), degrees are assumed, if str w/ 'm' (ex. 33m),
+        arcmin assumed, & if str w/ 's' (ex. '4s'), arcsec assumed
+    height: float, int, or str
+        optional, full height of box query.  If not specified, will be the same as width
+    columns: list of str
+        optional, specify specific cols to return w/ query. Same format as query_region
+    column_filters: dict
+        optional, apply filters to specific cols for query. Same format as query_region
+    """
+
+    ra_center = ra_center % 360
+
+    if dec_center > 90 or dec_center < -90:
+        raise ValueError("Declination must be between -90 and +90 degrees")
+
+    if height is None:
+        height = width
+
+    print(f' Local query box size: {height, width}')
+    height = ang_convert(height)
+    width = ang_convert(width)
+
+    POLE_THRESHOLD = 0.5  # degrees from pole to switch query strategy (box to radial)
+    near_south_pole = dec_center - height / 2 <= -90 + POLE_THRESHOLD
+    near_north_pole = dec_center + height / 2 >= 90 - POLE_THRESHOLD
+
+    if near_south_pole or near_north_pole:
+        # Use radial query near poles
+        radius = math.sqrt((height / 2) ** 2 + (width / 2) ** 2)
+        print(f" Near pole detected, switching to radial query with radius {radius:.4f} deg")
+        query_type = 'radial'
+        query_params = (ra_center, dec_center, radius)
+    else:
+        delta_ra = (width / 2) / math.cos(math.radians(dec_center))
+        delta_dec = height / 2
+        corners = [
+            (ra_center - delta_ra, dec_center + delta_dec),  # TL
+            (ra_center + delta_ra, dec_center + delta_dec),  # TR
+            (ra_center + delta_ra, dec_center - delta_dec),  # BR
+            (ra_center - delta_ra, dec_center - delta_dec),  # BL
+        ]
+        corners = [(ra % 360, dec) for ra, dec in corners]
+        query_type = 'poly'
+        query_params = corners
+
+    conn = psycopg2.connect(service=dbname)
+
+    cur = conn.cursor()
+
+    colstr = "*" if columns is None else ",".join(columns)
+
+    if query_type == 'radial':
+        where = [f"""
+           q3c_radial_query(
+                ra, dec, {query_params[0]}, {query_params[1]}, {query_params[2]}
+           )
+           """]
+    else:
+        where = [f"""
+           q3c_poly_query(
+               ra, dec,
+               ARRAY[
+                   {query_params[0][0]}, {query_params[0][1]},
+                   {query_params[1][0]}, {query_params[1][1]},
+                   {query_params[2][0]}, {query_params[2][1]},
+                   {query_params[3][0]}, {query_params[3][1]}
+               ]::double precision[]
+           )
+           """]
+
+    if column_filters:
+        for col, expr in column_filters.items():
+            expr = expr.strip()
+            if expr == '!= null':
+                where.append(f"{col} IS NOT NULL")
+            elif '?' in expr or '*' in expr:
+                negate = expr.startswith(('~', '!'))
+                pattern = expr.lstrip('~!=').replace('?', '_').replace('*', '%').replace("'", "''")
+                where.append(f"{col} {'NOT LIKE' if negate else 'LIKE'} '{pattern}'")
+            else:
+                where.append(f"{col} {expr}")
+
+    if columns:
+        print(' Specific cols specified, removing rows where column vals = None')
+        for col in columns:
+            where.append(f"{col} IS NOT NULL")
+
+    sql = f"""
+        SELECT {colstr}
+        FROM {tablename}
+        WHERE {" AND ".join(where)}
+    """
+
+    # print(f' Constraints: {where}')
+
+    cur.execute(sql)
+    rows = cur.fetchall()
+    names = [d[0] for d in cur.description]
+    conn.close()
+
+    tbl = Table(rows=rows, names=names) if rows else Table(names=names)
+
+    return TableList([("local_query", tbl)])
+
+
+# LOCAL QUERY FUNCTIONS
 
 
 def gaia_vizier_query(coords, width, chosen_frame='fk5'):
@@ -765,11 +918,53 @@ def des_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     return Q, survey_name
 
 
+def vmc_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff,
+              mag_high_cutoff=PHOTOMETRY_MAG_UPPER_LIMIT, chosen_frame='fk5', errbits=None):
+    """VMC query function"""
+
+    if chosen_frame != 'fk5':
+        raise Exception('Frame other than fk5 detected! *WARNING* Local query currently doesnt '
+                        'support galactic coords!')
+
+    ra = coords.ra.deg
+    dec = coords.dec.deg
+
+    column_filters = {
+        f'{band}AperMag3': f">{mag_low_cutoff:f}",
+    }
+
+    # errbits constraint
+    errbit_flg = '<128'
+    if errbits is not None:
+        errbit_flg = errbits
+
+    column_filters[f"{band}ppErrBits"] = errbit_flg
+
+    survey_name = 'VMC'
+    print('\nLocal VMC Query around %s, %s, boxwidth %.2f arcmin, mag lim of %s - %s'
+          % (frame_long_str, frame_lat_str, width, mag_low_cutoff, mag_high_cutoff))
+    try:
+        Q = local_query_box(ra_center=ra,
+                            dec_center=dec,
+                            dbname='prime_vhs_local',
+                            tablename='vmc_sources',
+                            width=str(width) + 'm',
+                            columns=["ra", "dec", f'{band}AperMag3', f'{band}AperMag3Err'],
+                            column_filters=column_filters
+                            )
+    except (psycopg2.ProgrammingError, psycopg2.OperationalError) as e:
+        print(f'Local VMC query unsuccessful!: Error: {e}')
+        # print('Attempting Vizier query as backup!')
+        #TODO put vizier query in if in vizier
+
+    return Q, survey_name
+
+
 # Check if local query is intact on machine, if not, remove local-only surveys
 PHOTOMETRY_QUERY_FUNCTIONS = {
         'Z': [viking_query, vvv_query, vhs_query, gcs_query, panstarrs_query, sdss_query, des_query],
-        'Y': [viking_query, vvv_query, vhs_query, las_query, gcs_query, panstarrs_query, des_query],
-        'J': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
+        'Y': [viking_query, vvv_query, vmc_query, vhs_query, las_query, gcs_query, panstarrs_query, des_query],
+        'J': [viking_query, vvv_query, vmc_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query],
         'H': [viking_query, vvv_query, vhs_query, las_query, uhs_query, gcs_query, twomass_query]
     }
 

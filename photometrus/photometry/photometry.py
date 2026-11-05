@@ -46,10 +46,10 @@ from datetime import datetime as dt
 from photometrus.settings import (gen_config_file_name, bulge_checker, PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT,
                                   PHOTOMETRY_QUERY_WIDTH, PHOTOMETRY_QUERY_CATALOGS, PHOTOMETRY_LIM_MAGS,
                                   AB_OFFSET_DICT, PRIME_FILTERS_DICT, get_weight_thresh, set_vizier_mirror, CHIP_ZPS,
-                                  MAGTYPES, local_query_box)
+                                  MAGTYPES)
 
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
-from photometrus.query import query
+from photometrus.query import query, local_query_box
 from photometrus.photometry.photom_utils import (open_fits_robust, log_output, get_table_from_ldac, get_band,
                                                  grb_rad_convert, ab_convert, removal, copy_given_cat_to_dir)
 from photometrus.photometry.GRB import GRB, newsourcesearch
@@ -516,7 +516,7 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         # newtext_cat = open('PRIME_cat_srcs.reg', 'w+')
         # newtext_cat.write('fk5')
         # for a, d, rad in zip(good_cat_stars[RA], good_cat_stars[DEC], rad_col):
-        #     newtext_cat.write(f'\ncircle({a}, {d}, {rad}") # color=green')
+        #     newtext_cat.write(f'\ncircle({a}, {d}, {rad}") # color=red')
 
         try:
             psfsourceTable = get_table_from_ldac(psfcatalogName)
@@ -592,6 +592,12 @@ def tables(Q, data, w, psfcatalogName, crop, given_catalog_path=None):
         idx_psfimage, idx_psfmass, d2d, d3d = massCatCoords.search_around_sky(psfsourceCatCoords,
                                                                               photoDistThresh * u.arcsec)
         # idx_psfimage are indexes into psfsourceCatCoords for the matched sources, while idx_psfmass are indexes into massCatCoords for the matched sources
+
+        # med = np.nanmedian(d2d.to(u.arcsec))
+        # max = np.max(d2d.to(u.arcsec))
+        # min = np.min(d2d.to(u.arcsec))
+        #
+        # print(f'Cat CM: med: {med:.3f}, max: {max:.3f}, min {min:.3f}')
 
         if 'Mclass' in colnames or 'mergedClass' in colnames or 'mergedclass' in colnames:
             # pruning crossmatches to only include stars if applicable

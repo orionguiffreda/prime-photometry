@@ -337,6 +337,18 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
             firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
 
         img_list = swarpcat
+        str_addition = ''
+
+        # tbl = Table.read(img_list, hdu=2)
+        # rad_col = ["1.0"] * len(tbl)
+        # newtext_cat = open('PRIME_astrom_sex_srcs.reg', 'w+')
+        # newtext_cat.write('fk5')
+        # for a, d, rad in zip(tbl["ALPHA_J2000"], tbl["DELTA_J2000"], rad_col):
+        #     newtext_cat.write(f'\ncircle({a}, {d}, {rad}") # color=red')
+        # print('INPUT SEXTRACTOR SOURCE LIST OUTPUTTED')
+        #
+        # raise Exception('arresting')
+
     else:
         fits_list = [f for f in sorted(os.listdir(imgdir)) if f.endswith('.new')]
         firsthdr = fits.getheader(os.path.join(imgdir, fits_list[0]))
@@ -353,6 +365,8 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
         img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
         img_list = ','.join(img_list)
 
+        str_addition = ''
+
     raImage = firsthdr['CRVAL1']
     decImage = firsthdr['CRVAL2']
     coords = SkyCoord(ra=raImage * u.degree, dec=decImage * u.degree, frame='fk5')
@@ -367,10 +381,10 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
                f'-ASTREFMAG_LIMITS 8.5,20 -DISTORT_DEGREES {distortdeg} '
                f'-ASTREFCENT_KEYS {cols[0]},{cols[1]} -ASTREFERR_KEYS {cols[2]},{cols[3]} '
                f'-ASTREFMAG_KEY {cols[4]} -ASTREFOBSDATE_KEY {cols[5]} -ASTREFMAGERR_KEY {cols[6]} '
-               f'-ASTR_ACCURACY {astr_acc}')
+               f'-ASTR_ACCURACY {astr_acc} {str_addition}')
     print(f'Executing command: {command}')
     os.system(command)
-
+ 
     return fits_list, img_list
 
 

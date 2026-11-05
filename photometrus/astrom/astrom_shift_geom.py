@@ -26,9 +26,9 @@ from collections import defaultdict
 import math
 import sys
 
-from photometrus.query import query, twomass_query
+from photometrus.query import query, twomass_query, local_query_box
 from photometrus.settings import (gen_config_file_name, bulge_checker, CHIP_ZPS, ASTROM_QUERY_CATALOGS,
-                                  AB_OFFSET_DICT, GB_QUERY_CATALOGS, AB_SURVEYS, set_vizier_mirror, local_query_box)
+                                  AB_OFFSET_DICT, GB_QUERY_CATALOGS, AB_SURVEYS, set_vizier_mirror)
 from photometrus.utils.defaults import ASTROM_DEFAULTS_NEW as defaults
 
 
