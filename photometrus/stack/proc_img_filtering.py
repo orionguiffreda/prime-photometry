@@ -14,6 +14,7 @@ import numpy as np
 import fnmatch
 import matplotlib.pyplot as plt
 import pandas as pd
+from scipy.stats import median_abs_deviation
 from astropy.stats import SigmaClip
 
 from photometrus.photometry.photom_utils import get_table_from_ldac
@@ -82,7 +83,7 @@ def bckg_filter(full_img_list, stdev_limit=3, csv_path=None):
         sky_fac_arr.append(sky_fac)
 
     med_sky_fac = np.median(sky_fac_arr, axis=0)
-    stdev_sky_fac = np.std(sky_fac_arr)
+    stdev_sky_fac = median_abs_deviation(sky_fac_arr, scale='normal') #np.std(sky_fac_arr)
     low_thresh = med_sky_fac - (stdev_limit * stdev_sky_fac)
     high_thresh = med_sky_fac + (stdev_limit * stdev_sky_fac)
     thresh = [low_thresh, high_thresh]
@@ -118,10 +119,10 @@ def shallow_filter(full_img_list, img_cat_list, crop=defaults['crop'], stdev_lim
         source_num_arr.append(indiv_source_num)
 
     med_source_num = np.median(source_num_arr, axis=0)
-    stdev_source_num = np.std(source_num_arr)
+    stdev_source_num = median_abs_deviation(source_num_arr, scale='normal')
     low_thresh = med_source_num - (stdev_limit * stdev_source_num)
     if low_thresh < 0:
-        print(f'     Large stdev detected!  Reducing sigma threshold to 1 sig.')
+        print(f'     Large stdev detected!  Switching to Reducing sigma threshold to 1 sig.')
         stdev_limit = 1
         low_thresh = med_source_num - (stdev_limit * stdev_source_num)
     print(f'     Median: {med_source_num:.0f}, stdev: {stdev_source_num:.0f}, thresh ({stdev_limit} sig): {low_thresh:.0f}')
@@ -239,7 +240,7 @@ def bad_astrom_filter(full_img_list, img_cat_list, band, survey='GAIA', crop=def
 
     # Uses floor above to resist outliers of obviously broken astrometric solutions
     med_completion = np.median(completion_arr[valid_mask])
-    stdev_completion = np.std(completion_arr[valid_mask])
+    stdev_completion = median_abs_deviation(completion_arr[valid_mask], scale='normal') #np.std(completion_arr[valid_mask])
     low_thresh = med_completion - (stdev_limit * stdev_completion)
     if low_thresh < 0:
         print(f'     Large stdev!  Reducing sigma threshold to 1 sig.')
@@ -286,7 +287,7 @@ def bad_focus_filter(full_img_list, img_cat_list, crop=defaults['crop'], stdev_l
         flx_rad_arr.append(indiv_flx_rad)
 
     med_flx_rad = np.median(flx_rad_arr, axis=0)
-    stdev_flx_rad = np.std(flx_rad_arr)
+    stdev_flx_rad = median_abs_deviation(flx_rad_arr, scale='normal') #np.std(flx_rad_arr)
     # low_thresh = med_flx_rad - (stdev_limit * stdev_flx_rad)
     high_thresh = med_flx_rad + (stdev_limit * stdev_flx_rad)
     print(f'    Median: {med_flx_rad:.3f}, stdev: {stdev_flx_rad:.3f}, thresh ({stdev_limit} sig): {high_thresh:.3f}')

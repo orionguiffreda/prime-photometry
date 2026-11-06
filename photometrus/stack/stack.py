@@ -377,10 +377,12 @@ def swarp(imgdir, finout, chip):
         image_fnames = imgdir
         image_fnames.sort()
         pruned = True
+        tot_frames_used = len(image_fnames)
     else:
         image_fnames = get_astrom_files(imgdir)
         image_fnames.sort()
         pruned = False
+        tot_frames_used = len(image_fnames)
 
     # header = fits.getheader(image_fnames[-1])
     header = gen_stack_header(image_fnames)
@@ -439,7 +441,12 @@ def swarp(imgdir, finout, chip):
     print('Co-added image created, all done!')
     # remove_small_weights(weight_name)
     with fits.open(save_name, mode='update') as fin:
-        fin[0].header.update(header)
+        hdr = fin[0].header
+        hdr.update(header)
+        if 'EXPTIME' in hdr:
+            hdr.set('TOT_IMGS', tot_frames_used, 'Total # of imgs used in stack', before='EXPTIME')
+        else:
+            hdr['TOT_IMGS'] = (tot_frames_used, 'Total # of imgs used in stack')
 
 
 def swarp_increm(imgdir, finout, im_num=5):
