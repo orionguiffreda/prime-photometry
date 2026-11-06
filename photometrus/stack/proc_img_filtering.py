@@ -120,6 +120,10 @@ def shallow_filter(full_img_list, img_cat_list, crop=defaults['crop'], stdev_lim
     med_source_num = np.median(source_num_arr, axis=0)
     stdev_source_num = np.std(source_num_arr)
     low_thresh = med_source_num - (stdev_limit * stdev_source_num)
+    if low_thresh < 0:
+        print(f'     Large stdev detected!  Reducing sigma threshold to 1 sig.')
+        stdev_limit = 1
+        low_thresh = med_source_num - (stdev_limit * stdev_source_num)
     print(f'     Median: {med_source_num:.0f}, stdev: {stdev_source_num:.0f}, thresh ({stdev_limit} sig): {low_thresh:.0f}')
 
     # Add to or create CSV of values for each file
@@ -237,6 +241,10 @@ def bad_astrom_filter(full_img_list, img_cat_list, band, survey='GAIA', crop=def
     med_completion = np.median(completion_arr[valid_mask])
     stdev_completion = np.std(completion_arr[valid_mask])
     low_thresh = med_completion - (stdev_limit * stdev_completion)
+    if low_thresh < 0:
+        print(f'     Large stdev!  Reducing sigma threshold to 1 sig.')
+        stdev_limit = 1
+        low_thresh = med_completion - (stdev_limit * stdev_completion)
     print(f'     Median: {med_completion:.2f}, stdev: {stdev_completion:.2f}, thresh ({stdev_limit} sig): {low_thresh:.2f}')
 
     # Add to or create CSV of values for each file

@@ -339,6 +339,9 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
         img_list = swarpcat
         str_addition = ''
 
+        # astr_acc = 0.02
+        # str_addition = '-ASTRACCURACY_TYPE SIGMA-ARCSEC -POSANGLE_MAXERR 0.0 -POSITION_MAXERR 0.05'
+
         # tbl = Table.read(img_list, hdu=2)
         # rad_col = ["1.0"] * len(tbl)
         # newtext_cat = open('PRIME_astrom_sex_srcs.reg', 'w+')
@@ -364,6 +367,9 @@ def local_scamp(imgdir, distortdeg=4, swarpcat=None, bulge=None, **kwargs):
 
         img_list = [os.path.join(imgdir, f) for f in sorted(os.listdir(imgdir)) if f.endswith('.cat')]
         img_list = ','.join(img_list)
+
+        # # scamp coord error conversion
+        # astr_acc = 0.02 / (60 * 60 * 1000)       # mas (coord error) to degrees
 
         str_addition = ''
 

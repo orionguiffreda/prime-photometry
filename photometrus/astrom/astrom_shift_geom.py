@@ -572,13 +572,13 @@ def astroalign_shift(inner_primesources, inner_catsources, pixel_tol=2, max_cont
         except (aa.MaxIterError, ValueError, TypeError, _AlignTimeout) as e:
             print(f'astroalign attempt (cell={cell}) failed: {type(e).__name__}: {e}')
     if result is None:
-        return 0, 0, 0, None
+        return 0, 0, 0, None, 0
     tform, (cat_matched, prime_matched) = result
 
     rot_deg = np.degrees(tform.rotation)
     if abs(rot_deg) > max_rot_deg or abs(tform.scale - 1) > max_scale_dev:
         print(f'astroalign solution rejected (rotation={rot_deg:.3f} deg, scale={tform.scale:.5f})')
-        return 0, 0, 0, None
+        return 0, 0, 0, None, 0
 
     # Re-match the FULL lists under the fitted transform
     M = tform.params
@@ -607,10 +607,10 @@ def astroalign_shift(inner_primesources, inner_catsources, pixel_tol=2, max_cont
 
     if n_ok < min_matches or sigma < min_sigma:
         print('astroalign solution rejected: match count not significant')
-        return 0, 0, n_ok, None
+        return 0, 0, n_ok, None, 0
     if max_shift is not None and np.hypot(x_shift, y_shift) > max_shift:
         print(f'astroalign shift {np.hypot(x_shift, y_shift):.1f} pix exceeds max_shift, rejecting')
-        return 0, 0, n_ok, None
+        return 0, 0, n_ok, None, 0
 
     return x_shift, y_shift, n_ok, M, rot_deg
 
