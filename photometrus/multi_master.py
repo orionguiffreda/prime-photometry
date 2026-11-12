@@ -76,10 +76,12 @@ def datadownload(parentdir, target, band, date, chip, header_filter=None):
 
 def baseprocess(parentdir, chip, band, date, rot_val, sky_override_path, removal, fullramplist,
                  bulge, rampnum, start_stage):
-    if chip == 1 or chip == 2:
+    if chip == 1:
         sigma = defaults['sigma']
-    elif chip == 3 or chip == 4:
+    elif chip ==2 or chip == 3 or chip == 4:
         sigma = defaults['sigma'] + 2
+    # elif chip == 2:
+    #     sigma = defaults['sigma'] + 2
     else:
         sigma = None
     master(parentdir=parentdir, chip=chip, band=band, sigma=sigma, date=date, rot_val=rot_val, sky_override=sky_override_path,

@@ -18,10 +18,12 @@ from astroquery.utils import TableList
 import psycopg2
 
 from photometrus.settings import (PHOTOMETRY_MAG_LOWER_LIMIT, PHOTOMETRY_MAG_UPPER_LIMIT, AB_OFFSET_DICT,
-                                  PHOTOMETRY_QUERY_WIDTH, gen_config_file_name)
+                                  PHOTOMETRY_QUERY_WIDTH, gen_config_file_name, set_vizier_mirror)
 
 from photometrus.utils.utils import convert_table_to_ldac
 from photometrus.utils.defaults import PROCESSING_DEFAULTS as defaults
+
+VIZIER_SERVER = set_vizier_mirror()
 
 
 # ALL CATALOG QUERY FUNCTIONS
@@ -253,6 +255,7 @@ def gaia_vizier_query(coords, width, chosen_frame='fk5'):
     try:
         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', 'e_RA_ICRS', 'e_DE_ICRS', 'RPmag', 'Epoch'],
                    column_filters={"Dup": "<1", "Nd": ">6"},
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -317,6 +320,7 @@ def twomass_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band, 'e_%smag' % band],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -395,6 +399,7 @@ def vhs_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -474,6 +479,7 @@ def viking_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%sap3' % band, 'e_%sap3' % band, 'Mclass'],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -554,6 +560,7 @@ def vvv_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag3' % band, 'e_%smag3' % band, 'mClass'],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -595,6 +602,7 @@ def las_vizier_query(coords, frame_long_str, frame_lat_str, band, width, mag_low
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%s' % mag_col_name, 'e_%s' % mag_col_name],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
                            catalog=catNum, cache=False, frame=chosen_frame)
@@ -794,6 +802,7 @@ def panstarrs_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_
     try:
         v = Vizier(columns=['RAJ2000', 'DEJ2000', '%smag' % band.lower(), 'e_%smag' % band.lower()],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
                            catalog=catNum, cache=False, frame=chosen_frame)
@@ -829,6 +838,7 @@ def skymapper_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_
     try:
         v = Vizier(columns=['RAICRS', 'DEICRS', '%sPSF' % band.lower(), 'e_%sPSF' % band.lower()],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -865,6 +875,7 @@ def sdss_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutof
     try:
         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%spmag' % band.lower(), 'e_%spmag' % band.lower()],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm'
                            , catalog=catNum, cache=False, frame=chosen_frame)
@@ -906,6 +917,7 @@ def des_query(coords, frame_long_str, frame_lat_str, band, width, mag_low_cutoff
     try:
         v = Vizier(columns=['RA_ICRS', 'DE_ICRS', '%smag' % band, 'e_%smag' % band],
                    column_filters=column_filters,
+                   vizier_server=VIZIER_SERVER,
                    row_limit=-1)
         Q = v.query_region(SkyCoord(coords, unit=(u.deg, u.deg)), width=str(width) + 'm',
                            catalog=catNum, cache=False, frame=chosen_frame)

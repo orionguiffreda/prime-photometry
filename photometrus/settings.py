@@ -9,6 +9,8 @@ Settings for pipeline
 import os
 from pathlib import Path
 from astroquery.vizier import Vizier, conf
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 from astropy.table import Table
 from astroquery.utils import TableList
 import warnings
@@ -91,9 +93,9 @@ PRIME_FILTERS_DICT = {
 }
 
 VIZIER_MIRRORS = [
+    "vizier.idia.ac.za",
     "vizier.cds.unistra.fr",
     "vizier.cfa.harvard.edu",
-    "vizier.idia.ac.za",
     "vizier.nao.ac.jp",
     "vizier.iucaa.in",
     "vizier.inasan.ru",
@@ -342,33 +344,29 @@ def get_weight_thresh(chip):
 
 
 # vizier mirror automated check
-def set_vizier_mirror():
+def set_vizier_mirror(timeout=5):
     """
-    Checks vizier mirrors and auto picks working one, then updates astroquery's config.
+    Checks Vizier mirrors in order and returns the first one that gives real data.
+    Pass the returned hostname to Vizier(vizier_server=...).
     """
+    test_cat = 'II/246'
+    test_coord = SkyCoord(229.776, -76.962, unit=(u.deg, u.deg))  # test query, 2MASS covers the whole sky
 
-    mirrors = VIZIER_MIRRORS
-
-    test_cat = 'II/246/'
-
-    for url in mirrors:
-        old = conf.server
+    for url in VIZIER_MIRRORS:
         try:
-            conf.server = url
-
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                v = Vizier(columns=["*"],
-                           column_filters={'Jmag': '>12.5'},
-                           row_limit=1)
-                result = v.query_constraints(catalog=test_cat)
-            print(f'Vizier mirror: {url}')
-            break
-
+                v = Vizier(columns=['RAJ2000', 'DEJ2000', 'Jmag'],
+                           vizier_server=url,
+                           timeout=timeout,
+                           row_limit=-1)
+                result = v.query_region(test_coord, radius='1m',
+                                        catalog=test_cat, cache=False)
+            if len(result) > 0 and len(result[0]) > 0:
+                # print(f'Vizier mirror: {url}')
+                return url
+            print(f'{url}: empty result, trying next mirror')
         except Exception as e:
-            print(f' {url} mirror check failed: \n{e}\n')
-            conf.server = old
-    else:
-        raise RuntimeError('No working Vizier mirror found!')
+            print(f'{url}: check failed ({type(e).__name__})')
 
-    return url
+    print('No working Vizier mirror found!')

@@ -81,13 +81,13 @@ def shift(subdir, band, adv=False, old=False, single_solve=False, **kwargs):
                 good_fits = fits
                 break
 
-            print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s -adv' %
-                  (subdir, imgname, band))
-            shift_x, shift_y, proc_single_img_path = astrom_shift_geom.shift(directory=subdir, imagename=imgname, band=band, adv_solve=True,
-                                                      single_solve=single_solve)
-            if (shift_x != 0) or (shift_y != 0):
-                good_fits = fits
-                break
+            # print('\nEquivalent argparse cmd: photometrus astrom shift -dir %s -imagename %s -band %s -adv' %
+            #       (subdir, imgname, band))
+            # shift_x, shift_y, proc_single_img_path = astrom_shift_geom.shift(directory=subdir, imagename=imgname, band=band, adv_solve=True,
+            #                                           single_solve=single_solve)
+            # if (shift_x != 0) or (shift_y != 0):
+            #     good_fits = fits
+            #     break
 
         if good_fits is None:
             print(err_msg)

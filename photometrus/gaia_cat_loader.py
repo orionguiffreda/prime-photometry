@@ -1,4 +1,7 @@
 import os
+import re
+import psycopg2
+import io
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -7,7 +10,10 @@ from astropy_healpix import HEALPix
 from astropy.coordinates import Angle
 from filelock import FileLock, Timeout
 from datetime import datetime as dt
+from astropy.io import ascii
 import argparse
+
+from vista_cat_test import connection_details
 
 #%%
 
@@ -127,16 +133,21 @@ def mass_gaia_downloader(
 
     df = pd.read_csv(grid_file, comment="#")
 
-    if field_range is not None:
-        range_start, range_end = field_range
-        print(f'Downloading for PRIME field range of: {range_start} - {range_end}\n')
-        range_start = range_start-1
-        range_end = range_end-1
-        df = df[range_start:range_end]
-
     Field_arr = df['ObjectName']
     RA_arr = df['RA']
     DEC_arr = df['DEC']
+
+    def get_field_number(id):
+        # extracts field num
+        return int(re.search(r'\d+', id).group())
+
+    if field_range is not None:
+        range_start, range_end = field_range
+        print(f'PRIME field range specified: {range_start} - {range_end}')
+        df = [(id, ra, dec) for id, ra, dec in zip(Field_arr, RA_arr, DEC_arr)
+                       if range_start <= get_field_number(id) <= range_end]
+        total = abs(range_start - range_end) + 1
+        print(f'Total to process: {total}')
 
     reference_file, output_file, url_prefix = ref_file_setup(output_dir)
 
@@ -144,7 +155,7 @@ def mass_gaia_downloader(
     if not os.path.isdir(f'{output_dir}'):
         os.system(f'mkdir {output_dir}')
 
-    for id, pointing_ra, pointing_dec in zip(Field_arr, RA_arr, DEC_arr):
+    for id, pointing_ra, pointing_dec in df:
         pointing_ra = Angle(pointing_ra, unit=u.hourangle)
         pointing_ra = pointing_ra.deg * u.deg
         pointing_dec = Angle(pointing_dec, unit=u.deg)
@@ -161,14 +172,123 @@ def mass_gaia_downloader(
     end_time = dt.now()
     print('Full time to download range of files:', (end_time - start_time).total_seconds())
 
-#%%
-# mass_gaia_downloader(output_dir='/mnt/photometry/local_catalog_db_test/gaia_test/')
+
+def load_gaia_to_db(red_data, dbname, tablename):
+    start_time = dt.now()
+    conn = psycopg2.connect(
+        dbname=dbname,
+        user=connection_details['user'],
+        password=connection_details['password'],
+        host=connection_details['host'],
+        port=connection_details['port']
+    )
+
+    print(f' Row count: {len(red_data)}')
+    # Get column names from the SQL table
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = %s
+        ORDER BY ordinal_position
+    """, (tablename,))
+
+    sql_columns = [row[0] for row in cur.fetchall()]
+    sql_columns_str = ', '.join(sql_columns)
+
+    print(' Converting table to dataframe')
+    df = red_data.to_pandas(use_nullable_int=True)
+    df = df.where(pd.notnull(df), None)
+
+    conv_time = dt.now()
+    print(' Conversion time:', (conv_time - start_time).total_seconds())
+
+    staging_table = f"staging_{tablename}"
+
+    cur.execute(f"""
+        CREATE TEMP TABLE IF NOT EXISTS {staging_table}
+        (LIKE {tablename} INCLUDING DEFAULTS)
+    """)
+
+    cur.execute(f"TRUNCATE {staging_table}")
+
+    buffer = io.StringIO()
+
+    df.to_csv(
+        buffer,
+        index=False,
+        header=False,
+        sep='\t',
+        na_rep='\\N'
+    )
+    buffer.seek(0)
+
+    cur.copy_from(
+        buffer,
+        staging_table,
+        sep='\t',
+        null='\\N',
+        columns=sql_columns
+    )
+
+    insert_query = f"""
+        INSERT INTO {tablename} ({sql_columns_str})
+        SELECT {sql_columns_str}
+        FROM {staging_table}
+        ON CONFLICT (source_id) DO NOTHING
+    """
+
+    cur.execute(insert_query)
+    conn.commit()
+    conn.close()
+
+    end_time = dt.now()
+    print('Database loading time:', (end_time - start_time).total_seconds())
+
+
+def load_gaia_csv(filepath, dbname, tablename):
+    GAIA_COLS = [
+        'source_id', 'ref_epoch', 'ra', 'ra_error', 'dec', 'dec_error', 'parallax', 'parallax_error',
+        'parallax_over_error',
+        'pm', 'pmra', 'pmra_error', 'pmdec', 'pmdec_error', 'astrometric_n_obs_al', 'astrometric_n_obs_ac',
+        'astrometric_n_good_obs_al',
+        'astrometric_n_bad_obs_al', 'astrometric_gof_al', 'astrometric_chi2_al', 'astrometric_excess_noise',
+        'astrometric_excess_noise_sig',
+        'astrometric_params_solved', 'nu_eff_used_in_astrometry', 'pseudocolour', 'pseudocolour_error',
+        'astrometric_sigma5d_max',
+        'duplicated_source', 'phot_g_mean_flux', 'phot_g_mean_flux_error', 'phot_g_mean_flux_over_error',
+        'phot_g_mean_mag',
+        'phot_bp_mean_flux', 'phot_bp_mean_flux_error', 'phot_bp_mean_flux_over_error', 'phot_bp_mean_mag',
+        'phot_rp_mean_flux',
+        'phot_rp_mean_flux_error', 'phot_rp_mean_flux_over_error', 'phot_rp_mean_mag', 'phot_bp_rp_excess_factor',
+        'dr2_radial_velocity', 'dr2_radial_velocity_error',
+    ]
+
+    print(f'\nReading & column pruning input table: {filepath}')
+    input_tbl = ascii.read(filepath)
+    pruned_tbl = input_tbl[GAIA_COLS]
+
+    load_gaia_to_db(red_data=pruned_tbl, dbname=dbname, tablename=tablename)
+
+
+def mass_gaia_db_loader(storage_directory='/mnt/fits_data/PRIME_local_catalogs/gaia/downloads',
+                        dbname='prime_vhs_local', tablename='gaia_sources'):
+
+    print('='*120)
+    print(f'Loading in all applicable gaia files in {storage_directory}')
+    print(f'dbname: {dbname}, tablename: {tablename}')
+
+    for file in os.listdir(storage_directory):
+        if file.endswith('csv.gz'):
+            filepath = os.path.join(storage_directory, file)
+            load_gaia_csv(filepath=filepath, dbname=dbname, tablename=tablename)
 
 
 def main():
     parser = argparse.ArgumentParser(
         description='Downloads csv.gz files for GAIA EDR3 for all PRIME fields'
     )
+    parser.add_argument('-db_load', action='store_true', help='optional flag, to load csv.gz files into database')
     parser.add_argument('--storage_directory', type=str, metavar='SD', help='Specify'
                                                                             ' storage directory where downloaded .csv.gz'
                                                                             ' files are stored.')
@@ -177,7 +297,10 @@ def main():
 
     field_range = tuple(args.range) if args.range else None
 
-    mass_gaia_downloader(output_dir=args.storage_directory, field_range=field_range)
+    if args.db_load:
+        mass_gaia_db_loader(storage_directory=args.storage_directory)
+    else:
+        mass_gaia_downloader(output_dir=args.storage_directory, field_range=field_range)
 
 
 if __name__ == "__main__":

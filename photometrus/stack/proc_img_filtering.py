@@ -83,7 +83,7 @@ def bckg_filter(full_img_list, stdev_limit=3, csv_path=None):
         sky_fac_arr.append(sky_fac)
 
     med_sky_fac = np.median(sky_fac_arr, axis=0)
-    stdev_sky_fac = median_abs_deviation(sky_fac_arr, scale='normal') #np.std(sky_fac_arr)
+    stdev_sky_fac = np.std(sky_fac_arr) #max(median_abs_deviation(sky_fac_arr, scale='normal'), 0.04 * med_sky_fac)
     low_thresh = med_sky_fac - (stdev_limit * stdev_sky_fac)
     high_thresh = med_sky_fac + (stdev_limit * stdev_sky_fac)
     thresh = [low_thresh, high_thresh]

@@ -224,9 +224,9 @@
   },
     // mirrors for vizier
   "VIZIER_MIRRORS": [
+    "vizier.idia.ac.za",
     "vizier.cds.unistra.fr",
     "vizier.cfa.harvard.edu",
-    "vizier.idia.ac.za",
     "vizier.nao.ac.jp",
     "vizier.iucaa.in",
     "vizier.inasan.ru",
