@@ -13,7 +13,7 @@ import fitsio
 
 from photometrus.utils.defaults import FILE_DEFAULTS
 from photometrus.settings import GET_DATA_SETTINGS
-from photometrus.ramp import do_ramp, calc_darklim, reduce_image_from_file_list
+from photometrus.ramp import do_ramp, calc_darklim, reduce_image_from_file_list, HMDReducer
 
 defaults = FILE_DEFAULTS.copy()
 
@@ -242,26 +242,45 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
             print(GET_DATA_SETTINGS)
             raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
     date, date_list = get_temperature_date(date, temperature)
-    coe_R = "coe_R/coe_R.C{chip}.fits.cube.{date}"
-    coe_D = "coe_D/coe_D.C{chip}.fits.cube.{date}"
-    darklim = "darklim/darklim.C{chip}.fits.{date}"
-    superbias = "bias/superbias_minRMS.C{chip}.fits.{date}"
-    satulim = "satulim/satulim.C{chip}.fits.{date}"
-    formats = (superbias, satulim, coe_R, coe_D, darklim)
-    cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
-    return cal_files
+    try:
+        coe_C = f"HMD/coe_C.C{chip}.fits.{date}"
+        coe_Ad = f"HMD/coe_Ad.C{chip}.fits.{date}"
+        darklim = f"HMD/darklim.C{chip}.fits.{date}"
+        spbias = f"bias/superbias_minRMS.C{chip}.fits.{date}"
+        satulim = f"HMD/satulim.C{chip}.fits.{date}"
+        formats = (superbias, satulim, coe_C, coe_Ad, darklim)
+        cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
+        return cal_files, 2
+    except MissingCalError:
+        coe_R = "coe_R/coe_R.C{chip}.fits.cube.{date}"
+        coe_D = "coe_D/coe_D.C{chip}.fits.cube.{date}"
+        darklim = "darklim/darklim.C{chip}.fits.{date}"
+        superbias = "bias/superbias_minRMS.C{chip}.fits.{date}"
+        satulim = "satulim/satulim.C{chip}.fits.{date}"
+        formats = (superbias, satulim, coe_R, coe_D, darklim)
+        cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
+        return cal_files, 1
 
 
 def get_ramp_cal(header):
-    cal_files = get_ramp_cal_files(header)
-    superbias, satulim, coe_R, coe_D, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
-    coe_R_tr = np.transpose(coe_R, (1, 2, 0)).copy(order='C')
-    coe_D_tr = np.transpose(coe_D, (1, 2, 0)).copy(order='C')
-    Adarklim, Fdarklim = calc_darklim(coe_D_tr, darklim)
-    satulim_flat = satulim[4:-4, 4:-4].flatten()
-    satulim_thre = np.nanmean(satulim_flat) - 5 * np.nanstd(satulim_flat)
-    mask = np.where(satulim > satulim_thre, 1, 0).astype(np.uint8)
-    return superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim
+    cal_files, version = get_ramp_cal_files(header)
+    if version == 1:
+        superbias, satulim, coe_R, coe_D, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
+        coe_R_tr = np.transpose(coe_R, (1, 2, 0)).copy(order='C')
+        coe_D_tr = np.transpose(coe_D, (1, 2, 0)).copy(order='C')
+        Adarklim, Fdarklim = calc_darklim(coe_D_tr, darklim)
+        satulim_flat = satulim[4:-4, 4:-4].flatten()
+        satulim_thre = np.nanmean(satulim_flat) - 5 * np.nanstd(satulim_flat)
+        mask = np.where(satulim > satulim_thre, 1, 0).astype(np.uint8)
+        return superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim
+    elif version == 2:
+        superbias, satulim, coe_C, coe_Ad, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
+        coe_C = np.transpose(coe_C, (1, 2, 0)).copy(order='C')
+        coe_Ad = np.transpose(coe_Ad, (1, 2, 0)).copy(order='C')
+        return HMDReducer(coe_C, coe_Ad, satulim, darklim, superbias), version
+    else:
+        raise ValueError('ramp_cal only supports version 1 or 2. If a new version exists, it is not implemented.')
+
 
 
 def update_header(header, f0_num, fl_num):
@@ -322,10 +341,16 @@ def regen_ramp(file_number, nframe, camera):
             print('{} exists, but seems to be corrupted. Regenerating file...')
     try:
         print('regenerating ramp: {}'.format(output_file))
-        superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
-        # print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
-        header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
-        # print(header)
+        cals, version = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
+        if version == 1:
+            superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = cals
+            # print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
+            header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
+            # print(header)
+        elif version == 2:
+            header, ramp = cals.do_ramp(raw_files, extension, 0)
+        else:
+            raise ValueError('ramp_cal only supports version 1 or 2. If a new version exists, it is not implemented.')
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
     make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])

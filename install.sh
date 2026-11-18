@@ -2,6 +2,7 @@ conda create -n prime-photometrus numpy scikit-image scipy pandas astropy statsm
 conda activate prime-photometrus
 cd photometrus/ramp || exit
 python setup.py build_ext --inplace
+python setup2.py built_ext --inplace
 cd ../..
 python build.py
 conda develop .

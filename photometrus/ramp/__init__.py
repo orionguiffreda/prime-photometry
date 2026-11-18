@@ -1,2 +1,3 @@
 from photometrus.ramp.ramp_reduce import do_ramp, calc_darklim
+from photometrus.ramp.ramp_reduce_v2 import HMDReducer
 from photometrus.ramp.simple_ramp_reduce import reduce_image_from_file_list
