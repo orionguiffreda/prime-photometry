@@ -348,7 +348,7 @@ def regen_ramp(file_number, nframe, camera):
             header, ramp = do_ramp(raw_files, superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim, extension)
             # print(header)
         elif version == 2:
-            header, ramp = cals.reduce(raw_files, extension, 0)
+            ramp, header = cals.reduce(raw_files, extension, 0)
         else:
             raise ValueError('ramp_cal only supports version 1 or 2. If a new version exists, it is not implemented.')
     except NoCalError:
