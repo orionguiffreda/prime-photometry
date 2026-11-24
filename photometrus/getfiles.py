@@ -199,6 +199,7 @@ def get_temperature_date(datetime, temperature):
     if not temp_dates:  # raise an error if no dataset exists
         raise NoCalError("No calibration data for datetime {} and temperature {}".format(datetime, temperature))
     backup_date = temp_dates.pop('backup', None)
+    cal_version = temp_dates.pop('cal_version', 1)
     temperature_keys = temp_dates.keys()
     temperatures = np.asarray(list(temperature_keys), dtype=float)
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
@@ -206,14 +207,14 @@ def get_temperature_date(datetime, temperature):
     if len(date_list) == 1:
         if backup_date is not None:
             date_list.append(backup_date)
-        return date_list[0], date_list
+        return date_list[0], date_list, cal_version
     else:
         date_array = np.asarray([to_datetime(d) for d in date_list])
         data_date_array = np.asarray([datetime for d in date_list])
         nearest_date = np.abs(date_array-data_date_array).argmin()  # getting closest date with cal data
         if backup_date is not None:
             date_list.append(backup_date)
-        return date_list[nearest_date], date_list
+        return date_list[nearest_date], date_list, cal_version
 
 
 def get_ramp_cal_file(cal_file_format, chip, date, date_list, base_dir=GET_DATA_SETTINGS['ramp_cal_directory']):
@@ -246,8 +247,8 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
         except KeyError:
             print(GET_DATA_SETTINGS)
             raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
-    date, date_list = get_temperature_date(date, temperature)
-    try:
+    date, date_list, cal_version = get_temperature_date(date, temperature)
+    if cal_verison == 2:
         coe_C = "HMD/coe_C.C{chip}.fits.{date}"
         coe_Ad = "HMD/coe_Ad.C{chip}.fits.{date}"
         darklim = "HMD/darklim.C{chip}.fits.{date}"
@@ -255,8 +256,8 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
         satulim = "HMD/satulim.C{chip}.fits.{date}"
         formats = (superbias, satulim, coe_C, coe_Ad, darklim)
         cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
-        return cal_files, 2
-    except MissingCalError:
+        return cal_files, cal_version
+    else:
         coe_R = "coe_R/coe_R.C{chip}.fits.cube.{date}"
         coe_D = "coe_D/coe_D.C{chip}.fits.cube.{date}"
         darklim = "darklim/darklim.C{chip}.fits.{date}"
@@ -264,7 +265,7 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
         satulim = "satulim/satulim.C{chip}.fits.{date}"
         formats = (superbias, satulim, coe_R, coe_D, darklim)
         cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
-        return cal_files, 1
+        return cal_files, cal_version
 
 
 def get_ramp_cal(header):
@@ -289,8 +290,8 @@ def get_ramp_cal(header):
 
 
 def update_header(header, f0_num, fl_num):
-    superbias, satulim, coe_R, coe_D, darklim =\
-        [os.path.basename(f) for f in get_ramp_cal_files(header)]
+    cal_files, cal_version = get_ramp_cal_files(header)
+    superbias, satulim, coe_R, coe_D, darklim = [os.path.basename(f) for f in cal_files]
     header["BZERO"] = 0
     header["BSCALE"] = 1
     header["COER"] = coe_R
