@@ -248,11 +248,11 @@ def get_ramp_cal_files(header, base_dir=GET_DATA_SETTINGS['ramp_cal_directory'])
             raise KeyError('TEMPDET header is missing from file, and no backup temperature is available. An update to photometrus.json5, "date_temperature_dict" is required for date {} to rereduce this data'.format(date_str))
     date, date_list = get_temperature_date(date, temperature)
     try:
-        coe_C = f"HMD/coe_C.C{chip}.fits.{date}"
-        coe_Ad = f"HMD/coe_Ad.C{chip}.fits.{date}"
-        darklim = f"HMD/darklim.C{chip}.fits.{date}"
-        superbias = f"bias/superbias_minRMS.C{chip}.fits.{date}"
-        satulim = f"HMD/satulim.C{chip}.fits.{date}"
+        coe_C = "HMD/coe_C.C{chip}.fits.{date}"
+        coe_Ad = "HMD/coe_Ad.C{chip}.fits.{date}"
+        darklim = "HMD/darklim.C{chip}.fits.{date}"
+        superbias = "bias/superbias_minRMS.C{chip}.fits.{date}"
+        satulim = "HMD/satulim.C{chip}.fits.{date}"
         formats = (superbias, satulim, coe_C, coe_Ad, darklim)
         cal_files = [get_ramp_cal_file(f, chip, date, date_list, base_dir) for f in formats]
         return cal_files, 2
