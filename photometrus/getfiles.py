@@ -198,16 +198,21 @@ def get_temperature_date(datetime, temperature):
             break
     if not temp_dates:  # raise an error if no dataset exists
         raise NoCalError("No calibration data for datetime {} and temperature {}".format(datetime, temperature))
+    backup_date = temp_dates.pop('backup', None)
     temperature_keys = temp_dates.keys()
     temperatures = np.asarray(list(temperature_keys), dtype=float)
     nearest_temp = np.abs(temperatures-temperature).argmin()  # getting closest detector temperature with cal data
     date_list = temp_dates['{:.1f}'.format(temperatures[nearest_temp])]
     if len(date_list) == 1:
+        if backup_date is not None:
+            date_list.append(backup_date)
         return date_list[0], date_list
     else:
         date_array = np.asarray([to_datetime(d) for d in date_list])
         data_date_array = np.asarray([datetime for d in date_list])
         nearest_date = np.abs(date_array-data_date_array).argmin()  # getting closest date with cal data
+        if backup_date is not None:
+            date_list.append(backup_date)
         return date_list[nearest_date], date_list
 
 
