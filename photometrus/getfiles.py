@@ -309,7 +309,7 @@ def make_ramp_fits(ramp, header, out_file, f0_num, fl_num, cal_files):
     if not os.path.isdir(out_dir) and out_dir != '':
         os.makedirs(out_dir)
     if not isinstance(header, fits.Header):  # nlc ramp fit code uses fitsio instead of astropy.io.fits
-        fitsio.write(out_file, ramp.astype(np.float32), header=header, clobber=True)
+        fitsio.write(out_file, np.asarray(ramp, dtype=np.float32), header=header, clobber=True)
     else:
         fits.HDUList([PrimaryHDU(ramp.astype(np.float32), header)]).writeto(out_file, overwrite=True)
     print(f"make {out_file}")
