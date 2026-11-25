@@ -194,7 +194,7 @@ def get_temperature_date(datetime, temperature):
     for cutoff_date in cutoff_dates:  # getting era with identical load files
         td = datetime - to_datetime(cutoff_date)
         if td.total_seconds() > 0:
-            temp_dates = temperature_date_dict[cutoff_date]
+            temp_dates = temperature_date_dict[cutoff_date].copy()
             break
     if not temp_dates:  # raise an error if no dataset exists
         raise NoCalError("No calibration data for datetime {} and temperature {}".format(datetime, temperature))
@@ -278,19 +278,18 @@ def get_ramp_cal(header):
         satulim_flat = satulim[4:-4, 4:-4].flatten()
         satulim_thre = np.nanmean(satulim_flat) - 5 * np.nanstd(satulim_flat)
         mask = np.where(satulim > satulim_thre, 1, 0).astype(np.uint8)
-        return superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim
+        return (superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim), version, cal_files
     elif version == 2:
         superbias, satulim, coe_C, coe_Ad, darklim = [fits.getdata(f).astype(np.float64) for f in cal_files]
         coe_C = np.transpose(coe_C, (1, 2, 0)).copy(order='C')
         coe_Ad = np.transpose(coe_Ad, (1, 2, 0)).copy(order='C')
-        return HMDReducer(coe_C, coe_Ad, satulim, darklim, superbias), version
+        return HMDReducer(coe_C, coe_Ad, satulim, darklim, superbias), version, cal_files
     else:
         raise ValueError('ramp_cal only supports version 1 or 2. If a new version exists, it is not implemented.')
 
 
 
-def update_header(header, f0_num, fl_num):
-    cal_files, cal_version = get_ramp_cal_files(header)
+def update_header(header, f0_num, fl_num, cal_files):
     superbias, satulim, coe_R, coe_D, darklim = [os.path.basename(f) for f in cal_files]
     header["BZERO"] = 0
     header["BSCALE"] = 1
@@ -304,8 +303,8 @@ def update_header(header, f0_num, fl_num):
     return header
 
 
-def make_ramp_fits(ramp, header, out_file, f0_num, fl_num):
-    header = update_header(header, f0_num, fl_num)
+def make_ramp_fits(ramp, header, out_file, f0_num, fl_num, cal_files):
+    header = update_header(header, f0_num, fl_num, cal_files)
     out_dir = os.path.dirname(out_file)
     if not os.path.isdir(out_dir) and out_dir != '':
         os.makedirs(out_dir)
@@ -347,7 +346,7 @@ def regen_ramp(file_number, nframe, camera):
             print('{} exists, but seems to be corrupted. Regenerating file...')
     try:
         print('regenerating ramp: {}'.format(output_file))
-        cals, version = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
+        cals, version, cal_files = get_ramp_cal(fits.getheader(raw_files[0], ext=extension))
         if version == 1:
             superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim = cals
             # print('Using cals:', superbias, satulim, mask, coe_R_tr, coe_D_tr, darklim, Adarklim, Fdarklim)
@@ -359,7 +358,8 @@ def regen_ramp(file_number, nframe, camera):
             raise ValueError('ramp_cal only supports version 1 or 2. If a new version exists, it is not implemented.')
     except NoCalError:
         header, ramp = reduce_image_from_file_list(raw_files, hdu_ext=extension)
-    make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1])
+        cal_files = ['' for f in range(5)]  # standard number of cal_files is 5
+    make_ramp_fits(ramp, header, output_file, file_numbers[0], file_numbers[-1], cal_files)
     return output_file
 
 
