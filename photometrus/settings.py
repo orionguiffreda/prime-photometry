@@ -29,7 +29,9 @@ import json5
 
 PIPELINE_DEFAULT_DIR = '/mnt/photometry/'
 FLAT_DEFAULT_DIR = '/mnt/windows_fits_data/fits_data_drive_backup/flat_storage_dir/'
+
 PIPELINE_STAGES = ['preprocess', 'sky', 'astrom', 'stack']
+SKY_METHODS = ['default', 'poly', 'bkg2d', 'sex']
 
 PHOTOMETRY_MAG_LOWER_LIMIT = 12.5
 PHOTOMETRY_MAG_UPPER_LIMIT = 23
@@ -369,4 +371,5 @@ def set_vizier_mirror(timeout=5):
         except Exception as e:
             print(f'{url}: check failed ({type(e).__name__})')
 
-    print('No working Vizier mirror found!')
+    print('No working Vizier mirror found, defaulting to 1st idx in hierarchy!')
+    return VIZIER_MIRRORS[0]
